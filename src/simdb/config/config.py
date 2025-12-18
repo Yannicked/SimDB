@@ -1,17 +1,17 @@
 import configparser
+import os
 import platform
+from pathlib import Path
+from typing import TextIO, cast
 
 import appdirs
-import os
-from pathlib import Path
-from typing import Tuple, List, Optional, TextIO, Union, Dict, cast
 
 
 class ConfigError(Exception):
     pass
 
 
-def _parse_name(arg: str) -> Tuple[str, str]:
+def _parse_name(arg: str) -> tuple[str, str]:
     if "." in arg:
         section, *name, option = arg.split(".")
         if name:
@@ -41,7 +41,7 @@ def _isfloat(value: str) -> bool:
     return _isdecimal(l) and (len(r) == 0 or (len(r) == 1 and _isdecimal(r[0])))
 
 
-def _convert(value: str) -> Union[int, float, str, bool]:
+def _convert(value: str) -> int | float | str | bool:
     if value == "":
         return value
     elif value.isdecimal():
@@ -113,7 +113,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
     def api_version(self) -> str:
         return self._api_version
 
-    def load(self, file: Optional[TextIO] = None) -> None:
+    def load(self, file: TextIO | None = None) -> None:
         """
         Load the configuration.
 
@@ -164,7 +164,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
         self._debug = debug
 
     @property
-    def default_remote(self) -> Optional[str]:
+    def default_remote(self) -> str | None:
         """
         Returns the default remote used by the SimDB client.
         """
@@ -233,7 +233,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
         with open(descriptor, "w") as file:
             self._parser.write(file)
 
-    def sections(self) -> List[str]:
+    def sections(self) -> list[str]:
         """
         Return all sections in the configuration.
         """
@@ -242,8 +242,8 @@ User configuration file {self._user_config_path} has incorrect permissions (must
     def get_section(
         self,
         name: str,
-        default: Optional[Dict[str, Union[int, float, bool, str]]] = None,
-    ) -> Dict[str, Union[int, float, bool, str]]:
+        default: dict[str, int | float | bool | str] | None = None,
+    ) -> dict[str, int | float | bool | str]:
         """
         Returns the section from the configuration with the given name.
 
@@ -255,7 +255,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
         try:
             items = self._parser.items(name)
             return {k: _convert(v) for (k, v) in items}
-        except (configparser.NoSectionError,):
+        except configparser.NoSectionError:
             if default is not None:
                 return default
             raise KeyError(f"Section {name} not found in configuration")
@@ -263,8 +263,8 @@ User configuration file {self._user_config_path} has incorrect permissions (must
     def get_option(
         self,
         name: str,
-        default: Union[int, float, bool, str, None, _NothingSentinel] = NOTHING,
-    ) -> Union[int, float, bool, str]:
+        default: int | float | bool | str | None | _NothingSentinel = NOTHING,
+    ) -> int | float | bool | str:
         """
         Returns the value for the option with the given name from the configuration.
 
@@ -278,12 +278,12 @@ User configuration file {self._user_config_path} has incorrect permissions (must
             return _convert(self._parser.get(section, option))
         except (configparser.NoSectionError, configparser.NoOptionError):
             if default is not Config.NOTHING:
-                value = cast(Union[int, float, bool, str], default)
+                value = cast(int | float | bool | str, default)
                 return value
             raise KeyError(f"Option {name} not found in configuration")
 
     def get_string_option(
-        self, name: str, default: Union[str, None, _NothingSentinel] = NOTHING
+        self, name: str, default: str | None | _NothingSentinel = NOTHING
     ) -> str:
         """
         Returns the value for the option with the given name from the configuration but also ensures the resulting
@@ -325,7 +325,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
         except configparser.NoSectionError:
             raise KeyError(f"Section {name} not found in configuration")
 
-    def set_option(self, name: str, value: Union[int, float, bool, str]) -> None:
+    def set_option(self, name: str, value: int | float | bool | str) -> None:
         """
         Set the option with the given name to the given value.
 
@@ -337,7 +337,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
             self._parser.add_section(section)
         self._parser.set(section, option, str(value))
 
-    def list_options(self) -> List[str]:
+    def list_options(self) -> list[str]:
         """
         List all the options found in the configuration.
 

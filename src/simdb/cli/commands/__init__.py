@@ -1,5 +1,6 @@
+from collections.abc import Iterable
+
 import click
-from typing import Iterable
 
 from ...config import Config
 

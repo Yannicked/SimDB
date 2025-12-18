@@ -1,12 +1,12 @@
-import click
 from pathlib import Path
-from typing import Optional, List, Tuple, Any, Type
+from typing import Any
 
-from . import pass_config, check_meta_args
+import click
+
 from ...config.config import Config
 from ...query import QueryType, parse_query_arg
+from . import check_meta_args, pass_config
 from .validators import validate_non_negative
-
 
 # def _validate_simulation_outputs(options: dict, simulation):
 #     file_validator_type = options.get("file_validator", None)
@@ -72,7 +72,7 @@ def simulation():
     help="Include UUID in the output.",
     default=False,
 )
-def simulation_list(config: Config, meta: List[str], limit: int, show_uuid: bool):
+def simulation_list(config: Config, meta: list[str], limit: int, show_uuid: bool):
     """List ingested simulations."""
     from ...database import get_local_db
     from .utils import print_simulations
@@ -101,9 +101,9 @@ class NameValueOption(click.Option):
 def simulation_modify(
     config: Config,
     sim_id: str,
-    alias: Optional[str],
-    set_meta: Optional[str],
-    del_meta: Optional[str],
+    alias: str | None,
+    set_meta: str | None,
+    del_meta: str | None,
 ):
     """Modify the ingested simulation."""
     from ...database import get_local_db
@@ -172,9 +172,10 @@ def simulation_info(config: Config, sim_id: str):
 def simulation_ingest(config: Config, manifest_file: str, alias: str):
     """Ingest a MANIFEST_FILE."""
     import urllib.parse
+
     from ...database import get_local_db
     from ...database.models import Simulation
-    from ..manifest import Manifest, InvalidAlias
+    from ..manifest import InvalidAlias, Manifest
 
     manifest = Manifest()
     manifest.load(Path(manifest_file))
@@ -201,7 +202,7 @@ def simulation_ingest(config: Config, manifest_file: str, alias: str):
     click.echo("ALIAS: " + simulation.alias + "\nUUID: " + str(simulation.uuid))
 
 
-def n_required_args_adaptor(n) -> Type[click.Command]:
+def n_required_args_adaptor(n) -> type[click.Command]:
     class NRequiredArgs(click.Command):
         NArgs = n
 
@@ -227,18 +228,19 @@ def n_required_args_adaptor(n) -> Type[click.Command]:
 )
 def simulation_push(
     config: Config,
-    remote: Optional[str],
+    remote: str | None,
     sim_id: str,
-    username: Optional[str],
-    password: Optional[str],
-    replaces: Optional[str],
+    username: str | None,
+    password: str | None,
+    replaces: str | None,
     add_watcher: bool,
 ):
     """Push the simulation with the given SIM_ID (UUID or alias) to the REMOTE."""
-    from ...database import get_local_db
-    from ..remote_api import RemoteAPI
-    from ...validation import Validator, ValidationError
     import sys
+
+    from ...database import get_local_db
+    from ...validation import ValidationError, Validator
+    from ..remote_api import RemoteAPI
 
     api = RemoteAPI(remote, username, password, config)
     db = get_local_db(config)
@@ -274,16 +276,17 @@ def simulation_push(
 @click.option("--password", help="Password used to authenticate with the remote.")
 def simulation_pull(
     config: Config,
-    remote: Optional[str],
+    remote: str | None,
     sim_id: str,
     directory: Path,
-    username: Optional[str],
-    password: Optional[str],
+    username: str | None,
+    password: str | None,
 ):
     """Pull the simulation with the given SIM_ID (UUID or alias) from the REMOTE."""
-    from ...database import get_local_db, DatabaseError
-    from ..remote_api import RemoteAPI, RemoteError
     import sys
+
+    from ...database import DatabaseError, get_local_db
+    from ..remote_api import RemoteAPI, RemoteError
 
     api = RemoteAPI(remote, username, password, config)
     db = get_local_db(config)
@@ -326,7 +329,7 @@ def simulation_pull(
     default=False,
 )
 def simulation_query(
-    config: Config, constraints: List[str], meta: List[str], show_uuid: bool
+    config: Config, constraints: list[str], meta: list[str], show_uuid: bool
 ):
     """Perform a metadata query to find matching local simulations.
 
@@ -373,7 +376,7 @@ def simulation_query(
     from ...database import get_local_db
     from .utils import print_simulations
 
-    parsed_constraints: List[Tuple[str, str, QueryType]] = []
+    parsed_constraints: list[tuple[str, str, QueryType]] = []
     names = []
     for constraint in constraints:
         if "=" not in constraint:
@@ -397,10 +400,11 @@ def simulation_query(
 @click.option("--username", help="Username used to authenticate with the remote.")
 @click.option("--password", help="Password used to authenticate with the remote.")
 def simulation_validate(
-    config: Config, remote: Optional[str], sim_id: str, username: str, password: str
+    config: Config, remote: str | None, sim_id: str, username: str, password: str
 ):
     """Validate the ingested simulation with given SIM_ID (UUID or alias) using validation schema from REMOTE."""
     from itertools import chain
+
     from ...database import get_local_db
     from ...validation import ValidationError, Validator
     from ..remote_api import RemoteAPI
@@ -431,7 +435,7 @@ def simulation_validate(
                 )
         except Exception as e:
             raise ValidationError(
-                f"Failed to validate checksum for file {file.uri}: {str(e)}"
+                f"Failed to validate checksum for file {file.uri}: {e!s}"
             )
 
     click.echo("validation successful")

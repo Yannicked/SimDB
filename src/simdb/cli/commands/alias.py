@@ -1,6 +1,8 @@
 import sys
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
+
 import click
-from typing import TYPE_CHECKING, Iterable
 
 from ..remote_api import RemoteAPI
 from . import pass_config
@@ -8,8 +10,9 @@ from . import pass_config
 pass_api = click.make_pass_decorator(RemoteAPI)
 
 if TYPE_CHECKING or "sphinx" in sys.modules:
-    from ...config import Config
     from click import Context
+
+    from ...config import Config
 
 
 class AliasCommand(click.Command):

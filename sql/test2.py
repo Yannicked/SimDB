@@ -5,9 +5,10 @@ Keys may be repeated so in YAML format, values are contained in string and list 
 File manifest data are contained in string, list, and dictionary objects
 """
 
-import yaml
-from uuid import UUID
 import sqlite3
+from uuid import UUID
+
+import yaml
 
 conn = sqlite3.connect("imas.db")
 # con = sqlite3.connect(":memory:")
@@ -122,7 +123,7 @@ def validateUUID(uuid):
 
 
 def ingestFile(fileClass, fileName):
-    fd = open(fileName, "r")
+    fd = open(fileName)
     x = yaml.load(fd)  # x is a dictionary
 
     print(yaml.dump(x))

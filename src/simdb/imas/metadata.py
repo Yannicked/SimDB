@@ -1,6 +1,6 @@
 import re
-from typing import Dict, Any
 from enum import Enum
+from typing import Any
 
 
 class MetricException(Exception):
@@ -24,7 +24,7 @@ class ReadValues(Enum):
     SELECTED = 2
 
 
-def walk_imas(ids_node) -> Dict:
+def walk_imas(ids_node) -> dict:
     import imas
 
     meta = {}
@@ -53,7 +53,7 @@ def walk_imas(ids_node) -> Dict:
     return meta
 
 
-def walk_dict(d: Dict, node, depth: int, read_values: ReadValues) -> Dict:
+def walk_dict(d: dict, node, depth: int, read_values: ReadValues) -> dict:
     meta = {}
     for k, v in d.items():
         if depth == 0:

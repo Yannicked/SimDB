@@ -1,23 +1,24 @@
 import logging
 import os
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-from flask_compress import Compress
-from typing import Optional, cast, Type
-from flask.json import JSONEncoder, JSONDecoder
+from typing import cast
 
+from flask import Flask, jsonify, request
+from flask.json import JSONDecoder, JSONEncoder
+from flask_compress import Compress
+from flask_cors import CORS
+
+from ..config import Config
+from ..json import CustomDecoder, CustomEncoder
 from .apis import blueprints
+from .core.auth._authenticator import Authenticator
 from .core.cache import cache
 from .core.typing import SimDBApp
-from ..config import Config
-from ..json import CustomEncoder, CustomDecoder
-from .core.auth._authenticator import Authenticator
 
 compress = Compress()
 
 
 def create_app(
-    config: Optional[Config] = None, testing=False, debug=False, profile=False
+    config: Config | None = None, testing=False, debug=False, profile=False
 ):
     if config is None:
         config_file = os.environ.get("SIMDB_CONFIG_FILE", default="app.cfg")
@@ -30,8 +31,8 @@ def create_app(
     app.config["TESTING"] = testing
     app.config["DEBUG"] = debug
     app.config["PROFILE"] = profile
-    app.json_encoder = cast(Type[JSONEncoder], CustomEncoder)
-    app.json_decoder = cast(Type[JSONDecoder], CustomDecoder)
+    app.json_encoder = cast(type[JSONEncoder], CustomEncoder)
+    app.json_decoder = cast(type[JSONDecoder], CustomDecoder)
     app.config.from_mapping(flask_options)
     app.simdb_config = config
     cache.init_app(app)

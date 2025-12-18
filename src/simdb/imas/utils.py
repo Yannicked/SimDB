@@ -1,11 +1,12 @@
 import os
-from typing import List, Any
 from datetime import datetime
 from pathlib import Path
+from typing import Any
+
 from dateutil import parser
 
-from ..uri import URI
 from ..config import Config
+from ..uri import URI
 
 
 class ImasError(Exception):
@@ -54,7 +55,7 @@ def is_missing(value: Any):
 class DBEntry:
     def partial_get(self, ids: str, path: str, occurrence=0) -> Any: ...
 
-    def list_all_occurrences(self, ids: str) -> List[int]:
+    def list_all_occurrences(self, ids: str) -> list[int]:
         """
         List all occurrences of the given IDS in the IMAS data entry.
 
@@ -66,7 +67,7 @@ class DBEntry:
         ...
 
 
-def list_idss(entry: DBEntry) -> List[str]:
+def list_idss(entry: DBEntry) -> list[str]:
     """
     List all the IDSs found to be populated for the given IMAS data entry.
 
@@ -75,7 +76,6 @@ def list_idss(entry: DBEntry) -> List[str]:
     @param entry: the IMAS data entry
     @return: the list of found IDSs
     """
-    import imas
 
     idss = []
 
@@ -275,7 +275,7 @@ def _get_path(uri: URI) -> Path:
     return path
 
 
-def imas_files(uri: URI) -> List[Path]:
+def imas_files(uri: URI) -> list[Path]:
     """
     Return all the files associated with the given IMAS URI.
 
@@ -283,8 +283,7 @@ def imas_files(uri: URI) -> List[Path]:
     @return: a list of files which contains the IDS data for the backend specified in the URI
     """
     backend = str(uri.path)
-    if backend.startswith("/"):
-        backend = backend[1:]
+    backend = backend.removeprefix("/")
 
     path = _get_path(uri)
 
