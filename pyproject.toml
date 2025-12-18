@@ -127,6 +127,9 @@ local_scheme = "dirty-tag"
 line-length = 88
 indent-width = 4
 
+[tool.ruff.format]
+docstring-code-format = true
+
 [tool.ruff.lint]
 select = [
     # pycodestyle
