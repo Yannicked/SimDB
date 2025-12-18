@@ -1,10 +1,10 @@
-from typing import Optional
+
 from flask import Request
 
 from ....config import Config
 from ._authenticator import Authenticator
-from ._user import User
 from ._exceptions import AuthenticationError
+from ._user import User
 
 
 class LdapAuthenticator(Authenticator):
@@ -22,7 +22,7 @@ class LdapAuthenticator(Authenticator):
 
     Name = "LDAP"
 
-    def authenticate(self, config: Config, request: Request) -> Optional[User]:
+    def authenticate(self, config: Config, request: Request) -> User | None:
         import ldap
 
         ldap_host = config.get_option("authentication.ldap_server")

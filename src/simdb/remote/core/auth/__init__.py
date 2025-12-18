@@ -1,19 +1,19 @@
-from flask import Response, request, Request
-from typing import Optional
 from functools import wraps
+from typing import Optional
 
-from ._user import User
-from ._exceptions import AuthenticationError
+from flask import Request, Response, request
+
+from ....config import Config
+from ..typing import current_app
 from ._authenticator import Authenticator
-
+from ._exceptions import AuthenticationError
+from ._user import User
 from .active_directory import ActiveDirectoryAuthenticator
 from .firewall import FirewallAuthenticator
 from .keycloak import KeyCloakAuthenticator
 from .ldap import LdapAuthenticator
 from .no_authentication import NoopAuthenticator
 from .token import TokenAuthenticator
-from ..typing import current_app
-from ....config import Config
 
 __all__ = [
     User,
@@ -45,7 +45,7 @@ def authenticate():
     )
 
 
-def check_role(config: Config, user: User, role: Optional[str]) -> bool:
+def check_role(config: Config, user: User, role: str | None) -> bool:
     """
     This function is called to check if an authenticated user is a member of the specified role.
 
@@ -64,7 +64,7 @@ def check_role(config: Config, user: User, role: Optional[str]) -> bool:
     return True
 
 
-def check_auth(config: Config, request: Request) -> Optional[User]:
+def check_auth(config: Config, request: Request) -> User | None:
     """
     This function is called to check if a request is authenticated.
     """
@@ -106,7 +106,7 @@ class RequiresAuth:
         @wraps(f)
         def decorated(*args, **kwargs):
             config = current_app.simdb_config
-            user: Optional[User] = check_auth(config, request)
+            user: User | None = check_auth(config, request)
 
             if not user:
                 return authenticate()

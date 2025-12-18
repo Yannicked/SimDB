@@ -1,18 +1,18 @@
 import uuid
 from datetime import datetime
-from typing import Dict, Optional
 from pathlib import Path
 
 from dateutil import parser as date_parser
-from sqlalchemy import Column, types as sql_types
+from sqlalchemy import Column
+from sqlalchemy import types as sql_types
 
-from ...cli.manifest import DataObject
-from .base import Base
-from .types import UUID, URI
-from ...docstrings import inherit_docstrings
-from ...config.config import Config
-from .utils import checked_get
 from ... import uri as urilib
+from ...cli.manifest import DataObject
+from ...config.config import Config
+from ...docstrings import inherit_docstrings
+from .base import Base
+from .types import URI, UUID
+from .utils import checked_get
 
 
 @inherit_docstrings
@@ -38,9 +38,9 @@ class File(Base):
         self,
         type: DataObject.Type,
         uri: urilib.URI,
-        ids_list: Optional[list] = None,
+        ids_list: list | None = None,
         perform_integrity_check: bool = True,
-        config: Optional[Config] = None,
+        config: Config | None = None,
     ) -> None:
         self.uuid = uuid.uuid1()
         self.uri = uri
@@ -107,7 +107,7 @@ class File(Base):
             raise NotImplementedError(f"Cannot generate checksum for type {self.type}.")
 
     @classmethod
-    def from_data(cls, data: Dict) -> "File":
+    def from_data(cls, data: dict) -> "File":
         data_type = checked_get(data, "type", str)
         uri = checked_get(data, "uri", str)
         file = File(
@@ -123,7 +123,7 @@ class File(Base):
         file.datetime = date_parser.parse(checked_get(data, "datetime", str))
         return file
 
-    def data(self, recurse: bool = False) -> Dict[str, str]:
+    def data(self, recurse: bool = False) -> dict[str, str]:
         data = dict(
             uuid=self.uuid,
             usage=self.usage,

@@ -1,13 +1,13 @@
 from collections import deque
-from typing import Dict, Any, Union, List, Tuple, Deque, Type
+from typing import Any
 
 FLATTEN_DICT_DELIM = "."
 
 
 def flatten_dict(
-    out_dict: Dict[str, Any],
-    in_dict: Dict[str, Union[Dict, List, Any]],
-    prefix: Tuple = (),
+    out_dict: dict[str, Any],
+    in_dict: dict[str, dict | list | Any],
+    prefix: tuple = (),
 ):
     for key, value in in_dict.items():
         if isinstance(value, dict):
@@ -19,7 +19,7 @@ def flatten_dict(
             out_dict[FLATTEN_DICT_DELIM.join(prefix + (key,))] = value
 
 
-def _parse_index(head: str) -> Tuple[bool, str, int]:
+def _parse_index(head: str) -> tuple[bool, str, int]:
     tokens = head.split("#")
     if len(tokens) > 1 and tokens[-1].isdigit():
         return True, "#".join(tokens[:-1]), int(tokens[-1])
@@ -27,7 +27,7 @@ def _parse_index(head: str) -> Tuple[bool, str, int]:
 
 
 def _unflatten_value(
-    out_dict: Dict[str, Union[Dict, List, Any]], key: Deque[str], value: Any
+    out_dict: dict[str, dict | list | Any], key: deque[str], value: Any
 ) -> None:
     head = key.popleft()
     tail = key
@@ -45,14 +45,14 @@ def _unflatten_value(
         out_dict[head] = value
 
 
-def unflatten_dict(in_dict: Dict[str, Any]) -> Dict[str, Union[Dict, Any]]:
-    out_dict: Dict[str, Union[Dict, List, Any]] = {}
+def unflatten_dict(in_dict: dict[str, Any]) -> dict[str, dict | Any]:
+    out_dict: dict[str, dict | list | Any] = {}
     for key, value in in_dict.items():
         _unflatten_value(out_dict, deque(key.split(FLATTEN_DICT_DELIM)), value)
     return out_dict
 
 
-def checked_get(data: Dict[str, Any], key, expected_type: Type, optional: bool = False):
+def checked_get(data: dict[str, Any], key, expected_type: type, optional: bool = False):
     if key not in data:
         raise ValueError(f"Corrupted data - missing key {key}.")
     if data[key] is None:

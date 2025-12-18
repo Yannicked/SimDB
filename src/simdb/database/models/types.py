@@ -1,7 +1,7 @@
 import enum
 import uuid
 from enum import Enum
-from typing import Optional, Dict
+
 from sqlalchemy import types as sql_types
 
 from ... import uri as urilib
@@ -67,19 +67,19 @@ class URI(sql_types.TypeDecorator):
     def python_type(self):
         return urilib.URI
 
-    def process_bind_param(self, value: Optional[urilib.URI], dialect) -> Optional[str]:
+    def process_bind_param(self, value: urilib.URI | None, dialect) -> str | None:
         if value is None:
             return value
         return str(value)
 
     def process_result_value(
-        self, value: Optional[str], dialect
-    ) -> Optional[urilib.URI]:
+        self, value: str | None, dialect
+    ) -> urilib.URI | None:
         if value is None:
             return value
         return urilib.URI(value)
 
-    def process_literal_param(self, value, dialect) -> Optional[urilib.URI]:
+    def process_literal_param(self, value, dialect) -> urilib.URI | None:
         return self.process_result_value(value, dialect)
 
 
@@ -90,7 +90,7 @@ class ChoiceType(sql_types.TypeDecorator):
     def python_type(self):
         return str
 
-    def __init__(self, choices: Dict[Enum, str], enum_type: type, **kw):
+    def __init__(self, choices: dict[Enum, str], enum_type: type, **kw):
         if type(enum_type) is not enum.EnumMeta:
             raise ValueError("enum_type must be a class inheriting from enum.Enum.")
         self._enum_type = enum_type

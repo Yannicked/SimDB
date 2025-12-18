@@ -1,10 +1,10 @@
 import abc
-from typing import Optional, Dict, Type
+
 from flask import Request
 
 from ....config import Config
-from ._user import User
 from ._exceptions import AuthenticationError
+from ._user import User
 
 
 class Authenticator(abc.ABC):
@@ -12,7 +12,7 @@ class Authenticator(abc.ABC):
     Base class for SimDB server authenticators.
     """
 
-    Authenticators: Dict[str, Type["Authenticator"]] = {}
+    Authenticators: dict[str, type["Authenticator"]] = {}
     Name: str = NotImplemented
 
     @abc.abstractmethod
@@ -20,7 +20,7 @@ class Authenticator(abc.ABC):
         self,
         config: Config,
         request: Request,
-    ) -> Optional[User]:
+    ) -> User | None:
         """
         Authenticate the user using parameters passed in the current request - i.e. username/password passed as part of
         SimpleAuth or a token in the request header.
@@ -50,5 +50,5 @@ class Authenticator(abc.ABC):
             )
 
     @classmethod
-    def register(cls, authenticator: Type["Authenticator"]) -> None:
+    def register(cls, authenticator: type["Authenticator"]) -> None:
         cls.Authenticators[authenticator.Name.lower()] = authenticator

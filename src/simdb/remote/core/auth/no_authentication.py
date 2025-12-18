@@ -1,4 +1,4 @@
-from typing import Optional
+
 from flask import Request
 
 from ....config import Config
@@ -13,7 +13,7 @@ class NoopAuthenticator(Authenticator):
 
     Name = "None"
 
-    def authenticate(self, config: Config, request: Request) -> Optional[User]:
+    def authenticate(self, config: Config, request: Request) -> User | None:
         auth = request.authorization
         username = auth.username if auth is not None else None
 

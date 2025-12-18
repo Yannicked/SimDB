@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 simdb_legacy_importer.py
 
@@ -98,7 +97,7 @@ def load_yaml_file(yaml_file, Loader=yaml.SafeLoader):
         return None
     yaml_data = None
     try:
-        with open(yaml_file, "r", encoding="utf-8") as file_handle:
+        with open(yaml_file, encoding="utf-8") as file_handle:
             yaml_data = yaml.load(file_handle, Loader=Loader)
     except Exception as e:
         validation_logger.error(
@@ -1376,7 +1375,7 @@ def write_manifest_file(legacy_yaml_file: str, output_directory: str = None):
             ids_summary = connection.get(
                 "summary", autoconvert=False, lazy=True, ignore_unknown_dd_version=True
             )
-        except Exception as e:  # noqa: F841
+        except Exception as e:
             validation_logger.error(f"{alias}: {e}")
             exit(0)
         try:
@@ -1404,7 +1403,7 @@ def write_manifest_file(legacy_yaml_file: str, output_directory: str = None):
                 lazy=True,
                 ignore_unknown_dd_version=True,
             )
-        except Exception as _:  # noqa: F841
+        except Exception as _:
             pass
         try:
             ids_equilibrium = connection.get(

@@ -1,26 +1,27 @@
 import re
+import shutil
 import sys
 import uuid
-import shutil
+from collections.abc import Iterable
+from pprint import pprint
+from typing import TYPE_CHECKING
 
 import click
-from collections.abc import Iterable
-from typing import List, TYPE_CHECKING, Optional, Tuple, Union, Type
 from semantic_version import Version
-from pprint import pprint
 
-from ..remote_api import RemoteAPI
-from . import pass_config, check_meta_args
-from .utils import print_simulations, print_trace
-from ...notifications import Notification
-from .validators import validate_non_negative, validate_positive
 from ...database.models.simulation import Simulation
+from ...notifications import Notification
+from ..remote_api import RemoteAPI
+from . import check_meta_args, pass_config
+from .utils import print_simulations, print_trace
+from .validators import validate_non_negative, validate_positive
 
 pass_api = click.make_pass_decorator(RemoteAPI)
 
 if TYPE_CHECKING or "sphinx" in sys.modules:
-    from ...config import Config
     from click import Context
+
+    from ...config import Config
 
 
 class RemoteGroup(click.Group):
@@ -80,7 +81,7 @@ class _RemoteCommand(click.Command):
             )
 
 
-def remote_command_cls(subgroup: str = "") -> Type:
+def remote_command_cls(subgroup: str = "") -> type:
     """
     Customise the RemoteCommand class to hold the name of the subgroup if provided. This is required to properly format
     the help string for subgroup commands.
@@ -102,8 +103,8 @@ def is_empty(value) -> bool:
 def remote(
     config: "Config",
     ctx: "Context",
-    username: Optional[str],
-    password: Optional[str],
+    username: str | None,
+    password: str | None,
     name: str,
 ):
     """Interact with the remote SimDB service.
@@ -208,8 +209,8 @@ def config_new(
     config: "Config",
     name: str,
     url: str,
-    firewall: Optional[str],
-    username: Optional[str],
+    firewall: str | None,
+    username: str | None,
     default: bool,
 ):
     """
@@ -323,8 +324,8 @@ def add_watcher(
     config: "Config",
     api: RemoteAPI,
     sim_id: str,
-    user: Optional[str],
-    email: Optional[str],
+    user: str | None,
+    email: str | None,
     notification: str,
 ):
     """Register a user as a watcher for a simulation with given SIM_ID (UUID or alias)."""
@@ -389,7 +390,7 @@ def remote_show_validation_schema(api: RemoteAPI, depth: int):
     default=False,
 )
 def remote_list(
-    config: "Config", api: RemoteAPI, meta: List[str], limit: int, show_uuid: bool
+    config: "Config", api: RemoteAPI, meta: list[str], limit: int, show_uuid: bool
 ):
     """List simulations available on remote."""
     check_meta_args(meta)
@@ -461,8 +462,8 @@ def remote_trace(api: RemoteAPI, sim_id: str):
 def remote_query(
     config: "Config",
     api: RemoteAPI,
-    constraints: List[str],
-    meta: Tuple[str],
+    constraints: list[str],
+    meta: tuple[str],
     limit: int,
     show_uuid: bool,
 ):
@@ -512,7 +513,7 @@ def remote_query(
 
     simulations = api.query_simulations(constraints, meta, limit)
 
-    names: List[str] = []
+    names: list[str] = []
     for constraint in constraints:
         name, _ = constraint.split("=")
         names.append(name)
@@ -613,7 +614,7 @@ def admin():
 )
 def admin_set_meta(api: RemoteAPI, sim_id: str, key: str, value: str, type: str):
     """Add or update a metadata value for the given simulation."""
-    new_value: Union[str, uuid.UUID, int, float] = value
+    new_value: str | uuid.UUID | int | float = value
     if type == "UUID":
         new_value = uuid.UUID(value)
     elif type == "int":
