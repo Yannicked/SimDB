@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any, cast
 
-from ..config import Config
+from simdb.config import Config
 
 
 class DatabaseError(RuntimeError):
@@ -21,7 +21,8 @@ if TYPING:
     import sqlalchemy
     from sqlalchemy.orm import scoped_session
 
-    from ..query import QueryType
+    from simdb.query import QueryType
+
     from .models import Base
     from .models.file import File
     from .models.simulation import Simulation
@@ -94,7 +95,7 @@ class Database:
                 raise ValueError("Missing file parameter for SQLITE database")
             # new_db = (not os.path.exists(kwargs["file"]))
             self.engine: sqlalchemy.engine.Engine = create_engine(
-                "sqlite:///%(file)s" % kwargs
+                "sqlite:///{file}".format(**kwargs)
             )
             with contextlib.closing(self.engine.connect()) as con:
                 res: sqlalchemy.engine.ResultProxy = con.execute(
@@ -115,8 +116,7 @@ class Database:
             #     % kwargs
             # )
             self.engine: sqlalchemy.engine.Engine = create_engine(
-                "postgresql+psycopg2://%(user)s:%(password)s@%(host)s:%(port)s/%(db_name)s"
-                % kwargs,
+                "postgresql+psycopg2://{user}:{password}@{host}:{port}/{db_name}".format(**kwargs),
                 pool_size=25,
                 max_overflow=50,
                 pool_pre_ping=True,
@@ -136,7 +136,7 @@ class Database:
             if "dsnname" not in kwargs:
                 raise ValueError("Missing dsnname parameter for MSSQL database")
             self.engine: sqlalchemy.engine.Engine = create_engine(
-                "mssql+pyodbc://%(user)s:%(password)s@%(dsnname)s" % kwargs
+                "mssql+pyodbc://{user}:{password}@{dsnname}".format(**kwargs)
             )
             new_db = False
 
@@ -252,7 +252,7 @@ class Database:
             trans.commit()
 
     def list_simulations(
-        self, meta_keys: list[str] = None, limit: int = 0
+        self, meta_keys: list[str] | None = None, limit: int = 0
     ) -> list["Simulation"]:
         """
         Return a list of all the simulations stored in the database.
@@ -282,7 +282,7 @@ class Database:
 
     def list_simulation_data(
         self,
-        meta_keys: list[str] = None,
+        meta_keys: list[str] | None = None,
         limit: int = 0,
         page: int = 1,
         sort_by: str = "",
@@ -389,7 +389,8 @@ class Database:
         from sqlalchemy import String, func, or_
         from sqlalchemy.orm import Bundle
 
-        from ..query import QueryType
+        from simdb.query import QueryType
+
         from .models.metadata import MetaData
         from .models.simulation import Simulation
 
@@ -465,7 +466,7 @@ class Database:
     def _get_sim_ids(
         self, constraints: list[tuple[str, str, "QueryType"]]
     ) -> Iterable[int]:
-        from ..query import QueryType, query_compare
+        from simdb.query import QueryType, query_compare
 
         rows = self._get_metadata(constraints)
 
@@ -689,7 +690,7 @@ class Database:
 
         if name == "alias":
             query = self.session.query(Simulation.alias).filter(
-                Simulation.alias != None
+                Simulation.alias is not None
             )
         else:
             query = (

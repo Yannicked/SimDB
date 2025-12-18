@@ -1,7 +1,8 @@
 
 from flask import Request
 
-from ....config import Config
+from simdb.config import Config
+
 from ._authenticator import Authenticator
 from ._exceptions import AuthenticationError
 from ._user import User
@@ -26,8 +27,8 @@ class KeyCloakAuthenticator(Authenticator):
             )
             decoded = oid.decode_token(token)
 
-            name = decoded["name"] if "name" in decoded else None
-            email = decoded["email"] if "email" in decoded else None
+            name = decoded.get("name", None)
+            email = decoded.get("email", None)
 
             return User(name, email)
         except KeycloakError as err:

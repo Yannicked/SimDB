@@ -1,3 +1,4 @@
+import contextlib
 import re
 
 import yaml
@@ -58,10 +59,8 @@ def get_meta(data):
             "time_begin": start,
             "time_end": end,
         }
-        try:
+        with contextlib.suppress(ValueError):
             dataset_description["simulation"]["time_step"] = float(step)
-        except ValueError:
-            pass
 
     meta["dataset_description"] = dataset_description
     if "database_relations" in data:
@@ -102,7 +101,7 @@ def to_uri(**kwargs):
 
 def main(args):
     if len(args) != 3:
-        print("usage: %s iter_yaml out_file" % args[0])
+        print(f"usage: {args[0]} iter_yaml out_file")
         return
 
     in_file = args[1]

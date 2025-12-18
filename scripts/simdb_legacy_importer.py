@@ -35,6 +35,7 @@ try:
 except ImportError:
     import imas
 import argparse
+import contextlib
 import os
 from datetime import datetime
 
@@ -492,7 +493,7 @@ def flatten_description(data, indent=0):
 
     if isinstance(data, dict):
         for key, value in data.items():
-            if isinstance(value, (dict, list)):
+            if isinstance(value, dict | list):
                 lines.append(f"{prefix}{key}:")
                 lines.append(flatten_description(value, indent + 2))
             else:
@@ -584,13 +585,12 @@ def get_dataset_description(
         code_from_ids = ids_summary.code.name
 
     code = {}
-    if code_from_ids:
-        if code_from_ids != code_from_yaml:
-            validation_logger.info("\tdiscrepancies found in code name")
-            validation_logger.info(
-                f"\t>  yaml['characteristics']['workflow'], summary.code.name  "
-                f"(yaml,ids):[{code_from_yaml}],[{code_from_ids}]"
-            )
+    if code_from_ids and code_from_ids != code_from_yaml:
+        validation_logger.info("\tdiscrepancies found in code name")
+        validation_logger.info(
+            f"\t>  yaml['characteristics']['workflow'], summary.code.name  "
+            f"(yaml,ids):[{code_from_yaml}],[{code_from_ids}]"
+        )
         # code["name"] = code_from_ids.upper()
     # else:
     #     validation_logger.info("\tsummary.code.name is not set in the IDS, setting it from yaml file")
@@ -676,10 +676,9 @@ def get_dataset_description(
         if step == "varying":
             times = ids_summary.time
             homogeneous_time = ids_summary.ids_properties.homogeneous_time
-            if homogeneous_time == 1:
-                if times is not None:
-                    if len(times) > 1:
-                        step = (times[len(times) - 1] - times[0]) / (len(times) - 1)
+            if homogeneous_time == 1 and times is not None:
+                if len(times) > 1:
+                    step = (times[len(times) - 1] - times[0]) / (len(times) - 1)
 
         start = float(start)
         end = float(end)
@@ -1179,7 +1178,7 @@ def get_global_quantities(
 
         if not ids_summary.global_quantities.h_mode.value.has_value:
             if (
-                not confinement_regime_from_yaml == "tbd"
+                confinement_regime_from_yaml != "tbd"
                 and confinement_regime_from_yaml != ""
             ):
                 if (
@@ -1334,7 +1333,7 @@ def get_global_quantities(
     return global_quantities
 
 
-def write_manifest_file(legacy_yaml_file: str, output_directory: str = None):
+def write_manifest_file(legacy_yaml_file: str, output_directory: str | None = None):
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
     legacy_yaml_data = load_yaml_file(legacy_yaml_file)
@@ -1396,15 +1395,13 @@ def write_manifest_file(legacy_yaml_file: str, output_directory: str = None):
             )
         except Exception as e:  # noqa: F841
             pass
-        try:
+        with contextlib.suppress(Exception):
             ids_dataset_description = connection.get(
                 "dataset_description",
                 autoconvert=False,
                 lazy=True,
                 ignore_unknown_dd_version=True,
             )
-        except Exception as _:
-            pass
         try:
             ids_equilibrium = connection.get(
                 "equilibrium",
