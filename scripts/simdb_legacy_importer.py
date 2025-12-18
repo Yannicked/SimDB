@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-simdb_legacy_importer.py
+"""simdb_legacy_importer.py.
 
 This script is designed to update legacy YAML metadata files into manifest files. It validates and processes data
 from YAML files and IMAS database entries, generating manifest files with updated metadata.

@@ -158,8 +158,8 @@ def _build_trace(sim_id: str) -> dict:
 
 
 def _get_json_aware(force: bool = False, silent: bool = False):
-    """
-    Parse JSON like Flask's request.get_json, but handle Content-Encoding: gzip.
+    """Parse JSON like Flask's request.get_json, but handle Content-Encoding: gzip.
+
     - force/silent mimic request.get_json behavior.
     - Uses Flask's JSON provider to ensure identical types/decoding.
     """

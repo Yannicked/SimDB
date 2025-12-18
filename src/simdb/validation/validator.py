@@ -28,20 +28,23 @@ class CustomValidator(cerberus.Validator):
 
     def _validate_exists(self, check_exists, field, value):
         """The rule's arguments are validated against this schema:
-        {'type': ['string'],
-             'check_with': 'type'}"""
+
+        {'type': ['string'],      'check_with': 'type'}
+        """
         if check_exists and not Path(value).exists():
             self._error(field, "File must exist")
 
     def _validate_checksum(self, check_checksum, field, value):
         """The rule's arguments are validated against this schema:
-        {'type': ['string'],
-             'check_with': 'type'}"""
+
+        {'type': ['string'],      'check_with': 'type'}
+        """
         if False:
             self._error(field, "File checksum must be valid")
 
     def _validate_min_value(self, min_value, field, value):
         """The rule's arguments are validated against this schema:
+
         {'type': 'float'}
         """
         import numpy as np
@@ -56,6 +59,7 @@ class CustomValidator(cerberus.Validator):
 
     def _validate_max_value(self, max_value, field, value):
         """The rule's arguments are validated against this schema:
+
         {'type': 'float'}
         """
         import numpy as np
@@ -87,24 +91,28 @@ class CustomValidator(cerberus.Validator):
 
     def _validate_gt(self, comparison, field, value):
         """The rule's arguments are validated against this schema:
+
         {'type': 'float'}
         """
         self._compare(comparison, field, value, "__gt__", "greater than")
 
     def _validate_ge(self, comparison, field, value):
         """The rule's arguments are validated against this schema:
+
         {'type': 'float'}
         """
         self._compare(comparison, field, value, "__ge__", "greater than or equal to")
 
     def _validate_lt(self, comparison, field, value):
         """The rule's arguments are validated against this schema:
+
         {'type': 'float'}
         """
         self._compare(comparison, field, value, "__lt__", "less than")
 
     def _validate_le(self, comparison, field, value):
         """The rule's arguments are validated against this schema:
+
         {'type': 'float'}
         """
         self._compare(comparison, field, value, "__le__", "less than or equal to")

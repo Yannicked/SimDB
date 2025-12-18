@@ -83,9 +83,9 @@ class _RemoteCommand(click.Command):
 
 
 def remote_command_cls(subgroup: str = "") -> type:
-    """
-    Customise the RemoteCommand class to hold the name of the subgroup if provided. This is required to properly format
-    the help string for subgroup commands.
+    """Customise the RemoteCommand class to hold the name of the subgroup if provided.
+
+    This is required to properly format the help string for subgroup commands.
     """
     sub_command_cls = type("SubCommandCls", (_RemoteCommand,), {"subgroup": subgroup})
     return sub_command_cls
@@ -110,8 +110,8 @@ def remote(
 ):
     """Interact with the remote SimDB service.
 
-    If NAME is provided this determines which remote server to communicate with, otherwise the server in the config file
-    with default=True is used.
+    If NAME is provided this determines which remote server to communicate with,
+    otherwise the server in the config file with default=True is used.
     """
     if not ctx.invoked_subcommand and not any(is_empty(i) for i in ctx.params.values()):
         click.echo(ctx.get_help())
@@ -130,9 +130,7 @@ def remote(
 @remote.command("test", cls=remote_command_cls())
 @pass_api
 def remote_test(api: RemoteAPI):
-    """
-    Test that the remote is valid.
-    """
+    """Test that the remote is valid."""
     remote_version = api.get_api_version()
     print(f"Remote is valid (remote API version: {remote_version})")
 
@@ -140,9 +138,7 @@ def remote_test(api: RemoteAPI):
 @remote.command("directory", cls=remote_command_cls())
 @pass_api
 def remote_directory(api: RemoteAPI):
-    """
-    Print the storage directory of the remote.
-    """
+    """Print the storage directory of the remote."""
     if api.version < Version("1.2.0"):
         raise click.ClickException(
             "Command not available with this remote. Requires API version >= 1.2."
@@ -152,27 +148,21 @@ def remote_directory(api: RemoteAPI):
 
 @remote.group("config", cls=RemoteSubGroup)
 def remote_config():
-    """
-    Configure the available remotes.
-    """
+    """Configure the available remotes."""
     pass
 
 
 @remote_config.command("default", cls=remote_command_cls("config"))
 @pass_config
 def config_default(config: "Config"):
-    """
-    Print the default remote.
-    """
+    """Print the default remote."""
     click.echo(config.default_remote)
 
 
 @remote_config.command("list", cls=remote_command_cls("config"))
 @pass_config
 def config_list(config: "Config"):
-    """
-    List available remotes.
-    """
+    """List available remotes."""
     r = re.compile(r"remote\.(.*)\.url: (.*)")
     for option in config.list_options():
         m = r.match(option)
@@ -214,9 +204,7 @@ def config_new(
     username: str | None,
     default: bool,
 ):
-    """
-    Add a new remote.
-    """
+    """Add a new remote."""
     config.set_option(f"remote.{name}.url", url)
     if firewall is not None:
         config.set_option(f"remote.{name}.firewall", firewall)
@@ -231,9 +219,7 @@ def config_new(
 @pass_config
 @click.argument("name", required=True)
 def config_delete(config: "Config", name: str):
-    """
-    Delete a remote.
-    """
+    """Delete a remote."""
     config.delete_section(f"remote.{name}")
     config.save()
 
@@ -242,9 +228,7 @@ def config_delete(config: "Config", name: str):
 @pass_config
 @click.argument("name", required=True)
 def config_set_default(config: "Config", name: str):
-    """
-    Set a remote as default.
-    """
+    """Set a remote as default."""
     config.default_remote = name
     config.save()
 
@@ -252,9 +236,7 @@ def config_set_default(config: "Config", name: str):
 @remote_config.command("get-default", cls=remote_command_cls("config"))
 @pass_config
 def config_get_default(config: "Config"):
-    """
-    Get the name of the default remote.
-    """
+    """Get the name of the default remote."""
     click.echo(config.default_remote)
 
 
@@ -264,9 +246,7 @@ def config_get_default(config: "Config"):
 @click.argument("option", required=True)
 @click.argument("value", required=True)
 def config_set_option(config: "Config", name: str, option: str, value: str):
-    """
-    Set a configuration option for a given remote.
-    """
+    """Set a configuration option for a given remote."""
     config.set_option(f"remote.{name}.{option}", value)
     config.save()
 
@@ -297,7 +277,8 @@ def list_watchers(api: RemoteAPI, sim_id: str):
 @click.argument("sim_id")
 @click.option("-u", "--user", help="Name of the user to remove as a watcher.")
 def remove_watcher(config: "Config", api: RemoteAPI, sim_id: str, user: str):
-    """Remove a user from list of watchers on a simulation with given SIM_ID (UUID or alias)."""
+    """Remove a user from list of watchers on a simulation with given SIM_ID (UUID or
+    alias)."""
     if not user:
         user = config.get_string_option("user.name")
     if not user:
@@ -329,7 +310,8 @@ def add_watcher(
     email: str | None,
     notification: str,
 ):
-    """Register a user as a watcher for a simulation with given SIM_ID (UUID or alias)."""
+    """Register a user as a watcher for a simulation with given SIM_ID (UUID or
+    alias)."""
     if not user:
         user = config.get_string_option("user.name", default=None)
     if not user:
@@ -412,7 +394,8 @@ def remote_version(api: RemoteAPI):
 @pass_api
 @click.argument("sim_id")
 def remote_info(api: RemoteAPI, sim_id: str):
-    """Print information about simulation with given SIM_ID (UUID or alias) from remote."""
+    """Print information about simulation with given SIM_ID (UUID or alias) from
+    remote."""
     simulation = api.get_simulation(sim_id)
     click.echo(str(simulation))
 
@@ -421,13 +404,14 @@ def remote_info(api: RemoteAPI, sim_id: str):
 @pass_api
 @click.argument("sim_id")
 def remote_trace(api: RemoteAPI, sim_id: str):
-    """Print provenance trace of simulation with given SIM_ID (UUID or alias) from remote.
+    """Print provenance trace of simulation with given SIM_ID (UUID or alias) from
+    remote.
 
-    This shows a history of simulations that this simulation has replaced or been replaced by and
-    what those simulations replaced or where replaced by and so on.
+    This shows a history of simulations that this simulation has replaced or been
+    replaced by and what those simulations replaced or where replaced by and so on.
 
-    If the outputs of this simulation are used as inputs of other simulations or if the inputs
-    are generated by other simulations then these dependencies are also reported.
+    If the outputs of this simulation are used as inputs of other simulations or if the
+    inputs are generated by other simulations then these dependencies are also reported.
     """
     trace_data = api.trace_simulation(sim_id)
     print_trace(trace_data)
@@ -569,9 +553,7 @@ def token():
 @pass_api
 @pass_config
 def token_new(config: "Config", api: RemoteAPI):
-    """
-    Create a new token for the given remote.
-    """
+    """Create a new token for the given remote."""
     token = api.get_token()
     config.set_option(f"remote.{api.remote}.token", token)
     config.save()
@@ -582,9 +564,7 @@ def token_new(config: "Config", api: RemoteAPI):
 @pass_api
 @pass_config
 def token_delete(config: "Config", api: RemoteAPI):
-    """
-    Delete the existing token for the given remote.
-    """
+    """Delete the existing token for the given remote."""
     try:
         config.delete_option(f"remote.{api.remote}.token")
         config.save()

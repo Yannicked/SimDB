@@ -1,6 +1,5 @@
-"""
-Metadata is represented as key-value pairs
-Keys may be repeated so in YAML format, values are contained in string and list objects
+"""Metadata is represented as key-value pairs Keys may be repeated so in YAML format,
+values are contained in string and list objects.
 
 File manifest data are contained in string, list, and dictionary objects
 """

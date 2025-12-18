@@ -18,11 +18,9 @@ INT_MISSING_VALUE = -999999999
 
 
 def is_missing(value: Any):
-    """
-    Returns whether the given value is one of IMASs 'missing' values.
+    """Returns whether the given value is one of IMASs 'missing' values.
 
-    @param value: the value to check
-    @return: whether this value is 'missing'
+    @param value: the value to check @return: whether this value is 'missing'
     """
     if not value:
         return True
@@ -56,8 +54,7 @@ class DBEntry:
     def partial_get(self, ids: str, path: str, occurrence=0) -> Any: ...
 
     def list_all_occurrences(self, ids: str) -> list[int]:
-        """
-        List all occurrences of the given IDS in the IMAS data entry.
+        """List all occurrences of the given IDS in the IMAS data entry.
 
         @param
         ids: the IDS name
@@ -68,13 +65,12 @@ class DBEntry:
 
 
 def list_idss(entry: DBEntry) -> list[str]:
-    """
-    List all the IDSs found to be populated for the given IMAS data entry.
+    """List all the IDSs found to be populated for the given IMAS data entry.
 
-    Each IDS is defined as being non-empty if the ids_properties/homogeneous_time field has been populated.
+    Each IDS is defined as being non-empty if the ids_properties/homogeneous_time field
+    has been populated.
 
-    @param entry: the IMAS data entry
-    @return: the list of found IDSs
+    @param entry: the IMAS data entry @return: the list of found IDSs
     """
 
     idss = []
@@ -90,12 +86,9 @@ def list_idss(entry: DBEntry) -> list[str]:
 
 
 def check_time(entry: DBEntry, ids: str, occurrence) -> None:
-    """
-    Check the validity of the ids_properties/homogeneous_time field of the given IDS.
+    """Check the validity of the ids_properties/homogeneous_time field of the given IDS.
 
-    @param entry: the open IMAS data entry
-    @param ids: the
-    @return:
+    @param entry: the open IMAS data entry @param ids: the @return:
     """
     import imas
 
@@ -176,11 +169,9 @@ def _open_legacy(uri: URI) -> DBEntry:
 
 
 def open_imas(uri: URI) -> DBEntry:
-    """
-    Open an IMAS URI and return the IMAS entry object.
+    """Open an IMAS URI and return the IMAS entry object.
 
-    @param uri: the IMAS URI to open
-    @return: the IMAS data entry object
+    @param uri: the IMAS URI to open @return: the IMAS data entry object
     """
     import imas
 
@@ -208,11 +199,9 @@ def open_imas(uri: URI) -> DBEntry:
 
 
 def imas_timestamp(uri: URI) -> datetime:
-    """
-    Extract the timestamp from the IDS data for the given IMAS URI.
+    """Extract the timestamp from the IDS data for the given IMAS URI.
 
-    @param uri: the IMAS URI
-    @return: the timestamp as a datetime object
+    @param uri: the IMAS URI @return: the timestamp as a datetime object
     """
     entry = open_imas(uri)
     ids_obj = entry.get("summary")
@@ -258,11 +247,10 @@ def get_path_for_legacy_uri(uri: URI) -> Path:
 
 
 def _get_path(uri: URI) -> Path:
-    """
-    Return the path to the data for a given IMAS URI
+    """Return the path to the data for a given IMAS URI.
 
-    @param uri: a valid IMAS URI
-    @return: the path of the IDS data for the given IMAS URI
+    @param uri: a valid IMAS URI @return: the path of the IDS data for the given IMAS
+    URI
     """
     path = uri.query.get("path", default=None)
     if path is None:
@@ -275,11 +263,10 @@ def _get_path(uri: URI) -> Path:
 
 
 def imas_files(uri: URI) -> list[Path]:
-    """
-    Return all the files associated with the given IMAS URI.
+    """Return all the files associated with the given IMAS URI.
 
-    @param uri: a valid IMAS URI
-    @return: a list of files which contains the IDS data for the backend specified in the URI
+    @param uri: a valid IMAS URI @return: a list of files which contains the IDS data
+    for the backend specified in the URI
     """
     backend = str(uri.path)
     backend = backend.removeprefix("/")
@@ -308,8 +295,8 @@ def imas_files(uri: URI) -> list[Path]:
 
 
 def convert_uri(uri: URI, path: Path, config: Config) -> URI:
-    """
-    Converts a local IMAS URI to a remote access IMAS URI based on the server.imas_remote_host configuration option.
+    """Converts a local IMAS URI to a remote access IMAS URI based on the
+    server.imas_remote_host configuration option.
 
     Translate locale IMAS URI (imas:<backend>?path=<path>) to remote access URI
     (imas://<imas_remote_host>:<imas_remote_port>/uda?path=<path>&backend=<backend>)
@@ -333,7 +320,9 @@ def convert_uri(uri: URI, path: Path, config: Config) -> URI:
 
 def extract_ids_occurrence(ids: str) -> tuple[str, int]:
     """Extract IDS name and occurrence number.
-    Returns tuple of (ids_name, occurrence)"""
+
+    Returns tuple of (ids_name, occurrence)
+    """
     last_underscore = ids.rfind("_")
     if last_underscore == -1:
         return ids, 0

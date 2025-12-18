@@ -7,9 +7,7 @@ from ._user import User
 
 
 class NoopAuthenticator(Authenticator):
-    """
-    No-op authenticator which accepts any user as authenticated.
-    """
+    """No-op authenticator which accepts any user as authenticated."""
 
     Name = "None"
 

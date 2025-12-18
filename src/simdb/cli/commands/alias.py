@@ -61,7 +61,8 @@ def alias(config: "Config", ctx: "Context", remote, username, password):
 @pass_config
 @click.argument("alias")
 def alias_make_unique(config: "Config", api: RemoteAPI, alias: str):
-    """Make the given alias unique, checking locally stored simulations and the remote."""
+    """Make the given alias unique, checking locally stored simulations and the
+    remote."""
     from simdb.database import get_local_db
 
     trans = str.maketrans("#/()=,*%", "________")

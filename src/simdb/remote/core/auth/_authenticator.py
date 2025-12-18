@@ -9,9 +9,7 @@ from ._user import User
 
 
 class Authenticator(abc.ABC):
-    """
-    Base class for SimDB server authenticators.
-    """
+    """Base class for SimDB server authenticators."""
 
     Authenticators: dict[str, type["Authenticator"]] = {}
     Name: str = NotImplemented
@@ -37,8 +35,8 @@ class Authenticator(abc.ABC):
 
     @classmethod
     def get(cls, name: str) -> "Authenticator":
-        """
-        Find an authenticator subclass for the given name and return an object of that class.
+        """Find an authenticator subclass for the given name and return an object of
+        that class.
 
         :param name: The name of the authenticator to return.
         :return: An instance of an Authenticator subclass.

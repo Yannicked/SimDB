@@ -18,9 +18,7 @@ from .utils import checked_get
 
 @inherit_docstrings
 class File(Base):
-    """
-    Class to represent files in the database ORM.
-    """
+    """Class to represent files in the database ORM."""
 
     __tablename__ = "files"
     id = Column(sql_types.Integer, primary_key=True)

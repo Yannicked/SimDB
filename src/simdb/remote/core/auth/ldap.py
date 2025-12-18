@@ -8,8 +8,7 @@ from ._user import User
 
 
 class LdapAuthenticator(Authenticator):
-    """
-    Authenticator for authenticating using an LDAP server.
+    """Authenticator for authenticating using an LDAP server.
 
     This requires the following extra parameters in the server configuration:
     ldap_server         - the URI of the LDAP server
