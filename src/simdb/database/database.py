@@ -54,17 +54,13 @@ def _is_hex_string(string: str) -> bool:
 
 
 class Database:
-    """
-    Class to wrap the database access.
-    """
+    """Class to wrap the database access."""
 
     engine: "sqlalchemy.engine.Engine"
     _session: "sqlalchemy.orm.SessionExtension" = None
 
     class DBMS(Enum):
-        """
-        DBMSs supported.
-        """
+        """DBMSs supported."""
 
         SQLITE = auto()
         POSTGRESQL = auto()
@@ -233,15 +229,12 @@ class Database:
         return simulation
 
     def remove(self):
-        """
-        Remove the current session
-        """
+        """Remove the current session."""
         if self.session:
             self.session.remove()
 
     def reset(self) -> None:
-        """
-        Clear all the data out of the database.
+        """Clear all the data out of the database.
 
         :return: None
         """
@@ -256,8 +249,7 @@ class Database:
     def list_simulations(
         self, meta_keys: list[str] | None = None, limit: int = 0
     ) -> list["Simulation"]:
-        """
-        Return a list of all the simulations stored in the database.
+        """Return a list of all the simulations stored in the database.
 
         :return: A list of Simulations.
         """
@@ -290,8 +282,7 @@ class Database:
         sort_by: str = "",
         sort_asc: bool = False,
     ) -> tuple[int, list[dict]]:
-        """
-        Return a list of all the simulations stored in the database.
+        """Return a list of all the simulations stored in the database.
 
         :return: A list of Simulations.
         """
@@ -360,18 +351,16 @@ class Database:
         return limit_query
 
     def list_files(self) -> list["File"]:
-        """
-        Return a list of all the files stored in the database.
+        """Return a list of all the files stored in the database.
 
-        :return:  A list of Files.
+        :return: A list of Files.
         """
         from .models.file import File
 
         return self.session.query(File).all()
 
     def delete_simulation(self, sim_ref: str) -> "Simulation":
-        """
-        Delete the specified simulation from the database.
+        """Delete the specified simulation from the database.
 
         :param sim_ref: The simulation UUID or alias.
         :return: None
@@ -492,8 +481,7 @@ class Database:
     def query_meta(
         self, constraints: list[tuple[str, str, "QueryType"]]
     ) -> list["Simulation"]:
-        """
-        Query the metadata and return matching simulations.
+        """Query the metadata and return matching simulations.
 
         :return:
         """
@@ -521,8 +509,7 @@ class Database:
         sort_by: str = "",
         sort_asc: bool = False,
     ) -> tuple[int, list[dict]]:
-        """
-        Query the metadata and return matching simulations.
+        """Query the metadata and return matching simulations.
 
         :return:
         """
@@ -577,8 +564,7 @@ class Database:
         return self._get_simulation_data(limit, query, meta_keys, page)
 
     def get_simulation(self, sim_ref: str) -> "Simulation":
-        """
-        Get the specified simulation from the database.
+        """Get the specified simulation from the database.
 
         :param sim_ref: The simulation UUID or alias.
         :return: The Simulation.
@@ -625,8 +611,7 @@ class Database:
         return [{"uuid": r.uuid, "alias": r.alias} for r in query.all()]
 
     def get_file(self, file_uuid_str: str) -> "File":
-        """
-        Get the specified file from the database.
+        """Get the specified file from the database.
 
         :param file_uuid_str: The string representation of the file UUID.
         :return: The File.
@@ -644,8 +629,7 @@ class Database:
         return file
 
     def get_metadata(self, sim_ref: str, name: str) -> list[str]:
-        """
-        Get all the metadata for the given simulation with the given key.
+        """Get all the metadata for the given simulation with the given key.
 
         :param sim_ref: the simulation identifier
         :param name: the metadata key
@@ -706,8 +690,7 @@ class Database:
             return data
 
     def insert_simulation(self, simulation: "Simulation") -> None:
-        """
-        Insert the given simulation into the database.
+        """Insert the given simulation into the database.
 
         :param simulation: The Simulation to insert.
         :return: None

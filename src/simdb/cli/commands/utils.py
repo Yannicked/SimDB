@@ -26,9 +26,7 @@ def _flatten_dict(values: dict) -> list[tuple[str, str]]:
 
 
 def _format_meta_value(meta_value: Any, max_len: int) -> str:
-    """
-    Format the meta value as a string, limiting array values to max_len.
-    """
+    """Format the meta value as a string, limiting array values to max_len."""
     if isinstance(meta_value, list | numpy.ndarray):
         values = []
         for i, v in enumerate(meta_value):
@@ -47,12 +45,11 @@ def print_simulations(
     metadata_names: list[str] | None = None,
     show_uuid: bool = False,
 ) -> None:
-    """
-    Print a table of simulations to the console.
+    """Print a table of simulations to the console.
 
     By default, only the simulation alias is printed on each row. If verbose is True
-    then the simulation datetime and status are also printed and metadata_names allows additional
-    columns to be specified.
+    then the simulation datetime and status are also printed and metadata_names allows
+    additional columns to be specified.
 
     :param simulations: The simulations to print.
     :param verbose: Whether to print a more verbose table.
@@ -155,8 +152,7 @@ def _print_trace_sim(trace_data: dict, indentation: int):
 
 
 def print_trace(trace_data: dict) -> None:
-    """
-    Print the simulation trace data to the console.
+    """Print the simulation trace data to the console.
 
     :param trace_data: A dictionary containing the simulation trace data.
     :return: None

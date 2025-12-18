@@ -11,9 +11,7 @@ from .simulation import Simulation
 
 @inherit_docstrings
 class MetaData(Base):
-    """
-    Class to represent metadata in the database ORM.
-    """
+    """Class to represent metadata in the database ORM."""
 
     __tablename__ = "metadata"
     id = Column(sql_types.Integer, primary_key=True)

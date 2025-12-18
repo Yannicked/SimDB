@@ -8,10 +8,10 @@ from simdb import uri as urilib
 
 
 class UUID(sql_types.TypeDecorator):
-    """
-    Platform-independent GUID type.
+    """Platform-independent GUID type.
 
-    Uses PostgreSQL's UUID type, otherwise uses CHAR(32), storing as stringified hex values.
+    Uses PostgreSQL's UUID type, otherwise uses CHAR(32), storing as stringified hex
+    values.
     """
 
     impl = sql_types.CHAR
@@ -57,9 +57,7 @@ class UUID(sql_types.TypeDecorator):
 
 
 class URI(sql_types.TypeDecorator):
-    """
-    UUID type for reading/writing to the ORM.
-    """
+    """UUID type for reading/writing to the ORM."""
 
     impl = sql_types.VARCHAR
 

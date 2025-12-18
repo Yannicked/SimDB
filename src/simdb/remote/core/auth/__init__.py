@@ -36,9 +36,7 @@ Authenticator.register(TokenAuthenticator)
 
 
 def authenticate():
-    """
-    Sends a 401 response that enables basic auth.
-    """
+    """Sends a 401 response that enables basic auth."""
     return Response(
         "Could not verify your access level for that URL. You have to login with proper credentials.",
         401,
@@ -47,8 +45,8 @@ def authenticate():
 
 
 def check_role(config: Config, user: User, role: str | None) -> bool:
-    """
-    This function is called to check if an authenticated user is a member of the specified role.
+    """This function is called to check if an authenticated user is a member of the
+    specified role.
 
     If no role is specified then the function always returns true.
     """
@@ -63,9 +61,7 @@ def check_role(config: Config, user: User, role: str | None) -> bool:
 
 
 def check_auth(config: Config, request: Request) -> User | None:
-    """
-    This function is called to check if a request is authenticated.
-    """
+    """This function is called to check if a request is authenticated."""
     auth = request.authorization
     username = auth.username if auth is not None else None
     password = auth.password if auth is not None else None

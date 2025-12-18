@@ -12,9 +12,7 @@ from .utils import checked_get
 
 @inherit_docstrings
 class Watcher(Base):
-    """
-    Class to represent people watching simulations for updates.
-    """
+    """Class to represent people watching simulations for updates."""
 
     NOTIFICATION_CHOICES = {
         Notification.VALIDATION: "V",

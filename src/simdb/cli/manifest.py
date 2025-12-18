@@ -67,8 +67,8 @@ def _to_uri(uri_str: str, base_path: Path) -> tuple["DataObject.Type", "URI"]:
 
 
 class DataObject:
-    """
-    Simulation data object, either a file, an IDS or an already registered object identifiable by the UUID.
+    """Simulation data object, either a file, an IDS or an already registered object
+    identifiable by the UUID.
 
     PATH: file:///<PATH>
     IMAS: imas:<BACKEND>?path=<PATH>
@@ -95,25 +95,19 @@ class DataObject:
 
 
 class Source(DataObject):
-    """
-    Simulation data inputs.
-    """
+    """Simulation data inputs."""
 
     pass
 
 
 class Sink(DataObject):
-    """
-    Simulation data outputs.
-    """
+    """Simulation data outputs."""
 
     pass
 
 
 class ManifestValidator:
-    """
-    Base class for validation of manifests.
-    """
+    """Base class for validation of manifests."""
 
     version: int
 
@@ -125,9 +119,7 @@ class ManifestValidator:
 
 
 class ListValuesValidator(ManifestValidator):
-    """
-    Class for the validation of list items in the manifest.
-    """
+    """Class for the validation of list items in the manifest."""
 
     def __init__(
         self,
@@ -165,9 +157,7 @@ class ListValuesValidator(ManifestValidator):
 
 
 class DictValuesValidator(ManifestValidator):
-    """
-    Class for the validation of dictionary items in the manifest.
-    """
+    """Class for the validation of dictionary items in the manifest."""
 
     def __init__(
         self,
@@ -208,9 +198,7 @@ class DictValuesValidator(ManifestValidator):
 
 
 class DataObjectValidator(ListValuesValidator):
-    """
-    Validator for the manifest data objects (inputs or outputs).
-    """
+    """Validator for the manifest data objects (inputs or outputs)."""
 
     def __init__(self, version: int, section_name: str) -> None:
         if version == 0:
@@ -241,27 +229,21 @@ class DataObjectValidator(ListValuesValidator):
 
 
 class InputsValidator(DataObjectValidator):
-    """
-    Validator for the manifest inputs list.
-    """
+    """Validator for the manifest inputs list."""
 
     def __init__(self, version):
         super().__init__(version, "inputs")
 
 
 class OutputsValidator(DataObjectValidator):
-    """
-    Validator for the manifest outputs list.
-    """
+    """Validator for the manifest outputs list."""
 
     def __init__(self, version):
         super().__init__(version, "outputs")
 
 
 class VersionValidator(ManifestValidator):
-    """
-    Validator for manifest version.
-    """
+    """Validator for manifest version."""
 
     def __init__(self, version: int):
         super().__init__(version)
@@ -272,9 +254,7 @@ class VersionValidator(ManifestValidator):
 
 
 class AliasValidator(ManifestValidator):
-    """
-    Validator for simulation alias.
-    """
+    """Validator for simulation alias."""
 
     def __init__(self, version: int):
         super().__init__(version)
@@ -306,17 +286,13 @@ class AliasValidator(ManifestValidator):
 
 
 class DescriptionValidator(ManifestValidator):
-    """
-    Validator for simulation description.
-    """
+    """Validator for simulation description."""
 
     pass
 
 
 class ResponsibleValidator(ManifestValidator):
-    """
-    Validator for simulation Responsible.
-    """
+    """Validator for simulation Responsible."""
 
     pass
 
@@ -335,9 +311,7 @@ def get_loader() -> type[yaml.SafeLoader]:
 
 
 class MetaDataValidator(ListValuesValidator):
-    """
-    Validator for the manifest Metadata list.
-    """
+    """Validator for the manifest Metadata list."""
 
     forbidden_characters = (":", "=", "#")
 
@@ -359,9 +333,7 @@ class MetaDataValidator(ListValuesValidator):
 
 
 class WorkflowValidator(DictValuesValidator):
-    """
-    Validator for the manifest workflow dictionary.
-    """
+    """Validator for the manifest workflow dictionary."""
 
     def __init__(self, version: int) -> None:
         section_name = "workflow"
@@ -396,9 +368,7 @@ def _update_dict(old: dict, new: dict) -> None:
 
 
 class Manifest:
-    """
-    Class to handle reading, writing & validation of simulation manifest files.
-    """
+    """Class to handle reading, writing & validation of simulation manifest files."""
 
     _data: dict | list | None = None
     _path: Path = Path()
@@ -410,8 +380,7 @@ class Manifest:
 
     @classmethod
     def from_template(cls) -> "Manifest":
-        """
-        Create an empty manifest from a template file.
+        """Create an empty manifest from a template file.
 
         :return: A new manifest object.
         """
@@ -538,8 +507,7 @@ class Manifest:
         return new_files
 
     def load(self, file_path: Path) -> None:
-        """
-        Load a manifest from the given file.
+        """Load a manifest from the given file.
 
         :param file_path: Path to the file read.
         :return: None
@@ -567,8 +535,7 @@ class Manifest:
             # _update_dict(self._metadata, item["values"])
 
     def save(self, out_file: TextIO) -> None:
-        """
-        Save the manifest to the given file.
+        """Save the manifest to the given file.
 
         :param out_file: The output text stream to write the manifest to.
         :return: None
@@ -578,8 +545,7 @@ class Manifest:
         yaml.dump(self._data, out_file, default_flow_style=False)
 
     def validate(self) -> None:
-        """
-        Validate the manifest object.
+        """Validate the manifest object.
 
         :return: None
         """

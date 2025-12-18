@@ -66,9 +66,7 @@ def _update_legacy_uri(data_object: DataObject):
 
 @inherit_docstrings
 class Simulation(Base):
-    """
-    Class to represent simulations in the database ORM.
-    """
+    """Class to represent simulations in the database ORM."""
 
     class Status(Enum):
         NOT_VALIDATED = "not validated"
@@ -97,10 +95,10 @@ class Simulation(Base):
     )
 
     def __init__(self, manifest: Manifest | None, config: Config | None = None) -> None:
-        """
-        Initialise a new Simulation object using the provided Manifest.
+        """Initialise a new Simulation object using the provided Manifest.
 
-        :param manifest: The Manifest to load the data from, or None to create an empty Simulation.
+        :param manifest: The Manifest to load the data from, or None to create an empty
+            Simulation.
         """
         from .metadata import MetaData
 
@@ -271,11 +269,11 @@ class Simulation(Base):
             self.meta.append(MetaData(name, value))
 
     def validate_meta(self) -> None:
-        """
-        Check the metadata elements for duplicates, throwing and exception if found.
+        """Check the metadata elements for duplicates, throwing and exception if found.
 
-        Duplicates should not be possible but if there is an issue causing them to arise then at least it will be
-        caught early rather than causing an SQL constraint failure later.
+        Duplicates should not be possible but if there is an issue causing them to arise
+        then at least it will be caught early rather than causing an SQL constraint
+        failure later.
         """
         names = [m.element for m in self.meta]
         counts = defaultdict(lambda: 0)
