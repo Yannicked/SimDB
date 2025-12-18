@@ -97,7 +97,7 @@ def walk_dict(d: dict, node, depth: int, read_values: ReadValues) -> dict:
 
 
 def extract_ids_path(coords_str: str) -> str:
-    """Extract path from IDSCoordinates string representation"""
+    """Extract path from IDSCoordinates string representation."""
     # Check if string matches expected format
     if not coords_str.startswith(
         "<IDSCoordinates of '"
@@ -110,8 +110,8 @@ def extract_ids_path(coords_str: str) -> str:
 
 
 def load_imas_metadata(ids_dist, entry) -> dict:
-    """
-    Load metadata from IMAS entry.
+    """Load metadata from IMAS entry.
+
     :param ids_list: Dictionary where keys are IDS names and values are configurations.
     :param entry: IMAS entry object.
     :return: Dictionary containing metadata.

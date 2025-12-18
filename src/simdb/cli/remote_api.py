@@ -136,8 +136,7 @@ def _get_paths(file: "File") -> Iterable[Path]:
 
 
 class RemoteAPI:
-    """
-    Class to represent connection to remote API.
+    """Class to represent connection to remote API.
 
     This is used by the CLI to make all requests to the remote.
     """
@@ -152,8 +151,7 @@ class RemoteAPI:
         config: Config,
         use_token: bool | None = None,
     ) -> None:
-        """
-        Create a new RemoteAPI.
+        """Create a new RemoteAPI.
 
         @param remote: the name of the remote - this is the name as created in the configuration file. If not provided
         this will use the remote that has been marked as default.
@@ -297,9 +295,7 @@ class RemoteAPI:
 
     @property
     def remote(self) -> str:
-        """
-        Return the name of the remote.
-        """
+        """Return the name of the remote."""
         return self._remote
 
     def _get_auth(self) -> Union["AuthBase", tuple]:
@@ -326,15 +322,12 @@ class RemoteAPI:
         authenticate: bool | None = True,
         stream: bool | None = False,
     ) -> "requests.Response":
-        """
-        Perform an HTTP GET request.
+        """Perform an HTTP GET request.
 
-        @param url: the URL of the request.
-        @param params: any additional parameters to send along with the request.
-        @param headers: additional headers to send with the request.
-        @param authenticate: True if we should send authentication headers with the request.
-        @param stream: True to enable streaming.
-        @return:
+        @param url: the URL of the request. @param params: any additional parameters to
+        send along with the request. @param headers: additional headers to send with the
+        request. @param authenticate: True if we should send authentication headers with
+        the request. @param stream: True to enable streaming. @return:
         """
         import requests
 
@@ -368,13 +361,10 @@ class RemoteAPI:
         return res
 
     def put(self, url: str, data: dict, **kwargs) -> "requests.Response":
-        """
-        Perform an HTTP PUT request.
+        """Perform an HTTP PUT request.
 
-        @param url: the URL of the request.
-        @param data: the PUT data to send.
-        @param kwargs: any additional keyword arguments to add to the request.
-        @return:
+        @param url: the URL of the request. @param data: the PUT data to send. @param
+        kwargs: any additional keyword arguments to add to the request. @return:
         """
         import requests
 
@@ -403,13 +393,10 @@ class RemoteAPI:
         return res
 
     def post(self, url: str, data: dict, **kwargs) -> "requests.Response":
-        """
-        Perform an HTTP POST request.
+        """Perform an HTTP POST request.
 
-        @param url: the URL of the request.
-        @param data: the POST data to send.
-        @param kwargs: any additional keyword arguments to add to the request.
-        @return:
+        @param url: the URL of the request. @param data: the POST data to send. @param
+        kwargs: any additional keyword arguments to add to the request. @return:
         """
         import requests
 
@@ -456,13 +443,10 @@ class RemoteAPI:
         return res
 
     def patch(self, url: str, data: dict, **kwargs) -> "requests.Response":
-        """
-        Perform an HTTP PATCH request.
+        """Perform an HTTP PATCH request.
 
-        @param url: the URL of the request.
-        @param data: the PATCH data to send.
-        @param kwargs: any additional keyword arguments to add to the request.
-        @return:
+        @param url: the URL of the request. @param data: the PATCH data to send. @param
+        kwargs: any additional keyword arguments to add to the request. @return:
         """
         import requests
 
@@ -491,13 +475,10 @@ class RemoteAPI:
         return res
 
     def delete(self, url: str, data: dict[Any, Any], **kwargs) -> "requests.Response":
-        """
-        Perform an HTTP DELETE request.
+        """Perform an HTTP DELETE request.
 
-        @param url: the URL of the request.
-        @param data: the DELETE data to send.
-        @param kwargs: any additional keyword arguments to add to the request.
-        @return:
+        @param url: the URL of the request. @param data: the DELETE data to send. @param
+        kwargs: any additional keyword arguments to add to the request. @return:
         """
         import requests
 
@@ -749,14 +730,15 @@ class RemoteAPI:
         out_stream: IO[str] = sys.stdout,
         add_watcher: bool = True,
     ) -> None:
-        """
-        Push the local simulation to the remote server.
+        """Push the local simulation to the remote server.
 
-        First we upload any files associated with the simulation, then push the simulation metadata.
+        First we upload any files associated with the simulation, then push the
+        simulation metadata.
 
         :param simulation: The Simulation to push to remote server
         :param out_stream: The IO stream to write messages to the user (default: stdout)
-        :param add_watcher: Add the current user as a watcher of the simulation on the remote server
+        :param add_watcher: Add the current user as a watcher of the simulation on the
+            remote server
         """
         from simdb.imas.utils import imas_files
 

@@ -7,8 +7,7 @@ from ._user import User
 
 
 class ActiveDirectoryAuthenticator(Authenticator):
-    """
-    Authenticator for authenticating using an LDAP server.
+    """Authenticator for authenticating using an LDAP server.
 
     This requires the following extra parameters in the server configuration:
     ad_server   -   the server URI

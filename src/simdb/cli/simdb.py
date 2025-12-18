@@ -84,8 +84,7 @@ add_commands()
 
 
 def main() -> None:
-    """
-    Main CLI entry function
+    """Main CLI entry function.
 
     :return: None
     """

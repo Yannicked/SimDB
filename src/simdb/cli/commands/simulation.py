@@ -404,7 +404,8 @@ def simulation_query(
 def simulation_validate(
     config: Config, remote: str | None, sim_id: str, username: str, password: str
 ):
-    """Validate the ingested simulation with given SIM_ID (UUID or alias) using validation schema from REMOTE."""
+    """Validate the ingested simulation with given SIM_ID (UUID or alias) using
+    validation schema from REMOTE."""
     from itertools import chain
 
     from simdb.cli.remote_api import RemoteAPI

@@ -114,17 +114,18 @@ User configuration file {self._user_config_path} has incorrect permissions (must
         return self._api_version
 
     def load(self, file: TextIO | None = None) -> None:
-        """
-        Load the configuration.
+        """Load the configuration.
 
-        This loads the configuration from the given file and the site config and user config files.
+        This loads the configuration from the given file and the site config and user
+        config files.
 
         The location of these files are either specified by SIMDB_USER_CONFIG_PATH and
-        SIMDB_SITE_CONFIG_PATH environmental variables or in the appdirs.site_config_dir('simdb') and
-        appdirs.user_config_dir('simdb').
+        SIMDB_SITE_CONFIG_PATH environmental variables or in the
+        appdirs.site_config_dir('simdb') and appdirs.user_config_dir('simdb').
 
-        The user config file is loaded after the site config file and will overwrite any settings specified. The given
-        file is loaded after both the site and user config files.
+        The user config file is loaded after the site config file and will overwrite any
+        settings specified. The given file is loaded after both the site and user config
+        files.
 
         :param file: The location of a config file to load.
         """
@@ -151,23 +152,17 @@ User configuration file {self._user_config_path} has incorrect permissions (must
 
     @property
     def debug(self) -> bool:
-        """
-        Returns the debug status flag.
-        """
+        """Returns the debug status flag."""
         return self._debug
 
     @debug.setter
     def debug(self, debug: bool) -> None:
-        """
-        Set the debug status flag.
-        """
+        """Set the debug status flag."""
         self._debug = debug
 
     @property
     def default_remote(self) -> str | None:
-        """
-        Returns the default remote used by the SimDB client.
-        """
+        """Returns the default remote used by the SimDB client."""
         remotes = [
             section
             for section in self._parser.sections()
@@ -180,9 +175,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
 
     @default_remote.setter
     def default_remote(self, default: str):
-        """
-        Set the default remote used by the SimDB client.
-        """
+        """Set the default remote used by the SimDB client."""
         remotes = [
             section
             for section in self._parser.sections()
@@ -199,30 +192,25 @@ User configuration file {self._user_config_path} has incorrect permissions (must
 
     @property
     def config_directory(self) -> Path:
-        """
-        Returns the directory that the local user configuration file is loaded from.
+        """Returns the directory that the local user configuration file is loaded from.
+
         @return:
         """
         return self._user_config_dir
 
     @property
     def verbose(self) -> bool:
-        """
-        Returns the SimDB client verbosity flag.
-        """
+        """Returns the SimDB client verbosity flag."""
         return self._verbose
 
     @verbose.setter
     def verbose(self, verbose: bool) -> None:
-        """
-        Sets the SimDB client verbosity flag.
-        """
+        """Sets the SimDB client verbosity flag."""
         self._verbose = verbose
 
     def save(self) -> None:
-        """
-        Save the current state of the configuration to a configuration file in the users configuration directory.
-        """
+        """Save the current state of the configuration to a configuration file in the
+        users configuration directory."""
         os.makedirs(self._user_config_dir, exist_ok=True)
         os.umask(0)
         descriptor = os.open(
@@ -234,9 +222,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
             self._parser.write(file)
 
     def sections(self) -> list[str]:
-        """
-        Return all sections in the configuration.
-        """
+        """Return all sections in the configuration."""
         return self._parser.sections()
 
     def get_section(
@@ -244,8 +230,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
         name: str,
         default: dict[str, int | float | bool | str] | None = None,
     ) -> dict[str, int | float | bool | str]:
-        """
-        Returns the section from the configuration with the given name.
+        """Returns the section from the configuration with the given name.
 
         @param name: the name of the section to find
         @param default: a dictionary that will be returned if the section is not found
@@ -265,8 +250,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
         name: str,
         default: int | float | bool | str | None | _NothingSentinel = NOTHING,
     ) -> int | float | bool | str:
-        """
-        Returns the value for the option with the given name from the configuration.
+        """Returns the value for the option with the given name from the configuration.
 
         @param name: the name of the option to return
         @param default: the value to return if the option is not found in the configuration
@@ -285,9 +269,8 @@ User configuration file {self._user_config_path} has incorrect permissions (must
     def get_string_option(
         self, name: str, default: str | None | _NothingSentinel = NOTHING
     ) -> str:
-        """
-        Returns the value for the option with the given name from the configuration but also ensures the resulting
-        value is a string.
+        """Returns the value for the option with the given name from the configuration
+        but also ensures the resulting value is a string.
 
         @see get_option
         @raise TypeError if the found value was not a string
@@ -300,8 +283,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
         return value
 
     def delete_option(self, name: str) -> None:
-        """
-        Delete the option with the given name from the configuration.
+        """Delete the option with the given name from the configuration.
 
         @param name: the name of the option to delete
         """
@@ -312,8 +294,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
             raise KeyError(f"Option {name} not found in configuration")
 
     def delete_section(self, name: str) -> None:
-        """
-        Delete the section with the given name from the configuration.
+        """Delete the section with the given name from the configuration.
 
         This will also delete all options contained in this section.
 
@@ -326,11 +307,10 @@ User configuration file {self._user_config_path} has incorrect permissions (must
             raise KeyError(f"Section {name} not found in configuration")
 
     def set_option(self, name: str, value: int | float | bool | str) -> None:
-        """
-        Set the option with the given name to the given value.
+        """Set the option with the given name to the given value.
 
-        @param name: the name of the option to set
-        @param value: the value to set the option to
+        @param name: the name of the option to set @param value: the value to set the
+        option to
         """
         section, option = _parse_name(name)
         if not self._parser.has_section(section) and section != "DEFAULT":
@@ -338,8 +318,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
         self._parser.set(section, option, str(value))
 
     def list_options(self) -> list[str]:
-        """
-        List all the options found in the configuration.
+        """List all the options found in the configuration.
 
         @return: the values found as a list of "name: value" strings
         """

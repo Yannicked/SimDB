@@ -8,9 +8,8 @@ from simdb.database import Database
 
 
 class SimDBApp(Flask):
-    """
-    Wrapper class for typing of SimDB Flask app with additional fields to hold configuration and database.
-    """
+    """Wrapper class for typing of SimDB Flask app with additional fields to hold
+    configuration and database."""
 
     simdb_config: Config
     db: Database
