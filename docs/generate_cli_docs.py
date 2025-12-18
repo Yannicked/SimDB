@@ -52,13 +52,12 @@ def process_line(line: str) -> str:
 
 
 def main():
-    with open("cli.md.in", "r") as f_in:
-        with open("cli.md", "w") as f_out:
-            for line in f_in:
-                if line.startswith("{{"):
-                    f_out.write(process_line(line))
-                else:
-                    f_out.write(line)
+    with open("cli.md.in") as f_in, open("cli.md", "w") as f_out:
+        for line in f_in:
+            if line.startswith("{{"):
+                f_out.write(process_line(line))
+            else:
+                f_out.write(line)
 
 
 if __name__ == "__main__":

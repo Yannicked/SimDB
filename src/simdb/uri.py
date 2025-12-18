@@ -1,6 +1,7 @@
-from urllib3.util.url import parse_url, Url, LocationParseError
 from pathlib import Path
-from typing import Dict, Union, Optional
+from typing import Union
+
+from urllib3.util.url import LocationParseError, Url, parse_url
 
 
 class URIParserError(ValueError):
@@ -13,9 +14,9 @@ class Query:
     Class representing the URI query parameters.
     """
 
-    _args: Dict[str, Optional[str]]
+    _args: dict[str, str | None]
 
-    def __init__(self, query: Optional[str]):
+    def __init__(self, query: str | None):
         query = "" if query is None else query
         self._args = {}
         for arg in query.split("&"):
@@ -41,7 +42,7 @@ class Query:
     def __getitem__(self, name):
         return self._args[name]
 
-    def get(self, name: str, *, default: Optional[str] = None) -> Optional[str]:
+    def get(self, name: str, *, default: str | None = None) -> str | None:
         return self._args.get(name, default)
 
     def set(self, name: str, value: str) -> None:
@@ -56,12 +57,12 @@ class Authority:
     Class representing URI authority.
     """
 
-    __slots__ = ("host", "port", "auth")
+    __slots__ = ("auth", "host", "port")
 
-    def __init__(self, host: Optional[int], port: Optional[int], auth: Optional[str]):
-        self.host: Optional[str] = host
-        self.port: Optional[int] = port
-        self.auth: Optional[str] = auth
+    def __init__(self, host: int | None, port: int | None, auth: str | None):
+        self.host: str | None = host
+        self.port: int | None = port
+        self.auth: str | None = auth
 
     @classmethod
     def empty(cls):
@@ -89,7 +90,7 @@ class URI:
     Class for parsing and representing a URI.
     """
 
-    __slots__ = ("scheme", "query", "path", "authority", "fragment")
+    __slots__ = ("authority", "fragment", "path", "query", "scheme")
 
     def __init__(self, uri: Union[str, "URI", None] = None, *, scheme=None, path=None):
         """
@@ -99,11 +100,11 @@ class URI:
         :param scheme: The URI scheme. Takes precedence over any scheme found from the URI argument.
         :param path: The URI path. Takes precedence over any path found from the URI argument.
         """
-        self.scheme: Optional[str] = None
+        self.scheme: str | None = None
         self.query: Query = Query.empty()
-        self.path: Optional[Path] = None
+        self.path: Path | None = None
         self.authority: Authority = Authority.empty()
-        self.fragment: Optional[str] = None
+        self.fragment: str | None = None
 
         if uri is not None:
             try:

@@ -1,12 +1,11 @@
-import click
 import os
 import platform
+from typing import NewType
 
-from typing import Dict, Union, List, NewType
+import click
 
-
-PlatformDetails = NewType("PlatformDetails", Dict[str, str])
-EnvironmentDetails = NewType("EnvironmentDetails", Dict[str, Union[str, List[str]]])
+PlatformDetails = NewType("PlatformDetails", dict[str, str])
+EnvironmentDetails = NewType("EnvironmentDetails", dict[str, str | list[str]])
 
 
 def _platform_version() -> str:
@@ -43,8 +42,8 @@ def _environmental_vars() -> EnvironmentDetails:
     return env_vars
 
 
-def _get_provenance() -> Dict[str, Union[PlatformDetails, EnvironmentDetails]]:
-    prov: Dict[str, Union[PlatformDetails, EnvironmentDetails]] = dict(
+def _get_provenance() -> dict[str, PlatformDetails | EnvironmentDetails]:
+    prov: dict[str, PlatformDetails | EnvironmentDetails] = dict(
         environment=_environmental_vars(),
         platform=_platform_details(),
     )

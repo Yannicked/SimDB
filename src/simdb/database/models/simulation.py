@@ -1,20 +1,20 @@
-from enum import Enum
-import uuid
-import sys
 import itertools
-from collections.abc import Iterable
+import sys
+import uuid
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import datetime
-from typing import List, Union, Dict, Any, TYPE_CHECKING, Optional, Set
+from enum import Enum
 from getpass import getuser
 from pathlib import Path
-from dateutil import parser as date_parser
+from typing import TYPE_CHECKING, Any, Optional
 
 if sys.version_info < (3, 11):
     from backports.datetime_fromisoformat import MonkeyPatch
 
+from sqlalchemy import Column, ForeignKey, Table
+from sqlalchemy import types as sql_types
 from sqlalchemy.orm import relationship
-from sqlalchemy import Table, ForeignKey, Column, types as sql_types
 
 if "sphinx" in sys.modules:
     # Patch to allow sphix doc generation
@@ -22,14 +22,13 @@ if "sphinx" in sys.modules:
 
     ClauseElement.__bool__ = lambda self: True
 
-from .utils import flatten_dict, unflatten_dict, checked_get
-from .types import UUID
+from ...cli.manifest import DataObject, Manifest
+from ...config.config import Config
+from ...docstrings import inherit_docstrings
 from .base import Base
 from .file import File
-from ...cli.manifest import Manifest, DataObject
-from ...docstrings import inherit_docstrings
-from ...config.config import Config
-
+from .types import UUID
+from .utils import checked_get, flatten_dict, unflatten_dict
 
 if sys.version_info < (3, 11):
     MonkeyPatch.patch_fromisoformat()
@@ -90,21 +89,21 @@ class Simulation(Base):
     uuid = Column(UUID, nullable=False, unique=True, index=True)
     alias: str = Column(sql_types.String(250), nullable=True, unique=True, index=True)
     datetime: datetime = Column(sql_types.DateTime, nullable=False)
-    inputs: List["File"] = relationship(
+    inputs: list["File"] = relationship(
         "File", secondary=simulation_input_files, backref="input_for"
     )
-    outputs: List["File"] = relationship(
+    outputs: list["File"] = relationship(
         "File", secondary=simulation_output_files, backref="output_of"
     )
-    meta: List["MetaData"] = relationship(
+    meta: list["MetaData"] = relationship(
         "MetaData", lazy="raise", cascade="all, delete-orphan"
     )
-    watchers: List["Watcher"] = relationship(
+    watchers: list["Watcher"] = relationship(
         "Watcher", secondary=simulation_watchers, lazy="dynamic"
     )
 
     def __init__(
-        self, manifest: Union[Manifest, None], config: Optional[Config] = None
+        self, manifest: Manifest | None, config: Config | None = None
     ) -> None:
         """
         Initialise a new Simulation object using the provided Manifest.
@@ -132,13 +131,13 @@ class Simulation(Base):
 
         for input in manifest.inputs:
             if input.type == DataObject.Type.IMAS:
+                from ...imas.metadata import load_metadata
                 from ...imas.utils import (
-                    open_imas,
-                    list_idss,
                     check_time,
                     extract_ids_occurrence,
+                    list_idss,
+                    open_imas,
                 )
-                from ...imas.metadata import load_metadata
 
                 entry = open_imas(input.uri)
                 idss = list_idss(entry)
@@ -163,13 +162,13 @@ class Simulation(Base):
 
         for output in manifest.outputs:
             if output.type == DataObject.Type.IMAS:
+                from ...imas.metadata import load_metadata
                 from ...imas.utils import (
-                    open_imas,
-                    list_idss,
                     check_time,
                     extract_ids_occurrence,
+                    list_idss,
+                    open_imas,
                 )
-                from ...imas.metadata import load_metadata
 
                 entry = open_imas(output.uri)
                 idss = list_idss(entry)
@@ -181,7 +180,7 @@ class Simulation(Base):
 
                 meta = load_metadata(entry)
                 entry.close()
-                flattened_meta: Dict[str, str] = {}
+                flattened_meta: dict[str, str] = {}
                 flatten_dict(flattened_meta, meta)
 
                 for key, value in flattened_meta.items():
@@ -196,7 +195,7 @@ class Simulation(Base):
         if all_output_idss:
             self.meta.append(MetaData("ids", "[%s]" % ", ".join(all_output_idss)))
 
-        flattened_dict: Dict[str, str] = {}
+        flattened_dict: dict[str, str] = {}
         flatten_dict(flattened_dict, manifest.metadata)
 
         for key, value in flattened_dict.items():
@@ -261,7 +260,7 @@ class Simulation(Base):
             result += f"{file}\n"
         return result
 
-    def find_meta(self, name: str) -> List["MetaData"]:
+    def find_meta(self, name: str) -> list["MetaData"]:
         return [m for m in self.meta if m.element == name]
 
     def remove_meta(self, name: str) -> None:
@@ -294,8 +293,8 @@ class Simulation(Base):
                 f"Duplicate metadata elements {duplicates} found for simulation {self.uuid}"
             )
 
-    def file_paths(self) -> Set[Path]:
-        def _get_path(file: File) -> Optional[Path]:
+    def file_paths(self) -> set[Path]:
+        def _get_path(file: File) -> Path | None:
             if file.uri.scheme == "file":
                 if file.type == DataObject.Type.FILE:
                     return file.uri.path
@@ -318,7 +317,7 @@ class Simulation(Base):
         return file_paths
 
     @classmethod
-    def from_data(cls, data: Dict[str, Union[str, Dict, List]]) -> "Simulation":
+    def from_data(cls, data: dict[str, str | dict | list]) -> "Simulation":
         from .metadata import MetaData
 
         simulation = Simulation(None)
@@ -342,8 +341,8 @@ class Simulation(Base):
         return simulation
 
     def data(
-        self, recurse: bool = False, meta_keys: Optional[List[str]] = None
-    ) -> Dict[str, Union[str, List]]:
+        self, recurse: bool = False, meta_keys: list[str] | None = None
+    ) -> dict[str, str | list]:
         data = dict(
             uuid=self.uuid,
             alias=self.alias,
@@ -359,6 +358,6 @@ class Simulation(Base):
             ]
         return data
 
-    def meta_dict(self) -> Dict[str, Union[Dict, Any]]:
+    def meta_dict(self) -> dict[str, dict | Any]:
         meta = {m.element: m.value for m in self.meta}
         return unflatten_dict(meta)

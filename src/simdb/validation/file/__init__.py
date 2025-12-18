@@ -1,9 +1,10 @@
-from .validator_base import FileValidatorBase
-from .ids_validator import IdsValidator
 from typing import Optional
 
+from .ids_validator import IdsValidator
+from .validator_base import FileValidatorBase
 
-def find_file_validator(name: str, options: dict) -> Optional[FileValidatorBase]:
+
+def find_file_validator(name: str, options: dict) -> FileValidatorBase | None:
     validators = {
         "ids_validator": IdsValidator,
     }

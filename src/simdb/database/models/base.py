@@ -1,4 +1,5 @@
-from typing import Dict, Any
+from typing import Any
+
 from sqlalchemy.ext.declarative import declarative_base
 
 
@@ -18,7 +19,7 @@ class BaseModel:
         raise NotImplementedError
 
     @classmethod
-    def from_data(cls, data: Dict) -> "BaseModel":
+    def from_data(cls, data: dict) -> "BaseModel":
         """
         Create a Model from serialised data.
 
@@ -27,7 +28,7 @@ class BaseModel:
         """
         raise NotImplementedError
 
-    def data(self, recurse: bool = False) -> Dict:
+    def data(self, recurse: bool = False) -> dict:
         """
         Serialise the {cls.__name__}.
 

@@ -1,8 +1,6 @@
-import sys
 import argparse
-from typing import List
 import sqlite3
-
+import sys
 
 conn = sqlite3.connect("sim.db")
 
@@ -19,7 +17,7 @@ def drop_db():
     conn.executescript("".join(sql))
 
 
-def main(args: List[str]):
+def main(args: list[str]):
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=["create", "drop"])
     parsed_args = parser.parse_args(args)

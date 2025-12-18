@@ -1,6 +1,7 @@
 import smtplib
-from typing import List
+
 from email_validator import validate_email
+
 from ..config import Config
 
 
@@ -16,7 +17,7 @@ class EmailServer:
         self._user = config.get_option("email.user")
         self._password = config.get_option("email.password")
 
-    def send_message(self, subject: str, body: str, to_addresses: List[str]):
+    def send_message(self, subject: str, body: str, to_addresses: list[str]):
         server = smtplib.SMTP(self._server, self._port)
         server.starttls()
         server.login(self._user, self._password)

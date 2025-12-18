@@ -1,6 +1,6 @@
-from typing import List, Dict, Tuple, TYPE_CHECKING, TypeVar, Optional, Any
 from collections import OrderedDict
-import uuid
+from typing import TYPE_CHECKING, Any, TypeVar
+
 import click
 import numpy
 
@@ -11,15 +11,15 @@ else:
     Config = TypeVar("Config")
 
 
-def _flatten_dict(values: Dict) -> List[Tuple[str, str]]:
+def _flatten_dict(values: dict) -> list[tuple[str, str]]:
     items = []
     for k, v in values.items():
         if isinstance(v, list):
             for n, i in enumerate(v):
-                items.append(("{}[{}]".format(k, n), i))
+                items.append((f"{k}[{n}]", i))
         elif isinstance(v, dict):
             for i in _flatten_dict(v):
-                items.append(("{}.{}".format(k, i[0]), i[1]))
+                items.append((f"{k}.{i[0]}", i[1]))
         else:
             items.append((k, v))
     return items
@@ -42,9 +42,9 @@ def _format_meta_value(meta_value: Any, max_len: int) -> str:
 
 
 def print_simulations(
-    simulations: List["Simulation"],
+    simulations: list["Simulation"],
     verbose: bool = False,
-    metadata_names: Optional[List[str]] = None,
+    metadata_names: list[str] | None = None,
     show_uuid: bool = False,
 ) -> None:
     """
@@ -66,9 +66,9 @@ def print_simulations(
 
     lines = []
     if show_uuid:
-        column_widths: Dict[str, int] = OrderedDict(alias=5, UUID=4)
+        column_widths: dict[str, int] = OrderedDict(alias=5, UUID=4)
     else:
-        column_widths: Dict[str, int] = OrderedDict(alias=5)
+        column_widths: dict[str, int] = OrderedDict(alias=5)
     if verbose:
         column_widths["datetime"] = 8
         column_widths["status"] = 6

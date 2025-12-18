@@ -1,16 +1,16 @@
-from typing import Optional
+
 from flask import Request
 
 from ....config import Config
 from ._authenticator import Authenticator
-from ._user import User
 from ._exceptions import AuthenticationError
+from ._user import User
 
 
 class FirewallAuthenticator(Authenticator):
     Name = "Firewall"
 
-    def authenticate(self, config: Config, request: Request) -> Optional[User]:
+    def authenticate(self, config: Config, request: Request) -> User | None:
         firewall_user = config.get_option("authentication.firewall_user", default=None)
         firewall_email = config.get_option(
             "authentication.firewall_email", default=None

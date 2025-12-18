@@ -2,7 +2,7 @@ import datetime
 import itertools
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 from flask import jsonify, request
 from flask_restx import Namespace, Resource
@@ -12,12 +12,12 @@ from ....database.models import metadata as models_meta
 from ....database.models import simulation as models_sim
 from ....uri import URI
 from ... import APIConstants
-from ...core.typing import current_app
 from ...core.alias import create_alias_dir
 from ...core.auth import User, requires_auth
 from ...core.cache import cache, cache_key, clear_cache
 from ...core.errors import error
 from ...core.path import secure_path
+from ...core.typing import current_app
 
 api = Namespace("simulations", path="/")
 
@@ -47,7 +47,7 @@ Note: please don't reply to this email, replies to this address are not monitore
             server.send_message(f"Simulation {simulation.alias}", msg, to_addresses)
 
 
-def _validate(simulation, user) -> Dict:
+def _validate(simulation, user) -> dict:
     from ....validation import ValidationError, Validator
 
     schemas = Validator.validation_schemas(current_app.simdb_config, simulation)
@@ -169,7 +169,7 @@ class SimulationList(Resource):
         names = []
         constraints = []
         if request.args:
-            constraints: List[Tuple[str, str, QueryType]] = []
+            constraints: list[tuple[str, str, QueryType]] = []
             for name in request.args:
                 if name not in ("alias", "uuid"):
                     names.append(name)

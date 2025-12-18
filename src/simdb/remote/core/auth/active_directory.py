@@ -1,4 +1,4 @@
-from typing import Optional
+
 from flask import Request
 
 from ....config import Config
@@ -18,7 +18,7 @@ class ActiveDirectoryAuthenticator(Authenticator):
 
     Name = "ActiveDirectory"
 
-    def authenticate(self, config: Config, request: Request) -> Optional[User]:
+    def authenticate(self, config: Config, request: Request) -> User | None:
         from easyad import EasyAD
 
         try:

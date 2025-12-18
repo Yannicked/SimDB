@@ -1,11 +1,11 @@
-import cerberus
-import yaml
 import re
 from pathlib import Path
-from typing import Dict, List, Optional
 
-from ..database.models.simulation import Simulation
+import cerberus
+import yaml
+
 from ..config import Config, ConfigError
+from ..database.models.simulation import Simulation
 
 
 class TestParameters:
@@ -134,7 +134,7 @@ def _load_schema(path: Path):
         return [{}]
 
     # load schema from file
-    with open(path, "r") as file:
+    with open(path) as file:
         try:
             schema = yaml.load(file, Loader=yaml.SafeLoader)
             return schema
@@ -148,8 +148,8 @@ class Validator:
 
     @classmethod
     def validation_schemas(
-        cls, config: Config, simulation: Optional[Simulation], path=None
-    ) -> List[Dict]:
+        cls, config: Config, simulation: Simulation | None, path=None
+    ) -> list[dict]:
         root = Path(
             str(
                 config.get_option(
@@ -191,7 +191,7 @@ class Validator:
 
         return schemas
 
-    def __init__(self, schema: Dict):
+    def __init__(self, schema: dict):
         try:
             self._validator = CustomValidator(schema)
             self._validator.allow_unknown = True

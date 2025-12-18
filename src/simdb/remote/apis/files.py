@@ -1,23 +1,24 @@
-from flask import request, jsonify, send_file, Response, stream_with_context
-from flask_restx import Resource, Namespace
-from typing import Optional, List, Iterable, Dict
-from pathlib import Path
-from werkzeug.datastructures import FileStorage
+import gzip
+import json
 import os
 import uuid
-import json
-import gzip
-import itertools
-import magic
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Optional
 
-from ..core.typing import current_app
-from ...remote.core.auth import User, requires_auth
-from ...remote.core.path import find_common_root, secure_path
-from ...remote.core.errors import error
-from ...database import DatabaseError, models
-from ...cli.manifest import DataObject
+import magic
+from flask import Response, jsonify, request, send_file, stream_with_context
+from flask_restx import Namespace, Resource
+from werkzeug.datastructures import FileStorage
+
 from ...checksum import sha1_checksum
+from ...cli.manifest import DataObject
+from ...database import DatabaseError, models
+from ...remote.core.auth import User, requires_auth
+from ...remote.core.errors import error
+from ...remote.core.path import find_common_root, secure_path
 from ...uri import URI
+from ..core.typing import current_app
 
 api = Namespace("files", path="/")
 
@@ -25,8 +26,8 @@ api = Namespace("files", path="/")
 def _verify_file(
     sim_uuid: uuid.UUID,
     sim_file: models.File,
-    common_root: Optional[Path],
-    ids_list: Optional[list] = None,
+    common_root: Path | None,
+    ids_list: list | None = None,
 ):
     if current_app.simdb_config.get_option(
         "development.disable_checksum", default=False
@@ -63,7 +64,7 @@ def _verify_file(
 
 
 def _save_chunked_file(
-    file: FileStorage, chunk_info: Dict, path: Path, compressed: bool = True
+    file: FileStorage, chunk_info: dict, path: Path, compressed: bool = True
 ):
     with open(path, "r+b" if path.exists() else "wb") as file_out:
         file_out.seek(chunk_info["chunk_size"] * chunk_info["chunk"])
@@ -76,10 +77,10 @@ def _save_chunked_file(
 
 def _stage_file_from_chunks(
     files: Iterable[FileStorage],
-    chunk_info: Dict,
+    chunk_info: dict,
     sim_uuid: uuid.UUID,
-    sim_files: List[models.File],
-    common_root: Optional[Path],
+    sim_files: list[models.File],
+    common_root: Path | None,
 ) -> None:
     staging_dir = (
         Path(current_app.simdb_config.get_option("server.upload_folder")) / sim_uuid.hex

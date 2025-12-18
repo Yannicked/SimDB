@@ -1,11 +1,12 @@
-from typing import Dict
-from sqlalchemy import Column, types as sql_types
+
+from sqlalchemy import Column
+from sqlalchemy import types as sql_types
 from sqlalchemy.orm import validates
 
+from ...docstrings import inherit_docstrings
+from ...notifications import Notification
 from .base import Base
 from .types import ChoiceType
-from ...notifications import Notification
-from ...docstrings import inherit_docstrings
 from .utils import checked_get
 
 
@@ -43,14 +44,14 @@ class Watcher(Base):
         self.notification = notification
 
     @classmethod
-    def from_data(cls, data: Dict) -> "Watcher":
+    def from_data(cls, data: dict) -> "Watcher":
         username = checked_get(data, "username", str)
         email = checked_get(data, "email", str)
         notification = checked_get(data, "notification", str)
         watcher = Watcher(username, email, notification)
         return watcher
 
-    def data(self, recurse: bool = False) -> Dict[str, str]:
+    def data(self, recurse: bool = False) -> dict[str, str]:
         data = dict(
             username=self.username,
             email=self.email,

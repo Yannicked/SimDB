@@ -1,5 +1,6 @@
-import yaml
 import re
+
+import yaml
 
 
 def map_status(status):
@@ -75,8 +76,7 @@ def get_meta(data):
                 meta["replaces"] = f"{m[1]}/{m[2]}"
                 if m[3]:
                     reason = m[3].strip()
-                    if reason.startswith("-"):
-                        reason = reason[1:]
+                    reason = reason.removeprefix("-")
                     meta["replaces_reason"] = reason.strip()
         # meta['replaced_by'] = data['database_relations']['replaced_by']
     return meta
