@@ -1,4 +1,3 @@
-
 from sqlalchemy import Column
 from sqlalchemy import types as sql_types
 from sqlalchemy.orm import validates

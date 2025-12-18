@@ -1,4 +1,3 @@
-
 from flask import Request
 
 from simdb.config import Config

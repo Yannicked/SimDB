@@ -18,9 +18,7 @@ from .core.typing import SimDBApp
 compress = Compress()
 
 
-def create_app(
-    config: Config | None = None, testing=False, debug=False, profile=False
-):
+def create_app(config: Config | None = None, testing=False, debug=False, profile=False):
     if config is None:
         config_file = os.environ.get("SIMDB_CONFIG_FILE", default="app.cfg")
         config = Config(config_file)
