@@ -116,7 +116,7 @@ def sqlUpdate(table, uuid, name, value):
 
 def validateUUID(uuid):
     try:
-        val = UUID(uuid, version=4)
+        UUID(uuid, version=4)
     except ValueError:
         return False
     return True
@@ -132,7 +132,6 @@ def ingestFile(fileClass, fileName):
     # accessed from the user's .imasdb file or simulation DBMS
 
     uuid = ""
-    alias = ""
     isValidUUID = False
 
     if fileClass == "metadata":
@@ -153,13 +152,13 @@ def ingestFile(fileClass, fileName):
 
             for i in range(0, len(x[key])):
                 if isValidUUID:
-                    alias = x[key][i]
+                    x[key][i]
                 else:
                     uuid = x[key][i]
                     isValidUUID = validateUUID(uuid)
                     if not isValidUUID:
                         uuid = ""
-                        alias = x[key][i]
+                        x[key][i]
 
     if fileClass == "manifest":
         key = "uuid"
@@ -169,7 +168,7 @@ def ingestFile(fileClass, fileName):
 
         key = "alias"
         if isinstance(x[key], str):
-            alias = x[key]
+            x[key]
 
     if not isValidUUID:
         if fileClass == "manifest":

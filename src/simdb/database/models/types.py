@@ -4,7 +4,7 @@ from enum import Enum
 
 from sqlalchemy import types as sql_types
 
-from ... import uri as urilib
+from simdb import uri as urilib
 
 
 class UUID(sql_types.TypeDecorator):

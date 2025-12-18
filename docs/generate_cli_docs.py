@@ -15,9 +15,8 @@ def extract_sub_commands(output: str) -> list[str]:
     in_commands = False
     sub_commands = []
     for line in output.split("\n"):
-        if in_commands:
-            if line:
-                sub_commands.append(line.split()[0])
+        if in_commands and line:
+            sub_commands.append(line.split()[0])
         if line == "Commands:":
             in_commands = True
     return sub_commands
@@ -34,10 +33,7 @@ def generate_block(output: str) -> str:
 def process_cmd(cmd: str) -> str:
     print(cmd)
     output = run_command(f"simdb {cmd} --help")
-    if cmd:
-        sub_commands = extract_sub_commands(output)
-    else:
-        sub_commands = []
+    sub_commands = extract_sub_commands(output) if cmd else []
 
     text = generate_block(output)
     for sub_command in sub_commands:
