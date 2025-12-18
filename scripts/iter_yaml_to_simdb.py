@@ -77,7 +77,6 @@ def get_meta(data):
                     reason = m[3].strip()
                     reason = reason.removeprefix("-")
                     meta["replaces_reason"] = reason.strip()
-        # meta['replaced_by'] = data['database_relations']['replaced_by']
     return meta
 
 
@@ -96,7 +95,6 @@ def to_uri(**kwargs):
     return "imas:hdf5?path=/work/imas/shared/imasdb/ITER/3/{shot}/{run}".format(
         **kwargs
     )
-    # return 'imas:?database={machine}&user=public&shot={shot}&run={run}'.format(**kwargs)
 
 
 def main(args):

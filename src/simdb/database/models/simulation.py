@@ -111,7 +111,6 @@ class Simulation(Base):
         if manifest.responsible_name:
             self.meta.append(MetaData("uploaded_by", manifest.responsible_name))
 
-        # self.status = Simulation.Status.NOT_VALIDATED
         self.user = getuser()
 
         if manifest.alias:
