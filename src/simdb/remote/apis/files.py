@@ -1,10 +1,8 @@
 import gzip
 import json
-import os
 import uuid
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Optional
 
 import magic
 from flask import Response, jsonify, request, send_file, stream_with_context
@@ -66,8 +64,8 @@ def _verify_file(
 def _save_chunked_file(
     file: FileStorage, chunk_info: dict, path: Path, compressed: bool = True
 ):
-    with open(path, "r+b" if path.exists() else "wb") as file_out:
-        file_out.seek(chunk_info["chunk_size"] * chunk_info["chunk"])
+    with path.open("a+b") as file_out:
+        file_out.seek(chunk_info["chunk_size"] * chunk_info["chunk"], 0)
         if compressed:
             with gzip.GzipFile(fileobj=file, mode="rb") as gz_file:
                 file_out.write(gz_file.read())
@@ -85,7 +83,7 @@ def _stage_file_from_chunks(
     staging_dir = (
         Path(current_app.simdb_config.get_option("server.upload_folder")) / sim_uuid.hex
     )
-    os.makedirs(staging_dir, exist_ok=True)
+    staging_dir.mkdir(parents=True, exist_ok=True)
 
     found_files = []
     for file in files:
@@ -100,7 +98,7 @@ def _stage_file_from_chunks(
 
     for file, sim_file in found_files:
         path = secure_path(sim_file.uri.path, common_root, staging_dir)
-        os.makedirs(path.parent, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
         file_chunk_info = chunk_info.get(
             sim_file.uuid.hex, {"chunk_size": 0, "chunk": 0, "num_chunks": 1}
         )
@@ -190,7 +188,7 @@ class FileList(Resource):
 @api.route("/file/<string:file_uuid>")
 class File(Resource):
     @requires_auth()
-    def get(self, file_uuid: str, user: User = Optional[None]):
+    def get(self, file_uuid: str, user: User | None = None):
         try:
             file = current_app.db.get_file(file_uuid)
             data = file.data(recurse=True)
@@ -216,7 +214,7 @@ class File(Resource):
 @api.route("/file/download/<string:file_uuid>")
 class NonIMASFileDownload(Resource):
     @requires_auth()
-    def get(self, file_uuid: str, user: User = Optional[None]):
+    def get(self, file_uuid: str, user: User | None = None):
         try:
             file: models.File = current_app.db.get_file(file_uuid)
             if file.type != DataObject.Type.FILE:
@@ -234,7 +232,7 @@ class NonIMASFileDownload(Resource):
 @api.route("/file/download/<string:file_uuid>/<int:file_index>")
 class FileDownload(Resource):
     @requires_auth()
-    def get(self, file_uuid: str, file_index: int, user: User = Optional[None]):
+    def get(self, file_uuid: str, file_index: int, user: User | None = None):
         try:
             file: models.File = current_app.db.get_file(file_uuid)
             if file.type == DataObject.Type.FILE:

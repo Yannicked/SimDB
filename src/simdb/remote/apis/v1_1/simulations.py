@@ -268,21 +268,20 @@ class SimulationList(Resource):
             replaces = simulation.find_meta("replaces")
             if not current_app.simdb_config.get_option(
                 "development.disable_replaces", default=False
-            ):
-                if replaces and replaces[0].value:
-                    sim_id = replaces[0].value
-                    try:
-                        replaces_sim = current_app.db.get_simulation(sim_id)
-                    except DatabaseError:
-                        replaces_sim = None
-                    if replaces_sim is None:
-                        pass
-                    else:
-                        _update_simulation_status(
-                            replaces_sim, models_sim.Simulation.Status.DEPRECATED, user
-                        )
-                        replaces_sim.set_meta("replaced_by", simulation.uuid)
-                        current_app.db.insert_simulation(replaces_sim)
+            ) and replaces and replaces[0].value:
+                sim_id = replaces[0].value
+                try:
+                    replaces_sim = current_app.db.get_simulation(sim_id)
+                except DatabaseError:
+                    replaces_sim = None
+                if replaces_sim is None:
+                    pass
+                else:
+                    _update_simulation_status(
+                        replaces_sim, models_sim.Simulation.Status.DEPRECATED, user
+                    )
+                    replaces_sim.set_meta("replaced_by", simulation.uuid)
+                    current_app.db.insert_simulation(replaces_sim)
 
             current_app.db.insert_simulation(simulation)
             clear_cache()

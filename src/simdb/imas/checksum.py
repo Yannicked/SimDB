@@ -1,6 +1,4 @@
 import hashlib
-import multiprocessing as mp
-from pathlib import Path
 
 from simdb.uri import URI
 
@@ -21,8 +19,6 @@ def checksum(uri: URI, ids_list: list) -> str:
     if uri.scheme != "imas":
         raise ValueError(f"invalid scheme for imas checksum: {uri.scheme}")
 
-    import hashlib
-
     sha1 = hashlib.sha1()
 
     if not ids_list:
@@ -31,12 +27,11 @@ def checksum(uri: URI, ids_list: list) -> str:
         entry.close()
 
     for path in imas_files(uri):
-        with open(path, "rb") as file:
-            ids_name = Path(path).name.split(".")
-            if ids_name[1] == "h5" and (
-                ids_name[0] != "master"
+        with path.open("rb") as file:
+            if path.suffix == "h5" and (
+                path.stem != "master"
                 and ids_list is not None
-                and ids_name[0] not in ids_list
+                and path.stem not in ids_list
             ):
                 continue
             for chunk in iter(lambda: file.read(4096), b""):

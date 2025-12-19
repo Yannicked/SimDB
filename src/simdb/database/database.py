@@ -1,10 +1,10 @@
 import contextlib
-import os
 import sys
 import uuid
 from collections.abc import Iterable
 from datetime import datetime
 from enum import Enum, auto
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from simdb.config import Config
@@ -220,7 +220,7 @@ class Database:
             except SQLAlchemyError:
                 simulation = None
             if not simulation:
-                raise DatabaseError(f"Simulation {sim_ref} not found.")
+                raise DatabaseError(f"Simulation {sim_ref} not found.") from None
         return simulation
 
     def remove(self):
@@ -462,11 +462,11 @@ class Database:
             for name, value, query_type in constraints:
                 if name in ("alias", "uuid", "creation_date"):
                     sim_id_sets[(name, value, query_type)].add(row.simulation.id)
-                if row.metadata.element == name:
-                    if query_type == QueryType.EXIST or query_compare(
-                        query_type, name, row.metadata.value, value
-                    ):
-                        sim_id_sets[(name, value, query_type)].add(row.simulation.id)
+                if row.metadata.element == name and (
+                    query_type == QueryType.EXIST
+                    or query_compare(query_type, name, row.metadata.value, value)
+                ):
+                    sim_id_sets[(name, value, query_type)].add(row.simulation.id)
 
         if sim_id_sets:
             return set.intersection(*sim_id_sets.values())
@@ -617,7 +617,7 @@ class Database:
             file_uuid = uuid.UUID(file_uuid_str)
             file = self.session.query(File).filter_by(uuid=file_uuid).one_or_none()
         except ValueError:
-            raise DatabaseError(f"Invalid UUID {file_uuid_str}.")
+            raise DatabaseError(f"Invalid UUID {file_uuid_str}.") from None
         if file is None:
             raise DatabaseError(f"Failed to find file {file_uuid.hex}.")
         self.session.commit()
@@ -700,15 +700,15 @@ class Database:
             if "alias" in str(err.orig):
                 raise DatabaseError(
                     f"Simulation already exists with alias {simulation.alias} - please use a unique alias."
-                )
+                ) from None
             elif "uuid" in str(err.orig):
                 raise DatabaseError(
                     f"Simulation already exists with uuid {simulation.uuid}."
-                )
-            raise DatabaseError(str(err.orig))
+                ) from None
+            raise err
         except DBAPIError as err:
             self.session.rollback()
-            raise DatabaseError(str(err.orig))
+            raise err
 
     def get_aliases(self, prefix: str | None) -> list[str]:
         from sqlalchemy.sql import column
@@ -731,10 +731,11 @@ class Database:
 def get_local_db(config: Config) -> Database:
     import appdirs
 
-    db_file = config.get_option(
-        "db.file", default=os.path.join(appdirs.user_data_dir("simdb"), "sim.db")
-    )
-    db_dir = os.path.dirname(db_file)
-    os.makedirs(db_dir, exist_ok=True)
+    db_file = config.get_option("db.file", default=None)
+    if db_file is None:
+        db_file = Path(appdirs.user_data_dir("simdb"))
+    else:
+        db_dir = Path(db_file).parent
+    db_dir.mkdir(parents=True, exist_ok=True)
     database = Database(Database.DBMS.SQLITE, file=db_file)
     return database

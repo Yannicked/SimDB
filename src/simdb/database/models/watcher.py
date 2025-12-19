@@ -9,17 +9,17 @@ from .base import Base
 from .types import ChoiceType
 from .utils import checked_get
 
+NOTIFICATION_CHOICES = {
+    Notification.VALIDATION: "V",
+    Notification.REVISION: "R",
+    Notification.OBSOLESCENCE: "O",
+    Notification.ALL: "A",
+}
+
 
 @inherit_docstrings
 class Watcher(Base):
     """Class to represent people watching simulations for updates."""
-
-    NOTIFICATION_CHOICES = {
-        Notification.VALIDATION: "V",
-        Notification.REVISION: "R",
-        Notification.OBSOLESCENCE: "O",
-        Notification.ALL: "A",
-    }
 
     __tablename__ = "watchers"
     id = Column(sql_types.Integer, primary_key=True)

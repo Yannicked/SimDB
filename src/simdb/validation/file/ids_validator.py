@@ -102,9 +102,11 @@ class IdsValidator(FileValidatorBase):
 
             report_generator = ValidationReportGenerator(validate_output)
 
-            if not validate_result:
-                raise ValidationError(
-                    f"Validation of following URI: [{validate_uri}], failed with following report: \n{report_generator.txt}"
-                )
         except Exception as err:
-            raise ValidationError(f"validate_uri exception [{err}]")
+            raise ValidationError("validate_uri exception") from err
+
+        if not validate_result:
+            raise ValidationError(
+                f"Validation of following URI: [{validate_uri}], failed with following "
+                f"report: \n{report_generator.txt}"
+            )

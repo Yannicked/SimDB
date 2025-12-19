@@ -1,5 +1,4 @@
 import datetime
-import os
 from pathlib import Path
 
 import jwt
@@ -10,7 +9,6 @@ from simdb import __version__
 from simdb.database import Database
 from simdb.remote.core.auth import AuthenticationError, User, requires_auth
 from simdb.remote.core.typing import current_app
-from simdb.validation.file import find_file_validator
 
 from .v1 import api as api_v1
 from .v1 import namespaces as namespaces_v1
@@ -53,10 +51,10 @@ def register(api, version, namespaces):
         elif db_type == "sqlite":
             import appdirs
 
-            db_dir = appdirs.user_data_dir("simdb")
-            db_file = os.path.join(db_dir, "remote.db")
+            db_dir = Path(appdirs.user_data_dir("simdb"))
+            db_file = db_dir / "remote.db"
             file = Path(config.get_option("database.file", default=db_file))
-            os.makedirs(file.parent, exist_ok=True)
+            file.parent.mkdir(parents=True, exist_ok=True)
             setup_state.app.db = Database(
                 Database.DBMS.SQLITE, scopefunc=_app_ctx_stack.__ident_func__, file=file
             )
