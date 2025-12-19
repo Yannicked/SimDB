@@ -1412,11 +1412,11 @@ def write_manifest_file(legacy_yaml_file: str, output_directory: str | None = No
             pass
         slice_index = 0
         if ids_core_profiles:
-            central_electron_density, slice_index = get_central_electron_density(
+            _central_electron_density, slice_index = get_central_electron_density(
                 ids_core_profiles
             )
         elif ids_edge_profiles:
-            sepmid_electron_density, slice_index = get_sepmid_electron_density(
+            _sepmid_electron_density, slice_index = get_sepmid_electron_density(
                 ids_summary
             )
 

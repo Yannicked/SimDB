@@ -37,8 +37,10 @@ def _isdecimal(v: str):
 
 
 def _isfloat(value: str) -> bool:
-    l, *r = value.split(".")
-    return _isdecimal(l) and (len(r) == 0 or (len(r) == 1 and _isdecimal(r[0])))
+    num, *r = value.split(".")
+    return _isdecimal(
+        num,
+    ) and (len(r) == 0 or (len(r) == 1 and _isdecimal(r[0])))
 
 
 def _convert(value: str) -> int | float | str | bool:
@@ -211,14 +213,14 @@ User configuration file {self._user_config_path} has incorrect permissions (must
     def save(self) -> None:
         """Save the current state of the configuration to a configuration file in the
         users configuration directory."""
-        os.makedirs(self._user_config_dir, exist_ok=True)
+        self._user_config_dir.mkdir(parents=True, exist_ok=True)
         os.umask(0)
         descriptor = os.open(
             path=self._user_config_path,
             flags=os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
             mode=0o600,
         )
-        with open(descriptor, "w") as file:
+        with descriptor.open("w") as file:
             self._parser.write(file)
 
     def sections(self) -> list[str]:
@@ -243,7 +245,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
         except configparser.NoSectionError:
             if default is not None:
                 return default
-            raise KeyError(f"Section {name} not found in configuration")
+            raise KeyError(f"Section {name} not found in configuration") from None
 
     def get_option(
         self,
@@ -264,7 +266,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
             if default is not Config.NOTHING:
                 value = cast(int | float | bool | str, default)
                 return value
-            raise KeyError(f"Option {name} not found in configuration")
+            raise KeyError(f"Option {name} not found in configuration") from None
 
     def get_string_option(
         self, name: str, default: str | None | _NothingSentinel = NOTHING
@@ -291,7 +293,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
         try:
             self._parser.remove_option(section, option)
         except (configparser.NoSectionError, configparser.NoOptionError):
-            raise KeyError(f"Option {name} not found in configuration")
+            raise KeyError(f"Option {name} not found in configuration") from None
 
     def delete_section(self, name: str) -> None:
         """Delete the section with the given name from the configuration.
@@ -304,7 +306,7 @@ User configuration file {self._user_config_path} has incorrect permissions (must
         try:
             self._parser.remove_section(section)
         except configparser.NoSectionError:
-            raise KeyError(f"Section {name} not found in configuration")
+            raise KeyError(f"Section {name} not found in configuration") from None
 
     def set_option(self, name: str, value: int | float | bool | str) -> None:
         """Set the option with the given name to the given value.

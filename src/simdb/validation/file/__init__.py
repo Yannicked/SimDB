@@ -1,5 +1,3 @@
-from typing import Optional
-
 from .ids_validator import IdsValidator
 from .validator_base import FileValidatorBase
 

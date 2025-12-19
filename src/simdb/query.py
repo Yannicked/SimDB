@@ -44,7 +44,7 @@ def parse_query_arg(value: str) -> tuple[str, QueryType]:
     try:
         return value, QueryType[comp[0].upper()]
     except KeyError:
-        raise ValueError(f"Unknown query modifier {comp[0]}.")
+        raise ValueError(f"Unknown query modifier {comp[0]}.") from None
 
 
 def query_compare(query_type: QueryType, name: str, value: Any, compare: str) -> bool:

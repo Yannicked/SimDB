@@ -1,18 +1,19 @@
 import base64
+import importlib.util
 import os
 import tempfile
+from pathlib import Path
 
 import pytest
 
-try:
-    import flask
-
-    has_flask = True
-except ImportError:
-    has_flask = False
-
 from simdb.cli.manifest import Manifest
 from simdb.database.models import Simulation
+
+has_flask = importlib.util.find_spec("flask") is not None
+
+if has_flask:
+    from simdb.config import Config
+    from simdb.remote.app import create_app
 
 TEST_PASSWORD = "test123"
 CREDENTIALS = base64.b64encode(f"admin:{TEST_PASSWORD}".encode()).decode()
@@ -25,9 +26,6 @@ for _ in range(100):
 
 @pytest.fixture(scope="session")
 def client():
-    from simdb.config import Config
-    from simdb.remote.app import create_app
-
     config = Config()
     config.load()
     db_fd, db_file = tempfile.mkstemp()
@@ -49,7 +47,7 @@ def client():
         yield client
 
     os.close(db_fd)
-    os.unlink(app.simdb_config.get_option("database.file"))
+    Path(app.simdb_config.get_option("database.file")).unlink()
 
 
 @pytest.mark.skipif(not has_flask, reason="requires flask library")

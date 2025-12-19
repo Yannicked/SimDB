@@ -7,7 +7,7 @@ name = "imas-simdb"
 description = "ITER Simulation Management Tool"
 readme = {file = "README.md", content-type = "text/markdown"}
 license = {file = "LICENCE"}
-requires-python = ">=3.11"
+requires-python = ">=3.8"
 authors = [
     {name = "ITER Organization", email = "imas-support@iter.org"},
 ]
@@ -126,6 +126,10 @@ local_scheme = "dirty-tag"
 [tool.ruff]
 line-length = 88
 indent-width = 4
+exclude = [
+    "src/simdb/remote/apis/v1",
+    "src/simdb/remote/apis/v1_1",
+]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -157,7 +161,7 @@ select = [
     # flake8-use-pathlib
     "PTH",
     # Pylint
-    # "PL",
+    # "PLC0415",
     # Refurb
     "FURB",
     # Ruff specific rules
@@ -173,7 +177,7 @@ testpaths = [
 
 [dependency-groups]
 dev = [
-    "pytest>=9.0.2",
-    "pytest-cov>=7.0.0",
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
     "ruff>=0.14.9",
 ]

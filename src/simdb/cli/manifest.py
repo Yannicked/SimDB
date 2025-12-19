@@ -1,11 +1,10 @@
-import glob
 import os
 import re
 import urllib
 from collections.abc import Iterable
 from enum import Enum, auto
 from pathlib import Path
-from typing import TextIO
+from typing import ClassVar, TextIO
 
 import numpy as np
 import yaml
@@ -27,16 +26,13 @@ class InvalidAlias(InvalidManifest):
 
 def _expand_path(path: Path, base_path: Path) -> Path:
     os.environ["MANIFEST_DIR"] = str(base_path)
-    path = Path(os.path.expanduser(os.path.expandvars(path)))
-    path = Path(str(path).replace("//", "/"))
+    path = Path(os.path.expandvars(path)).expanduser()
     if not path.is_absolute():
         if not base_path.is_absolute():
             raise ValueError("base_path must be absolute")
-        return base_path / path
-    else:
-        # Expand any /./ and /../ in absolute path
-        path = os.path.abspath(path)
-    return path
+        path = base_path / path
+
+    return path.resolve()
 
 
 def _to_uri(uri_str: str, base_path: Path) -> tuple["DataObject.Type", "URI"]:
@@ -348,7 +344,8 @@ class Manifest:
 
     _data: dict | list | None = None
     _path: Path = Path()
-    _metadata: dict = {}
+    # FIXME: This should not be a classvar
+    _metadata: ClassVar[dict] = {}
 
     @property
     def metadata(self) -> dict:
@@ -377,7 +374,7 @@ class Manifest:
             for i in self._data["inputs"]:
                 source = Source(base_path, i["uri"])
                 if source.type == DataObject.Type.FILE:
-                    names = glob.glob(str(source.uri.path))
+                    names = source.uri.path.glob()
                     if not names:
                         raise InvalidManifest(
                             f"No files found matching path {source.uri.path}"
@@ -396,7 +393,7 @@ class Manifest:
             for i in self._data["outputs"]:
                 sink = Sink(base_path, i["uri"])
                 if sink.type == DataObject.Type.FILE:
-                    names = glob.glob(str(sink.uri.path))
+                    names = sink.uri.path.glob()
                     for name in names:
                         sinks.append(Sink(base_path, "file://" + name))
                 else:
@@ -432,12 +429,12 @@ class Manifest:
             if not path.is_absolute():
                 root_dir = root_path.absolute().parent
                 path = root_dir / path
-            with open(path) as metadata_file:
+            with path.open() as metadata_file:
                 _update_dict(
                     self._metadata, yaml.load(metadata_file, Loader=get_loader())
                 )
         except yaml.YAMLError as err:
-            raise InvalidManifest(f"failed to read metadata file {path} - {err}")
+            raise InvalidManifest(f"failed to read metadata file {path}") from err
 
     def _convert_version(self):
         if self.version == 0:
@@ -491,11 +488,11 @@ class Manifest:
         import yaml
 
         self._path: Path = file_path
-        with open(file_path) as file:
+        with file_path.open() as file:
             try:
                 self._data = yaml.load(file, Loader=get_loader())
             except yaml.YAMLError as err:
-                raise InvalidManifest("badly formatted manifest - " + str(err))
+                raise InvalidManifest("badly formatted manifest") from err
 
         if isinstance(self._data, dict) and "metadata" in self._data:
             self._data["metadata"] or []

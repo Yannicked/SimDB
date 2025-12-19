@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Union
-
-from urllib3.util.url import LocationParseError, Url, parse_url
+from urllib.parse import urlparse
 
 
 class URIParserError(ValueError):
@@ -103,13 +102,15 @@ class URI:
         self.fragment: str | None = None
 
         if uri is not None:
-            try:
-                result: Url = parse_url(str(uri))
-            except LocationParseError:
-                raise URIParserError("failed to parse URI")
+            result = urlparse(str(uri))
             self.scheme = result.scheme
             self.query = Query(result.query)
-            self.authority = Authority(result.host, result.port, result.auth)
+            auth = (
+                None
+                if result.username is None
+                else f"{result.username}:{result.password}"
+            )
+            self.authority = Authority(result.hostname, result.port, auth)
             if result.path is not None:
                 if (
                     self.scheme == "imas"

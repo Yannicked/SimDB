@@ -63,21 +63,21 @@ Connection failed to {ex.request.url}
 
 Please check that the URL is valid and that SIMDB_REQUESTS_CA_BUNDLE is set if required.
                 """
-            )
+            ) from ex
         except requests.HTTPError as ex:
             raise FailedConnection(
                 f"""\
 HTTP error {ex.response.status_code} returned from endpoint {ex.request.url}
                 """
-            )
-        except requests.JSONDecodeError:
+            ) from ex
+        except requests.JSONDecodeError as ex:
             raise FailedConnection(
                 """\
 Invalid JSON returned from request endpoint
 
 This might indicate an invalid SimDB URL or the existence of a firewall.
                 """
-            )
+            ) from ex
 
     return wrapped_func
 
@@ -85,13 +85,14 @@ This might indicate an invalid SimDB URL or the existence of a firewall.
 def read_bytes(path: str, compressed: bool = True) -> bytes:
     if compressed:
         with io.BytesIO() as buffer:
-            with gzip.GzipFile(fileobj=buffer, mode="wb") as gz_file:
-                with open(path, "rb") as file_in:
-                    gz_file.write(file_in.read())
+            with gzip.GzipFile(fileobj=buffer, mode="wb") as gz_file, path.open(
+                "rb"
+            ) as file_in:
+                gz_file.write(file_in.read())
             buffer.seek(0)
             return buffer.read()
     else:
-        with open(path, "rb") as file:
+        with path.open("rb") as file:
             return file.read()
 
 
@@ -176,7 +177,7 @@ class RemoteAPI:
         except KeyError:
             raise ValueError(
                 f"Remote '{remote}' not found. Use `simdb remote config add` to add it."
-            )
+            ) from None
 
         self._api_url: str = f"{self._url}/v{config.api_version}/"
         self._firewall: str | None = config.get_option(
@@ -251,8 +252,8 @@ class RemoteAPI:
             base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
             cookies = None
-            if os.path.exists(cookies_path):
-                with open(cookies_path, "rb") as f:
+            if cookies_path.exists():
+                with cookies_path.open("rb") as f:
                     cookies = pickle.load(f)
                 r = requests.get(f"{self._url}/", headers=headers, cookies=cookies)
                 try:
@@ -284,7 +285,7 @@ class RemoteAPI:
                     flags=os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
                     mode=0o600,
                 )
-                with open(descriptor, "wb") as f:
+                with descriptor.open("wb") as f:
                     pickle.dump(cookies, f)
 
             if not cookies:
@@ -912,10 +913,10 @@ class RemoteAPI:
         )
         response = self.get(f"file/download/{uuid.hex}/{index}", stream=True)
 
-        os.makedirs(to_path.parent, exist_ok=True)
+        to_path.parent.mkdir(parents=True, exist_ok=True)
         sha1 = hashlib.sha1()
 
-        with open(to_path, "wb") as f:
+        with to_path.open("wb") as f:
             total_length = response.headers.get("content-length")
             if total_length is None:
                 f.write(response.content)

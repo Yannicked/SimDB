@@ -1,5 +1,4 @@
 from functools import wraps
-from typing import Optional
 
 from flask import Request, Response, request
 

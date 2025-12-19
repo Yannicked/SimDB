@@ -51,12 +51,11 @@ def _get_provenance() -> dict[str, PlatformDetails | EnvironmentDetails]:
 
 
 @click.command("provenance")
-@click.argument("provenance_file")
+@click.argument("provenance_file", type=click.File("w"))
 def provenance(provenance_file):
     """Create the PROVENANCE_FILE from the current system."""
     import yaml
 
-    with open(provenance_file, "w") as file:
-        yaml.dump(_get_provenance(), file, default_flow_style=False)
+    yaml.dump(_get_provenance(), provenance_file, default_flow_style=False)
 
     click.echo(f"Create provenance file {provenance_file}.")

@@ -1,4 +1,5 @@
 import abc
+from typing import ClassVar
 
 from flask import Request
 
@@ -11,7 +12,7 @@ from ._user import User
 class Authenticator(abc.ABC):
     """Base class for SimDB server authenticators."""
 
-    Authenticators: dict[str, type["Authenticator"]] = {}
+    Authenticators: ClassVar[dict[str, type["Authenticator"]]] = {}
     Name: str = NotImplemented
 
     @abc.abstractmethod
@@ -46,7 +47,7 @@ class Authenticator(abc.ABC):
         except KeyError:
             raise AuthenticationError(
                 f"Unknown authenticator {name} selected in configuration"
-            )
+            ) from None
 
     @classmethod
     def register(cls, authenticator: type["Authenticator"]) -> None:

@@ -3,7 +3,6 @@ import datetime
 import itertools
 import os
 from pathlib import Path
-from typing import Optional
 
 from flask import jsonify, request
 from flask_restx import Namespace, Resource
@@ -82,7 +81,7 @@ def _set_alias(alias: str):
         existing_id = int(existing_alias.split(character)[1])
         if next_id <= existing_id:
             next_id = existing_id + 1
-    alias = "%s%d" % (alias, next_id)
+    alias = f"{alias}{next_id}"
 
     return alias, next_id
 
@@ -160,11 +159,11 @@ class SimulationList(Resource):
                         constraints.append((name, *constraint))
 
         if constraints:
-            count, data = current_app.db.query_meta_data(
+            _count, data = current_app.db.query_meta_data(
                 constraints, names, limit=limit, page=page
             )
         else:
-            count, data = current_app.db.list_simulation_data(
+            _count, data = current_app.db.list_simulation_data(
                 meta_keys=names, limit=limit, page=page
             )
 
@@ -236,23 +235,26 @@ class SimulationList(Resource):
                     return response
 
             replaces = simulation.find_meta("replaces")
-            if not current_app.simdb_config.get_option(
-                "development.disable_replaces", default=False
+            if (
+                not current_app.simdb_config.get_option(
+                    "development.disable_replaces", default=False
+                )
+                and replaces
+                and replaces[0].value
             ):
-                if replaces and replaces[0].value:
-                    sim_id = replaces[0].value
-                    try:
-                        replaces_sim = current_app.db.get_simulation(sim_id)
-                    except DatabaseError:
-                        replaces_sim = None
-                    if replaces_sim is None:
-                        pass
-                    else:
-                        _update_simulation_status(
-                            replaces_sim, models_sim.Simulation.Status.DEPRECATED, user
-                        )
-                        replaces_sim.set_meta("replaced_by", simulation.uuid)
-                        current_app.db.insert_simulation(replaces_sim)
+                sim_id = replaces[0].value
+                try:
+                    replaces_sim = current_app.db.get_simulation(sim_id)
+                except DatabaseError:
+                    replaces_sim = None
+                if replaces_sim is None:
+                    pass
+                else:
+                    _update_simulation_status(
+                        replaces_sim, models_sim.Simulation.Status.DEPRECATED, user
+                    )
+                    replaces_sim.set_meta("replaced_by", simulation.uuid)
+                    current_app.db.insert_simulation(replaces_sim)
 
             current_app.db.insert_simulation(simulation)
             clear_cache()
@@ -285,7 +287,7 @@ class Simulation(Resource):
 
     @api.expect(parser)
     @requires_auth("admin")
-    def patch(self, sim_id: str, user: User = Optional[None]):
+    def patch(self, sim_id: str, user: User | None = None):
         try:
             data = request.get_json()
             if "status" not in data:
