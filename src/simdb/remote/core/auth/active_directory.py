@@ -5,6 +5,11 @@ from simdb.config import Config
 from ._authenticator import Authenticator
 from ._user import User
 
+try:
+    from easyad import EasyAD
+except ImportError:
+    EasyAD = None
+
 
 class ActiveDirectoryAuthenticator(Authenticator):
     """Authenticator for authenticating using an LDAP server.
@@ -18,7 +23,8 @@ class ActiveDirectoryAuthenticator(Authenticator):
     Name = "ActiveDirectory"
 
     def authenticate(self, config: Config, request: Request) -> User | None:
-        from easyad import EasyAD
+        if EasyAD is None:
+            return None
 
         try:
             ad_config = {
@@ -27,7 +33,7 @@ class ActiveDirectoryAuthenticator(Authenticator):
                 "AD_CA_CERT_FILE": config.get_option("authentication.ad_cert"),
             }
             ad = EasyAD(ad_config)
-        except (KeyError, ImportError):
+        except KeyError:
             return None
 
         auth = request.authorization

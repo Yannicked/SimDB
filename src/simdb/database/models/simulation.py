@@ -1,4 +1,5 @@
 import itertools
+import re
 import sys
 import uuid
 from collections import defaultdict
@@ -7,31 +8,37 @@ from datetime import datetime
 from enum import Enum
 from getpass import getuser
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
+import numpy as np
 from sqlalchemy import Column, ForeignKey, Table
 from sqlalchemy import types as sql_types
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql.elements import ClauseElement
 
 if "sphinx" in sys.modules:
     # Patch to allow sphix doc generation
-    from sqlalchemy.sql.elements import ClauseElement
-
     ClauseElement.__bool__ = lambda self: True
 
 from simdb.cli.manifest import DataObject, Manifest
 from simdb.config.config import Config
 from simdb.docstrings import inherit_docstrings
+from simdb.imas.metadata import load_metadata
+from simdb.imas.utils import (
+    check_time,
+    extract_ids_occurrence,
+    get_path_for_legacy_uri,
+    list_idss,
+    open_imas,
+)
+from simdb.uri import URI
 
 from .base import Base
 from .file import File
+from .metadata import MetaData
 from .types import UUID
 from .utils import checked_get, flatten_dict, unflatten_dict
-
-if TYPE_CHECKING:
-    # Only importing these for type checking and documentation generation in order to speed up runtime startup.
-    from .metadata import MetaData
-    from .watcher import Watcher
+from .watcher import Watcher
 
 simulation_input_files = Table(
     "simulation_input_files",
@@ -56,9 +63,6 @@ simulation_watchers = Table(
 
 
 def _update_legacy_uri(data_object: DataObject):
-    from simdb.imas.utils import get_path_for_legacy_uri
-    from simdb.uri import URI
-
     path = get_path_for_legacy_uri(data_object.uri)
     backend = data_object.uri.query.get("backend", default="hdf5")
     return URI(f"imas:{backend}?path={path}")
@@ -100,8 +104,6 @@ class Simulation(Base):
         :param manifest: The Manifest to load the data from, or None to create an empty
             Simulation.
         """
-        from .metadata import MetaData
-
         if manifest is None:
             return
         self.uuid = uuid.uuid1()
@@ -120,14 +122,6 @@ class Simulation(Base):
 
         for input in manifest.inputs:
             if input.type == DataObject.Type.IMAS:
-                from simdb.imas.metadata import load_metadata
-                from simdb.imas.utils import (
-                    check_time,
-                    extract_ids_occurrence,
-                    list_idss,
-                    open_imas,
-                )
-
                 entry = open_imas(input.uri)
                 idss = list_idss(entry)
 
@@ -153,14 +147,6 @@ class Simulation(Base):
 
         for output in manifest.outputs:
             if output.type == DataObject.Type.IMAS:
-                from simdb.imas.metadata import load_metadata
-                from simdb.imas.utils import (
-                    check_time,
-                    extract_ids_occurrence,
-                    list_idss,
-                    open_imas,
-                )
-
                 entry = open_imas(output.uri)
                 idss = list_idss(entry)
                 for ids in idss:
@@ -191,8 +177,6 @@ class Simulation(Base):
 
         for key, value in flattened_dict.items():
             if "metadata#" in key:
-                import re
-
                 key = re.sub(r"^metadata#\d+\.?", "", key)
             self.set_meta(key, value)
         if not self.find_meta("status"):
@@ -214,8 +198,6 @@ class Simulation(Base):
         self.set_meta("status", status.value)
 
     def __str__(self):
-        import numpy as np
-
         result = ""
         for name in ("uuid", "alias"):
             result += "{}:{}{}\n".format(
@@ -258,8 +240,6 @@ class Simulation(Base):
         self.meta = [m for m in self.meta if m.element != name]
 
     def set_meta(self, name: str, value: str) -> None:
-        from .metadata import MetaData
-
         for m in self.meta:
             if m.element == name:
                 m.value = value
@@ -309,8 +289,6 @@ class Simulation(Base):
 
     @classmethod
     def from_data(cls, data: dict[str, str | dict | list]) -> "Simulation":
-        from .metadata import MetaData
-
         simulation = Simulation(None)
         simulation.uuid = checked_get(data, "uuid", uuid.UUID)
         simulation.alias = checked_get(data, "alias", str)

@@ -6,6 +6,11 @@ from ._authenticator import Authenticator
 from ._exceptions import AuthenticationError
 from ._user import User
 
+try:
+    import ldap
+except ImportError:
+    ldap = None
+
 
 class LdapAuthenticator(Authenticator):
     """Authenticator for authenticating using an LDAP server.
@@ -22,7 +27,8 @@ class LdapAuthenticator(Authenticator):
     Name = "LDAP"
 
     def authenticate(self, config: Config, request: Request) -> User | None:
-        import ldap
+        if ldap is None:
+            return None
 
         ldap_host = config.get_option("authentication.ldap_server")
         try:

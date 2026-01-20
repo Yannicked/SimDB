@@ -6,13 +6,20 @@ from ._authenticator import Authenticator
 from ._exceptions import AuthenticationError
 from ._user import User
 
+try:
+    from keycloak import KeycloakError, KeycloakOpenID
+except ImportError:
+    KeycloakError = None
+    KeycloakOpenID = None
+
 
 class KeyCloakAuthenticator(Authenticator):
     TOKEN_HEADER_NAME = "KeyCloak-Token"
     Name = "KeyCloak"
 
     def authenticate(self, config: Config, request: Request) -> User | None:
-        from keycloak import KeycloakError, KeycloakOpenID
+        if KeycloakOpenID is None or KeycloakError is None:
+            return None
 
         sever_url = config.get_option("authentication.sever_url")
         realm_name = config.get_option("authentication.realm_name")

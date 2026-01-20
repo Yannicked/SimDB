@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 
 import cerberus
+import numpy as np
 import yaml
 
 from simdb.config import Config, ConfigError
@@ -21,8 +22,6 @@ class ValidationError(Exception):
 
 
 class CustomValidator(cerberus.Validator):
-    import numpy as np
-
     types_mapping = cerberus.Validator.types_mapping.copy()
     types_mapping["numpy"] = cerberus.TypeDefinition("numpy", (np.ndarray,), ())
 
@@ -47,8 +46,6 @@ class CustomValidator(cerberus.Validator):
 
         {'type': 'float'}
         """
-        import numpy as np
-
         if not isinstance(value, np.ndarray):
             value = value[~np.isnan(value)]
             if value.size == 0:
@@ -62,8 +59,6 @@ class CustomValidator(cerberus.Validator):
 
         {'type': 'float'}
         """
-        import numpy as np
-
         if not isinstance(value, np.ndarray):
             value = value[~np.isnan(value)]
             if value.size == 0:
@@ -73,8 +68,6 @@ class CustomValidator(cerberus.Validator):
             self._error(field, f"Maximum {value.max()} greater than {max_value}")
 
     def _compare(self, comparison, field, value, comparator: str, message: str):
-        import numpy as np
-
         if comparison is None:
             return
         if isinstance(value, np.ndarray):
@@ -127,8 +120,6 @@ class CustomValidator(cerberus.Validator):
 
     @classmethod
     def _normalize_coerce_numpy(cls, value):
-        import numpy as np
-
         if isinstance(value, np.ndarray):
             return value
         elif isinstance(value, str):

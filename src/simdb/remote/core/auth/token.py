@@ -1,3 +1,6 @@
+import datetime
+
+import jwt
 from flask import Request
 
 from simdb.config import Config
@@ -14,10 +17,6 @@ class TokenAuthenticator(Authenticator):
     Name = "Token"
 
     def authenticate(self, config: Config, request: Request) -> User | None:
-        import datetime
-
-        import jwt
-
         try:
             token = request.headers.get(TokenAuthenticator.TOKEN_HEADER_NAME, "")
 

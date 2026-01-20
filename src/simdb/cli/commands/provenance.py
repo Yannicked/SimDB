@@ -3,14 +3,14 @@ import platform
 from typing import NewType
 
 import click
+import distro
+import yaml
 
 PlatformDetails = NewType("PlatformDetails", dict[str, str])
 EnvironmentDetails = NewType("EnvironmentDetails", dict[str, str | list[str]])
 
 
 def _platform_version() -> str:
-    import distro
-
     return distro.name(pretty=True)
 
 
@@ -54,8 +54,6 @@ def _get_provenance() -> dict[str, PlatformDetails | EnvironmentDetails]:
 @click.argument("provenance_file", type=click.File("w"))
 def provenance(provenance_file):
     """Create the PROVENANCE_FILE from the current system."""
-    import yaml
-
     yaml.dump(_get_provenance(), provenance_file, default_flow_style=False)
 
     click.echo(f"Create provenance file {provenance_file}.")

@@ -1,3 +1,4 @@
+import csv
 from functools import wraps
 
 from flask import Request, Response, request
@@ -50,8 +51,6 @@ def check_role(config: Config, user: User, role: str | None) -> bool:
     If no role is specified then the function always returns true.
     """
     if role:
-        import csv
-
         users = config.get_option(f"role.{role}.users", default="")
         reader = csv.reader([users])
         return any(user.name in row for row in reader)
