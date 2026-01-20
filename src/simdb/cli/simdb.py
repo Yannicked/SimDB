@@ -5,6 +5,13 @@ from typing import IO
 import click
 
 from simdb import __version__
+from simdb.cli.commands.alias import alias
+from simdb.cli.commands.config import config
+from simdb.cli.commands.database import database
+from simdb.cli.commands.manifest import manifest
+from simdb.cli.commands.provenance import provenance
+from simdb.cli.commands.remote import remote
+from simdb.cli.commands.simulation import simulation
 from simdb.config import Config
 
 g_debug = False
@@ -26,10 +33,10 @@ class AliasCommandGroup(click.Group):
     def add_command(self, cmd, name=None, aliases=None):
         super().add_command(cmd, name)
         aliases = aliases if aliases is not None else []
-        for alias in aliases:
+        for alias_name in aliases:
             cmd = copy.copy(cmd)
             cmd.short_help = f"Alias for {name}."
-            self.commands[alias] = cmd
+            self.commands[alias_name] = cmd
 
     def get_command(self, ctx, cmd_name):
         return self.commands.get(cmd_name)
@@ -61,14 +68,6 @@ def dump_help():
 
 
 def add_commands():
-    from .commands.alias import alias
-    from .commands.config import config
-    from .commands.database import database
-    from .commands.manifest import manifest
-    from .commands.provenance import provenance
-    from .commands.remote import remote
-    from .commands.simulation import simulation
-
     cli.add_command(manifest)
     cli.add_command(alias)
     cli.add_command(simulation, aliases=["sim"], name="simulation")

@@ -9,6 +9,11 @@ from .base import Base
 from .types import ChoiceType
 from .utils import checked_get
 
+try:
+    from email_validator import validate_email
+except ImportError:
+    validate_email = None
+
 NOTIFICATION_CHOICES = {
     Notification.VALIDATION: "V",
     Notification.REVISION: "R",
@@ -30,10 +35,9 @@ class Watcher(Base):
     )
 
     @validates("email")
-    def validate_email(self, key, address):
-        from email_validator import validate_email
-
-        validate_email(address)
+    def validate_email_address(self, key, address):
+        if validate_email is not None:
+            validate_email(address)
         return address
 
     def __init__(self, username: str, email: str, notification: "Watcher.Notification"):

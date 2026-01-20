@@ -1,48 +1,31 @@
 import contextlib
-import sys
 import uuid
 from collections.abc import Iterable
 from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import cast
+
+import appdirs
+import sqlalchemy
+from sqlalchemy import String, Text, asc, create_engine, desc, func, or_
+from sqlalchemy import cast as sql_cast
+from sqlalchemy import or_ as sql_or
+from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import Bundle, joinedload, scoped_session, sessionmaker
+from sqlalchemy.sql import column
 
 from simdb.config import Config
+from simdb.database.models import Base
+from simdb.database.models.file import File
+from simdb.database.models.metadata import MetaData
+from simdb.database.models.simulation import Simulation
+from simdb.database.models.watcher import Watcher
+from simdb.query import QueryType, query_compare
 
 
 class DatabaseError(RuntimeError):
     pass
-
-
-TYPING = TYPE_CHECKING or "sphinx" in sys.modules
-
-if TYPING:
-    # Only importing these for type checking and documentation generation in order to speed up runtime startup.
-    import sqlalchemy
-    from sqlalchemy.orm import scoped_session
-
-    from simdb.query import QueryType
-
-    from .models import Base
-    from .models.file import File
-    from .models.simulation import Simulation
-    from .models.watcher import Watcher
-
-    class Session(scoped_session):
-        def query(self, obj: Base, *args, **kwargs) -> Any:
-            pass
-
-        def commit(self):
-            pass
-
-        def delete(self, obj: Base):
-            pass
-
-        def add(self, obj: Base, *args, **kwargs):
-            pass
-
-        def rollback(self):
-            pass
 
 
 def _is_hex_string(string: str) -> bool:
@@ -67,11 +50,6 @@ class Database:
         MSSQL = auto()
 
     def __init__(self, db_type: DBMS, scopefunc=None, **kwargs) -> None:
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import scoped_session, sessionmaker
-
-        from .models import Base
-
         """
         Create a new Database object.
 
@@ -143,9 +121,8 @@ class Database:
             def scopefunc():
                 return 0
 
-        self.session: Session = cast(
-            "Session",
-            scoped_session(sessionmaker(bind=self.engine), scopefunc=scopefunc),
+        self.session = scoped_session(
+            sessionmaker(bind=self.engine), scopefunc=scopefunc
         )
 
     def close(self):
@@ -188,14 +165,6 @@ class Database:
             return query.count(), list(data.values())
 
     def _find_simulation(self, sim_ref: str) -> "Simulation":
-        from sqlalchemy import Text
-        from sqlalchemy import cast as sql_cast
-        from sqlalchemy import or_ as sql_or
-        from sqlalchemy.exc import SQLAlchemyError
-        from sqlalchemy.orm import joinedload
-
-        from .models.simulation import Simulation
-
         try:
             sim_uuid = uuid.UUID(sim_ref)
             simulation = (
@@ -233,8 +202,6 @@ class Database:
 
         :return: None
         """
-        from .models import Base
-
         with contextlib.closing(self.engine.connect()) as con:
             trans = con.begin()
             for table in reversed(Base.metadata.sorted_tables):
@@ -248,11 +215,6 @@ class Database:
 
         :return: A list of Simulations.
         """
-        from sqlalchemy.orm import joinedload
-
-        from .models.metadata import MetaData
-        from .models.simulation import Simulation
-
         if meta_keys:
             query = (
                 self.session.query(Simulation)
@@ -281,12 +243,6 @@ class Database:
 
         :return: A list of Simulations.
         """
-        from sqlalchemy import asc, desc, func, or_
-        from sqlalchemy.orm import Bundle
-
-        from .models.metadata import MetaData
-        from .models.simulation import Simulation
-
         sort_query = None
         if sort_by:
             sort_dir = asc if sort_asc else desc
@@ -350,8 +306,6 @@ class Database:
 
         :return: A list of Files.
         """
-        from .models.file import File
-
         return self.session.query(File).all()
 
     def delete_simulation(self, sim_ref: str) -> "Simulation":
@@ -372,14 +326,6 @@ class Database:
     def _get_metadata(
         self, constraints: list[tuple[str, str, "QueryType"]]
     ) -> Iterable:
-        from sqlalchemy import String, func, or_
-        from sqlalchemy.orm import Bundle
-
-        from simdb.query import QueryType
-
-        from .models.metadata import MetaData
-        from .models.simulation import Simulation
-
         m_b = Bundle("metadata", MetaData.element, MetaData.value)
         s_b = Bundle("simulation", Simulation.id, Simulation.alias, Simulation.uuid)
         query = self.session.query(m_b, s_b).join(Simulation)
@@ -450,8 +396,6 @@ class Database:
     def _get_sim_ids(
         self, constraints: list[tuple[str, str, "QueryType"]]
     ) -> Iterable[int]:
-        from simdb.query import QueryType, query_compare
-
         rows = self._get_metadata(constraints)
 
         sim_id_sets = {}
@@ -480,10 +424,6 @@ class Database:
 
         :return:
         """
-        from sqlalchemy.orm import joinedload
-
-        from .models.simulation import Simulation
-
         sim_ids = self._get_sim_ids(constraints)
         if not sim_ids:
             return []
@@ -508,12 +448,6 @@ class Database:
 
         :return:
         """
-        from sqlalchemy import asc, desc, func
-        from sqlalchemy.orm import Bundle
-
-        from .models.metadata import MetaData
-        from .models.simulation import Simulation
-
         sim_ids = self._get_sim_ids(constraints)
         if not sim_ids:
             return 0, []
@@ -568,9 +502,6 @@ class Database:
         return simulation
 
     def get_simulation_parents(self, simulation: "Simulation") -> list[dict]:
-        from .models.file import File
-        from .models.simulation import Simulation
-
         subquery = (
             self.session.query(File.checksum)
             .filter(File.checksum != "")
@@ -587,9 +518,6 @@ class Database:
         return [{"uuid": r.uuid, "alias": r.alias} for r in query.all()]
 
     def get_simulation_children(self, simulation: "Simulation") -> list[dict]:
-        from .models.file import File
-        from .models.simulation import Simulation
-
         subquery = (
             self.session.query(File.checksum)
             .filter(File.checksum != "")
@@ -611,8 +539,6 @@ class Database:
         :param file_uuid_str: The string representation of the file UUID.
         :return: The File.
         """
-        from .models.file import File
-
         try:
             file_uuid = uuid.UUID(file_uuid_str)
             file = self.session.query(File).filter_by(uuid=file_uuid).one_or_none()
@@ -652,8 +578,6 @@ class Database:
         return self._find_simulation(sim_ref).watchers.all()
 
     def list_metadata_keys(self) -> list[dict]:
-        from .models.metadata import MetaData
-
         if self.engine.dialect.name == "postgresql":
             query = self.session.query(MetaData.element, MetaData.value).distinct(
                 MetaData.element
@@ -665,9 +589,6 @@ class Database:
         return [{"name": row[0], "type": type(row[1]).__name__} for row in query.all()]
 
     def list_metadata_values(self, name: str) -> list[str]:
-        from .models.metadata import MetaData
-        from .models.simulation import Simulation
-
         if name == "alias":
             query = self.session.query(Simulation.alias).filter(
                 Simulation.alias is not None
@@ -690,8 +611,6 @@ class Database:
         :param simulation: The Simulation to insert.
         :return: None
         """
-        from sqlalchemy.exc import DBAPIError, IntegrityError
-
         try:
             self.session.add(simulation)
             self.session.commit()
@@ -711,10 +630,6 @@ class Database:
             raise err
 
     def get_aliases(self, prefix: str | None) -> list[str]:
-        from sqlalchemy.sql import column
-
-        from .models.simulation import Simulation
-
         if prefix:
             return [
                 el[0]
@@ -729,13 +644,13 @@ class Database:
 
 
 def get_local_db(config: Config) -> Database:
-    import appdirs
-
     db_file = config.get_option("db.file", default=None)
     if db_file is None:
-        db_file = Path(appdirs.user_data_dir("simdb"))
+        db_dir = Path(appdirs.user_data_dir("simdb"))
+        db_file = db_dir / "simdb.db"
     else:
-        db_dir = Path(db_file).parent
+        db_file = Path(db_file)
+        db_dir = db_file.parent
     db_dir.mkdir(parents=True, exist_ok=True)
     database = Database(Database.DBMS.SQLITE, file=db_file)
     return database

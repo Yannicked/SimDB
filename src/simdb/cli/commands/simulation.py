@@ -1,13 +1,22 @@
 import contextlib
+import sys
+import urllib.parse
+from itertools import chain
 from pathlib import Path
 from typing import Any
 
 import click
 
+from simdb.cli.manifest import InvalidAlias, Manifest
+from simdb.cli.remote_api import RemoteAPI, RemoteError
 from simdb.config.config import Config
+from simdb.database import DatabaseError, get_local_db
+from simdb.database.models import Simulation
 from simdb.query import QueryType, parse_query_arg
+from simdb.validation import ValidationError, Validator
 
 from . import check_meta_args, pass_config
+from .utils import print_simulations
 from .validators import validate_non_negative
 
 
@@ -44,10 +53,6 @@ def simulation():
 )
 def simulation_list(config: Config, meta: list[str], limit: int, show_uuid: bool):
     """List ingested simulations."""
-    from simdb.database import get_local_db
-
-    from .utils import print_simulations
-
     check_meta_args(meta)
     db = get_local_db(config)
     simulations = db.list_simulations(meta_keys=meta, limit=limit)
@@ -77,8 +82,6 @@ def simulation_modify(
     del_meta: str | None,
 ):
     """Modify the ingested simulation."""
-    from simdb.database import get_local_db
-
     if alias is not None:
         db = get_local_db(config)
         simulation = db.get_simulation(sim_id)
@@ -112,8 +115,6 @@ def simulation_modify(
 @click.argument("sim_id")
 def simulation_delete(config: Config, sim_id: str):
     """Delete the ingested simulation with given SIM_ID (UUID or alias)."""
-    from simdb.database import get_local_db
-
     db = get_local_db(config)
     sim = db.delete_simulation(sim_id)
 
@@ -125,8 +126,6 @@ def simulation_delete(config: Config, sim_id: str):
 @click.argument("sim_id")
 def simulation_info(config: Config, sim_id: str):
     """Print information on the simulation with given SIM_ID (UUID or alias)."""
-    from simdb.database import get_local_db
-
     db = get_local_db(config)
     simulation = db.get_simulation(sim_id)
     if simulation is None:
@@ -144,12 +143,6 @@ def simulation_info(config: Config, sim_id: str):
 )
 def simulation_ingest(config: Config, manifest_file: str, alias: str):
     """Ingest a MANIFEST_FILE."""
-    import urllib.parse
-
-    from simdb.cli.manifest import InvalidAlias, Manifest
-    from simdb.database import get_local_db
-    from simdb.database.models import Simulation
-
     manifest = Manifest()
     manifest.load(Path(manifest_file))
     try:
@@ -209,12 +202,6 @@ def simulation_push(
     add_watcher: bool,
 ):
     """Push the simulation with the given SIM_ID (UUID or alias) to the REMOTE."""
-    import sys
-
-    from simdb.cli.remote_api import RemoteAPI
-    from simdb.database import get_local_db
-    from simdb.validation import ValidationError, Validator
-
     api = RemoteAPI(remote, username, password, config)
     db = get_local_db(config)
 
@@ -253,11 +240,6 @@ def simulation_pull(
     password: str | None,
 ):
     """Pull the simulation with the given SIM_ID (UUID or alias) from the REMOTE."""
-    import sys
-
-    from simdb.cli.remote_api import RemoteAPI, RemoteError
-    from simdb.database import DatabaseError, get_local_db
-
     api = RemoteAPI(remote, username, password, config)
     db = get_local_db(config)
 
@@ -341,10 +323,6 @@ def simulation_query(
 
     check_meta_args(meta)
 
-    from simdb.database import get_local_db
-
-    from .utils import print_simulations
-
     parsed_constraints: list[tuple[str, str, QueryType]] = []
     names = []
     for constraint in constraints:
@@ -373,12 +351,6 @@ def simulation_validate(
 ):
     """Validate the ingested simulation with given SIM_ID (UUID or alias) using
     validation schema from REMOTE."""
-    from itertools import chain
-
-    from simdb.cli.remote_api import RemoteAPI
-    from simdb.database import get_local_db
-    from simdb.validation import ValidationError, Validator
-
     db = get_local_db(config)
     simulation = db.get_simulation(sim_id)
 

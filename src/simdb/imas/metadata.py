@@ -2,6 +2,11 @@ import re
 from enum import Enum
 from typing import Any
 
+try:
+    import imas
+except ImportError:
+    imas = None
+
 
 class MetricException(Exception):
     pass
@@ -25,7 +30,8 @@ class ReadValues(Enum):
 
 
 def walk_imas(ids_node) -> dict:
-    import imas
+    if imas is None:
+        raise ImportError("imas package is not installed")
 
     meta = {}
     for name in (i for i in dir(ids_node) if not i.startswith("_")):
@@ -116,7 +122,8 @@ def load_imas_metadata(ids_dist, entry) -> dict:
     :param entry: IMAS entry object.
     :return: Dictionary containing metadata.
     """
-    import imas
+    if imas is None:
+        raise ImportError("imas package is not installed")
 
     metadata = {}
     for ids_name, _v in ids_dist.items():
