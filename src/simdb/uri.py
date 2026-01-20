@@ -1,6 +1,6 @@
+from urllib3.util.url import parse_url, Url, LocationParseError
 from pathlib import Path
-from typing import Union
-from urllib.parse import urlparse
+from typing import Dict, Union, Optional
 
 
 class URIParserError(ValueError):
@@ -9,11 +9,13 @@ class URIParserError(ValueError):
 
 
 class Query:
-    """Class representing the URI query parameters."""
+    """
+    Class representing the URI query parameters.
+    """
 
-    _args: dict[str, str | None]
+    _args: Dict[str, Optional[str]]
 
-    def __init__(self, query: str | None):
+    def __init__(self, query: Optional[str]):
         query = "" if query is None else query
         self._args = {}
         for arg in query.split("&"):
@@ -39,7 +41,7 @@ class Query:
     def __getitem__(self, name):
         return self._args[name]
 
-    def get(self, name: str, *, default: str | None = None) -> str | None:
+    def get(self, name: str, *, default: Optional[str] = None) -> Optional[str]:
         return self._args.get(name, default)
 
     def set(self, name: str, value: str) -> None:
@@ -50,14 +52,16 @@ class Query:
 
 
 class Authority:
-    """Class representing URI authority."""
+    """
+    Class representing URI authority.
+    """
 
-    __slots__ = ("auth", "host", "port")
+    __slots__ = ("host", "port", "auth")
 
-    def __init__(self, host: int | None, port: int | None, auth: str | None):
-        self.host: str | None = host
-        self.port: int | None = port
-        self.auth: str | None = auth
+    def __init__(self, host: Optional[int], port: Optional[int], auth: Optional[str]):
+        self.host: Optional[str] = host
+        self.port: Optional[int] = port
+        self.auth: Optional[str] = auth
 
     @classmethod
     def empty(cls):
@@ -81,36 +85,34 @@ class Authority:
 
 
 class URI:
-    """Class for parsing and representing a URI."""
+    """
+    Class for parsing and representing a URI.
+    """
 
-    __slots__ = ("authority", "fragment", "path", "query", "scheme")
+    __slots__ = ("scheme", "query", "path", "authority", "fragment")
 
     def __init__(self, uri: Union[str, "URI", None] = None, *, scheme=None, path=None):
-        """Create a URI object by either parsing a URI string or copying from an
-        existing URI object.
+        """
+        Create a URI object by either parsing a URI string or copying from an existing URI object.
 
         :param uri: A URI string, another URI to copy from or None for an empty URI.
-        :param scheme: The URI scheme. Takes precedence over any scheme found from the
-            URI argument.
-        :param path: The URI path. Takes precedence over any path found from the URI
-            argument.
+        :param scheme: The URI scheme. Takes precedence over any scheme found from the URI argument.
+        :param path: The URI path. Takes precedence over any path found from the URI argument.
         """
-        self.scheme: str | None = None
+        self.scheme: Optional[str] = None
         self.query: Query = Query.empty()
-        self.path: Path | None = None
+        self.path: Optional[Path] = None
         self.authority: Authority = Authority.empty()
-        self.fragment: str | None = None
+        self.fragment: Optional[str] = None
 
         if uri is not None:
-            result = urlparse(str(uri))
+            try:
+                result: Url = parse_url(str(uri))
+            except LocationParseError:
+                raise URIParserError("failed to parse URI")
             self.scheme = result.scheme
             self.query = Query(result.query)
-            auth = (
-                None
-                if result.username is None
-                else f"{result.username}:{result.password}"
-            )
-            self.authority = Authority(result.hostname, result.port, auth)
+            self.authority = Authority(result.host, result.port, result.auth)
             if result.path is not None:
                 if (
                     self.scheme == "imas"
@@ -130,7 +132,8 @@ class URI:
 
     @property
     def uri(self) -> str:
-        """Return the URI object as a URI string.
+        """
+        Return the URI object as a URI string.
 
         :return: A string representation of the URI.
         """
