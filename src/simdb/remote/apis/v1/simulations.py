@@ -164,7 +164,7 @@ class SimulationList(Resource):
                 constraints, names, limit=limit, page=page
             )
         else:
-            count, data = current_app.db.list_simulation_data(
+            _count, data = current_app.db.list_simulation_data(
                 meta_keys=names, limit=limit, page=page
             )
 
