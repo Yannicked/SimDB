@@ -72,9 +72,7 @@ class URI(sql_types.TypeDecorator):
             return value
         return str(value)
 
-    def process_result_value(
-        self, value: str | None, dialect
-    ) -> urilib.URI | None:
+    def process_result_value(self, value: str | None, dialect) -> urilib.URI | None:
         if value is None:
             return value
         return urilib.URI(value)

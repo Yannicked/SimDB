@@ -96,9 +96,7 @@ class Simulation(Base):
         "Watcher", secondary=simulation_watchers, lazy="dynamic"
     )
 
-    def __init__(
-        self, manifest: Manifest | None, config: Config | None = None
-    ) -> None:
+    def __init__(self, manifest: Manifest | None, config: Config | None = None) -> None:
         """
         Initialise a new Simulation object using the provided Manifest.
 
@@ -150,7 +148,9 @@ class Simulation(Base):
             self.inputs.append(file)
 
         if all_input_idss:
-            self.meta.append(MetaData("input_ids", "[{}]".format(", ".join(all_input_idss))))
+            self.meta.append(
+                MetaData("input_ids", "[{}]".format(", ".join(all_input_idss)))
+            )
 
         all_output_idss = []
 

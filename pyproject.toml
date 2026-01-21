@@ -17,9 +17,6 @@ maintainers = [
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Operating System :: OS Independent",
     "Development Status :: 4 - Beta",
@@ -127,6 +124,9 @@ local_scheme = "dirty-tag"
 [tool.ruff]
 line-length = 88
 indent-width = 4
+
+[tool.ruff.format]
+docstring-code-format = true
 
 [tool.ruff.lint]
 select = [
