@@ -161,6 +161,7 @@ addopts = "--cov=simdb"
 testpaths = [
     "tests",
 ]
+xfail_strict = true
 
 [dependency-groups]
 dev = [

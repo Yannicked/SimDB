@@ -934,3 +934,74 @@ def test_trace_endpoint(client):
     # Verify v1 (double nested)
     assert trace.replaces.replaces.uuid == sim_v1.simulation.uuid
     assert trace.replaces.replaces.replaces is None
+
+
+@pytest.mark.skipif(not has_flask, reason="requires flask library")
+def test_post_simulations_validation_error_missing_field(client):
+    """Test POST endpoint with missing required field returns proper validation
+    error."""
+    # Send invalid JSON missing the add_watcher field
+    invalid_data = {
+        "simulation": {
+            "alias": "test-validation-error",
+            "inputs": [],
+            "outputs": [],
+            "metadata": [],
+        }
+        # Missing add_watcher field
+    }
+
+    rv = client.post(
+        "/v1.2/simulations",
+        json=invalid_data,
+        headers=HEADERS,
+        content_type="application/json",
+    )
+
+    assert rv.status_code == 400
+    assert "error" in rv.json
+    assert "add_watcher" in rv.json["error"]
+    assert "Invalid or missing field" in rv.json["error"]
+
+
+@pytest.mark.skipif(not has_flask, reason="requires flask library")
+def test_patch_simulation_validation_error_invalid_data(client):
+    """Test PATCH endpoint with invalid data returns proper validation error."""
+    # First create a simulation
+    simulation_data = generate_simulation_data()
+    rv_post = post_simulation(client, simulation_data)
+    assert rv_post.status_code == 200
+
+    # Try to patch with invalid data (missing status field)
+    rv = client.patch(
+        f"/v1.2/simulation/{simulation_data.simulation.uuid.hex}",
+        json={},  # Missing status field
+        headers=HEADERS,
+    )
+
+    assert rv.status_code == 400
+    assert "error" in rv.json
+    assert "status" in rv.json["error"]
+    assert "Invalid or missing field" in rv.json["error"]
+
+
+@pytest.mark.skipif(not has_flask, reason="requires flask library")
+def test_patch_simulation_metadata_validation_error(client):
+    """Test PATCH metadata endpoint with invalid data returns proper validation
+    error."""
+    # First create a simulation
+    simulation_data = generate_simulation_data()
+    rv_post = post_simulation(client, simulation_data)
+    assert rv_post.status_code == 200
+
+    # Try to patch metadata with invalid data (missing required fields)
+    rv = client.patch(
+        f"/v1.2/simulation/metadata/{simulation_data.simulation.uuid.hex}",
+        json={"key": "test-key"},  # Missing value field
+        headers=HEADERS,
+    )
+
+    assert rv.status_code == 400
+    assert "error" in rv.json
+    assert "value" in rv.json["error"]
+    assert "Invalid or missing field" in rv.json["error"]

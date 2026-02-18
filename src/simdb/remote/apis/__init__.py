@@ -3,6 +3,7 @@ from pathlib import Path
 
 import appdirs
 import jwt
+import pydantic
 from flask import Blueprint, Response, _app_ctx_stack, jsonify, request
 from flask_restx import Resource
 
@@ -70,6 +71,23 @@ def register(api, version, namespaces):
     @api.errorhandler(AuthenticationError)
     def handle_authentication_error(err: Exception):
         return {"message": str(err)}, 401
+
+    @api.errorhandler(pydantic.ValidationError)
+    def handle_pydantic_validation_error(err: pydantic.ValidationError):
+        """Handle pydantic validation errors globally for this API version."""
+        # Extract just the field names that have validation errors
+        invalid_fields = []
+        for error_dict in err.errors():
+            field_path = ".".join(str(x) for x in error_dict["loc"])
+            if field_path not in invalid_fields:
+                invalid_fields.append(field_path)
+
+        if len(invalid_fields) == 1:
+            error_message = f"Invalid or missing field: {invalid_fields[0]}"
+        else:
+            error_message = f"Invalid or missing fields: {', '.join(invalid_fields)}"
+
+        return {"error": error_message}, 400
 
     @api.route("/")
     class Index(Resource):
