@@ -188,14 +188,14 @@ class RemoteAPI:
             )
         self._remote = remote
         try:
-            self._url: str = config.get_option(f"remote.{remote}.url")
+            self._url: str = config.get_string_option(f"remote.{remote}.url")
         except KeyError:
             raise ValueError(
                 f"Remote '{remote}' not found. Use `simdb remote config add` to add it."
             ) from None
 
         self._api_url: str = f"{self._url}/v{config.api_version}/"
-        self._firewall: Optional[str] = config.get_option(
+        self._firewall: Optional[str] = config.get_string_option(
             f"remote.{remote}.firewall", default=None
         )
 
