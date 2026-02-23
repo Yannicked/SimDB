@@ -5,6 +5,7 @@ from typing import Optional, Type, cast
 
 from alembic.config import Config as AlembicConfig
 from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from alembic.script import ScriptDirectory
 from flask import Flask, jsonify, request
 from flask.json import JSONDecoder, JSONEncoder
@@ -12,6 +13,7 @@ from flask_compress import Compress
 from flask_cors import CORS
 
 from simdb.config import Config
+from simdb.database.models import Base
 from simdb.json import CustomDecoder, CustomEncoder
 
 from .apis import blueprints
@@ -24,7 +26,7 @@ compress = Compress()
 
 # Path to alembic.ini, located at the project root (two levels above this file's
 # package: src/simdb/remote/ -> src/simdb/ -> src/ -> project root)
-_ALEMBIC_INI = Path(__file__).resolve().parents[3] / "alembic.ini"
+_ALEMBIC_INI = Path("alembic.ini")
 
 
 def check_migrations(app: "SimDBApp") -> None:
@@ -61,6 +63,25 @@ def check_migrations(app: "SimDBApp") -> None:
         app.logger.info(
             "Database schema is up to date (revision %s).", current_revision
         )
+
+
+def run_migrations(app: "SimDBApp") -> None:
+    """Run the database migrations."""
+    config = AlembicConfig(_ALEMBIC_INI)
+    config.set_main_option("script_location", "alembic")
+    script = ScriptDirectory.from_config(config)
+
+    def upgrade(rev, context):
+        return script._upgrade_revs("head", rev)
+
+    engine = app.db.engine
+    with engine.connect() as conn:
+        context = MigrationContext.configure(
+            conn, opts={"target_metadata": Base.metadata, "fn": upgrade}
+        )
+
+        with context.begin_transaction(), Operations.context(context):
+            context.run_migrations()
 
 
 def create_app(
@@ -112,6 +133,9 @@ def create_app(
 
     if not _ALEMBIC_INI.exists():
         raise RuntimeError(f"Alembic configuration not found at {_ALEMBIC_INI}.")
+
+    if testing:
+        run_migrations(app)
 
     try:
         check_migrations(app)
