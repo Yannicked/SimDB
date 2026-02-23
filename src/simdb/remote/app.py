@@ -1,7 +1,11 @@
 import logging
 import os
+from pathlib import Path
 from typing import Optional, Type, cast
 
+from alembic.config import Config as AlembicConfig
+from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from flask import Flask, jsonify, request
 from flask.json import JSONDecoder, JSONEncoder
 from flask_compress import Compress
@@ -16,6 +20,47 @@ from .core.cache import cache
 from .core.typing import SimDBApp
 
 compress = Compress()
+
+
+# Path to alembic.ini, located at the project root (two levels above this file's
+# package: src/simdb/remote/ -> src/simdb/ -> src/ -> project root)
+_ALEMBIC_INI = Path(__file__).resolve().parents[3] / "alembic.ini"
+
+
+def check_migrations(app: "SimDBApp") -> None:
+    """Check that the database is up-to-date with the latest Alembic migration.
+
+    Logs a warning if the database is behind the head revision, and raises a
+    :class:`RuntimeError` if the database has not been initialised at all (i.e.
+    the ``alembic_version`` table is absent).
+    """
+    alembic_cfg = AlembicConfig(str(_ALEMBIC_INI))
+    script = ScriptDirectory.from_config(alembic_cfg)
+    head_revision = script.get_current_head()
+
+    engine = app.db.engine
+    with engine.connect() as conn:
+        context = MigrationContext.configure(conn)
+        current_revision = context.get_current_revision()
+
+    if current_revision is None:
+        raise RuntimeError(
+            "The database has not been initialised. "
+            f"Run 'DATABASE_URL={engine.url} alembic upgrade head' before starting the "
+            "server. "
+        )
+
+    if current_revision != head_revision:
+        raise RuntimeError(
+            f"Database schema is out of date: current revision is {current_revision}, "
+            f"but the latest revision is {head_revision}. "
+            f"Run 'DATABASE_URL={engine.url} alembic upgrade head' to apply pending "
+            "migrations. "
+        )
+    else:
+        app.logger.info(
+            "Database schema is up to date (revision %s).", current_revision
+        )
 
 
 def create_app(
@@ -65,4 +110,12 @@ def create_app(
     for version, blueprint in blueprints.items():
         app.register_blueprint(blueprint, url_prefix=f"/{version}")
 
+    if not _ALEMBIC_INI.exists():
+        raise RuntimeError(f"Alembic configuration not found at {_ALEMBIC_INI}.")
+
+    try:
+        check_migrations(app)
+    except Exception as exc:
+        app.logger.error("Migration check failed: %s", exc)
+        raise
     return app
