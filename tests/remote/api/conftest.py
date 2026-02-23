@@ -65,8 +65,9 @@ def client():
 
 
 @pytest.fixture(scope="session")
-@pytest.mark.skipif(not has_flask, "Flask not installed")
 def client_copy_files():
+    if not has_flask:
+        pytest.skip("Flask not installed")
     config = Config()
     config.load()
     db_fd, db_file = tempfile.mkstemp()
