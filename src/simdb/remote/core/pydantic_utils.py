@@ -289,12 +289,29 @@ def pydantic_validate(
             return result
 
         if _body_schema is not None:
-            wrapper = ns.expect(_body_schema)(wrapper)
+            wrapper = ns.expect(_body_schema, validate=False)(wrapper)
         if _resp_schema is not None:
             wrapper = ns.response(200, "Success", _resp_schema)(wrapper)
         if _error_schema is not None:
             for error_code in error_codes:
                 wrapper = ns.response(error_code, "Error", _error_schema)(wrapper)
+
+        for _param_name, model_type, source in annotated_params:
+            if isinstance(source, (Query, Header)):
+                location = "query" if isinstance(source, Query) else "header"
+                schema = model_type.model_json_schema()
+                properties = schema.get("properties", {})
+                required_fields = schema.get("required", [])
+
+                for field_name, field_props in properties.items():
+                    wrapper = ns.param(
+                        name=field_name,
+                        description=field_props.get("description", ""),
+                        _in=location,
+                        required=(field_name in required_fields),
+                        type=field_props.get("type", "string"),
+                        default=field_props.get("default"),
+                    )(wrapper)
 
         return wrapper
 
