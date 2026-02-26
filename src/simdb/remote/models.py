@@ -18,18 +18,31 @@ from urllib.parse import urlencode
 from uuid import UUID, uuid1
 
 from pydantic import (
-    BaseModel,
+    BaseModel as _BaseModel,
+)
+from pydantic import (
     BeforeValidator,
+    ConfigDict,
     Field,
     PlainSerializer,
-    RootModel,
     model_validator,
+)
+from pydantic import (
+    RootModel as _RootModel,
 )
 
 from simdb.cli.manifest import DataObject
 
 HexUUID = Annotated[UUID, PlainSerializer(lambda x: x.hex, return_type=str)]
 """UUID serialized as a hex string."""
+
+
+class BaseModel(_BaseModel):
+    model_config = ConfigDict(use_attribute_docstrings=True)
+
+
+class RootModel(_RootModel):
+    model_config = ConfigDict(use_attribute_docstrings=True)
 
 
 def _deserialize_custom_uuid(v: Any) -> UUID:
@@ -64,7 +77,7 @@ class StatusPatchData(BaseModel):
 class DeletedSimulation(BaseModel):
     """Reference to a deleted simulation."""
 
-    uuid: UUID
+    simulation: UUID
     """UUID of the deleted simulation."""
     files: List[str]
     """List of deleted file paths."""
@@ -171,6 +184,10 @@ class MetadataDataList(RootModel):
         return urlencode(self.as_dict())
 
 
+class MetadataDeleteResponse(BaseModel):
+    pass
+
+
 class SimulationReference(BaseModel):
     """Reference to a simulation."""
 
@@ -204,6 +221,10 @@ class SimulationDataResponse(SimulationData):
     """Parent simulations."""
     children: List[SimulationReference]
     """Child simulations."""
+
+
+class SimulationPatchResponse(BaseModel):
+    pass
 
 
 class SimulationPostData(BaseModel):
@@ -469,3 +490,10 @@ class StagingDirectoryResponse(BaseModel):
 
     staging_dir: Path
     """Path to the staging dir."""
+
+
+class ErrorResponse(BaseModel):
+    """Response model for server errors."""
+
+    error: str
+    """Error description."""
