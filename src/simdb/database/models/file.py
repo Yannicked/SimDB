@@ -13,7 +13,8 @@ from simdb.cli.manifest import DataObject
 from simdb.config.config import Config
 from simdb.docstrings import inherit_docstrings
 from simdb.imas.checksum import checksum as imas_checksum
-from simdb.imas.utils import imas_timestamp
+from simdb.imas.utils import imas_files, imas_timestamp
+from simdb.remote.models import FileData, FileGetDataResponse, FileInfo
 from simdb.uda.checksum import checksum as uda_checksum
 
 from .base import Base
@@ -125,6 +126,23 @@ class File(Base):
         file.datetime = date_parser.parse(checked_get(data, "datetime", str))
         return file
 
+    @classmethod
+    def from_data_model(cls, data: FileData) -> "File":
+        data_type = data.type
+        uri = data.uri
+        file = File(
+            DataObject.Type[data_type], urilib.URI(uri), perform_integrity_check=False
+        )
+        file.uuid = data.uuid
+        file.usage = data.usage
+        file.checksum = data.checksum
+        file.purpose = data.purpose
+        file.sensitivity = data.sensitivity
+        file.access = data.access
+        file.embargo = data.embargo
+        file.datetime = data.datetime
+        return file
+
     def data(self, recurse: bool = False) -> Dict[str, str]:
         data = {
             "uuid": self.uuid,
@@ -139,3 +157,41 @@ class File(Base):
             "datetime": self.datetime.isoformat(),
         }
         return data
+
+    def to_model(self) -> FileData:
+        return FileData(
+            type=self.type.name,
+            uri=str(self.uri),
+            uuid=self.uuid,
+            checksum=self.checksum,
+            datetime=self.datetime,
+            usage=self.usage,
+            purpose=self.purpose,
+            sensitivity=self.sensitivity,
+            access=self.access,
+            embargo=self.embargo,
+        )
+
+    def to_model_with_path(self) -> FileGetDataResponse:
+        if self.type.name == "FILE":
+            if self.uri.path is None:
+                raise ValueError("File path not set")
+            files = [FileInfo(path=self.uri.path, checksum=self.checksum)]
+        else:
+            files = [
+                FileInfo(path=path, checksum=sha1_checksum(URI(f"file:{path}")))
+                for path in imas_files(self.uri)
+            ]
+        return FileGetDataResponse(
+            type=self.type.name,
+            uri=str(self.uri),
+            uuid=self.uuid,
+            checksum=self.checksum,
+            datetime=self.datetime,
+            usage=self.usage,
+            purpose=self.purpose,
+            sensitivity=self.sensitivity,
+            access=self.access,
+            embargo=self.embargo,
+            files=files,
+        )
