@@ -5,12 +5,9 @@ import copy
 import functools
 import gzip
 import inspect
-import typing
 from typing import (
     Annotated,
     Any,
-    TypeVar,
-    Union,
     get_args,
     get_origin,
 )
@@ -22,9 +19,16 @@ from pydantic import BaseModel, ValidationError
 from simdb.remote.core.errors import error as _error
 from simdb.remote.models import ErrorResponse
 
-M = TypeVar("M", bound=BaseModel)
 
-PydanticResponse = Union[ErrorResponse, M]
+class ResponseException(Exception):
+    """Raised an error has occurred in the request."""
+
+    def __init__(self, message, return_code=400):
+        super().__init__(message)
+        self.message = message
+        self.return_code = return_code
+
+
 # ---------------------------------------------------------------------------
 # Marker classes for Annotated-style parameter declarations
 # ---------------------------------------------------------------------------
@@ -153,7 +157,7 @@ def pydantic_validate(
     ns: Namespace,
     *,
     response_model: type[BaseModel] | None = None,
-    error_model: type[BaseModel] | None = None,
+    error_model: type[BaseModel] = ErrorResponse,
 ) -> Any:
     """Decorator factory that wires up Pydantic validation for a Flask-RESTX endpoint.
 
@@ -196,7 +200,7 @@ def pydantic_validate(
                 self,
                 user: User,
                 pagination: Annotated[PaginationData, Header()],
-            ) -> PydanticResponse[PaginatedResponse]:
+            ) -> PaginatedResponse:
                 ...
 
             @restx_route(api)
@@ -204,7 +208,7 @@ def pydantic_validate(
                 self,
                 user: User,
                 body: Annotated[SimulationPostData, Body()],
-            ) -> PydanticResponse[SimulationPostResponse]:
+            ) -> SimulationPostResponse:
                 ...
     """
 
@@ -218,12 +222,10 @@ def pydantic_validate(
             ret = inspect.signature(f).return_annotation
             if (
                 ret is not inspect.Parameter.empty
-                and typing.get_origin(ret) is typing.Union
-                and issubclass(typing.get_args(ret)[0], ErrorResponse)
-                and issubclass(typing.get_args(ret)[1], BaseModel)
+                and inspect.isclass(ret)
+                and issubclass(ret, BaseModel)
             ):
-                _response_model = typing.get_args(ret)[1]
-                _error_model = typing.get_args(ret)[0]
+                _response_model = ret
 
         # Register all input models with the namespace
         _registered = {}
@@ -258,9 +260,15 @@ def pydantic_validate(
 
             try:
                 result = f(*args, **kwargs)
+            except ResponseException as err:
+                return Response(
+                    response=_error_model(error=err.message).model_dump_json(),
+                    status=err.return_code,
+                    mimetype="application/json",
+                )
             except Exception as err:
                 return Response(
-                    response=ErrorResponse(error=str(err)).model_dump_json(),
+                    response=_error_model(error=str(err)).model_dump_json(),
                     status=400,
                     mimetype="application/json",
                 )

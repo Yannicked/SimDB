@@ -24,13 +24,12 @@ from simdb.remote.core.path import find_common_root, secure_path
 from simdb.remote.core.pydantic_utils import (
     Body,
     Header,
-    PydanticResponse,
+    ResponseException,
     pydantic_validate,
 )
 from simdb.remote.core.typing import current_app
 from simdb.remote.models import (
     DeletedSimulation,
-    ErrorResponse,
     MetadataDataList,
     MetadataDeleteData,
     MetadataDeleteResponse,
@@ -176,7 +175,7 @@ class SimulationList(Resource):
         self,
         user: User,
         pagination: Annotated[PaginationData, Header()],
-    ) -> PydanticResponse[PaginatedResponse[SimulationListItem]]:
+    ) -> PaginatedResponse[SimulationListItem]:
         names = []
         constraints = []
         if request.args:
@@ -223,7 +222,7 @@ class SimulationList(Resource):
         self,
         user: User,
         body: Annotated[SimulationPostData, Body()],
-    ) -> PydanticResponse[SimulationPostResponse]:
+    ) -> SimulationPostResponse:
         try:
             simulation = models_sim.Simulation.from_data_model(body.simulation)
 
@@ -306,12 +305,12 @@ class SimulationList(Resource):
                 result.validation = _validate(simulation, user)
 
                 if not result.validation.passed and error_on_fail:
-                    return ErrorResponse(
-                        error=f"Simulation validation failed and server has "
+                    raise ResponseException(
+                        f"Simulation validation failed and server has "
                         f"error_on_fail=True.\n{result.validation.error}"
                     )
             elif error_on_fail:
-                raise RuntimeError(
+                raise ResponseException(
                     "Validation config option error_on_fail=True without "
                     "auto_validate=True."
                 )
@@ -343,7 +342,7 @@ class SimulationList(Resource):
 
             return result
         except (DatabaseError, ValueError) as err:
-            return ErrorResponse(error=str(err))
+            raise ResponseException(str(err)) from err
 
 
 @api.route("/simulation/<path:sim_id>")
@@ -351,7 +350,7 @@ class Simulation(Resource):
     @requires_auth()
     @cache.cached(key_prefix=cache_key)  # type: ignore[invalid-argument-type]
     @pydantic_validate(api)
-    def get(self, sim_id: str, user: User) -> PydanticResponse[SimulationDataResponse]:
+    def get(self, sim_id: str, user: User) -> SimulationDataResponse:
         try:
             simulation = current_app.db.get_simulation(sim_id)
             if simulation:
@@ -364,9 +363,9 @@ class Simulation(Resource):
                     simulation
                 )
                 return sim_data
-            return ErrorResponse(error="Simulation not found")
+            raise ResponseException("Simulation not found")
         except DatabaseError as err:
-            return ErrorResponse(error=str(err))
+            raise ResponseException(str(err)) from err
 
     @requires_auth("admin")
     @pydantic_validate(api)
@@ -375,7 +374,7 @@ class Simulation(Resource):
         sim_id: str,
         user: Optional[User],
         body: Annotated[StatusPatchData, Body()],
-    ) -> PydanticResponse[SimulationPatchResponse]:
+    ) -> SimulationPatchResponse:
         try:
             simulation = current_app.db.get_simulation(sim_id)
             if simulation is None:
@@ -386,13 +385,11 @@ class Simulation(Resource):
             clear_cache()
             return SimulationPatchResponse()
         except DatabaseError as err:
-            return ErrorResponse(error=str(err))
+            raise ResponseException(str(err)) from err
 
     @requires_auth("admin")
     @pydantic_validate(api)
-    def delete(
-        self, sim_id: str, user: User
-    ) -> PydanticResponse[SimulationDeleteResponse]:
+    def delete(self, sim_id: str, user: User) -> SimulationDeleteResponse:
         try:
             simulation = current_app.db.delete_simulation(sim_id)
             clear_cache()
@@ -415,7 +412,7 @@ class Simulation(Resource):
                 deleted=DeletedSimulation(simulation=simulation.uuid, files=files)
             )
         except DatabaseError as err:
-            return ErrorResponse(error=str(err))
+            raise ResponseException(str(err)) from err
 
 
 @api.route("/simulation/metadata/<path:sim_id>")
@@ -423,16 +420,16 @@ class SimulationMeta(Resource):
     @requires_auth()
     @cache.cached(key_prefix=cache_key)  # type: ignore[invalid-argument-type]
     @pydantic_validate(api)
-    def get(self, sim_id: str, user: User) -> PydanticResponse[MetadataDataList]:
+    def get(self, sim_id: str, user: User) -> MetadataDataList:
         try:
             simulation = current_app.db.get_simulation(sim_id)
             if simulation:
                 return MetadataDataList.model_validate(
                     [meta.data() for meta in simulation.meta]
                 )
-            return ErrorResponse(error="Simulation not found")
+            raise ResponseException("Simulation not found")
         except DatabaseError as err:
-            return ErrorResponse(error=str(err))
+            raise ResponseException(str(err)) from err
 
     @requires_auth("admin")
     @pydantic_validate(api)
@@ -441,13 +438,13 @@ class SimulationMeta(Resource):
         sim_id: str,
         user: Optional[User],
         body: Annotated[MetadataPatchData, Body()],
-    ) -> PydanticResponse[MetadataDataList]:
+    ) -> MetadataDataList:
         try:
             key = body.key
             value = body.value.lower()
             simulation = current_app.db.get_simulation(sim_id)
             if simulation is None:
-                return ErrorResponse(error=f"Simulation {sim_id} not found.")
+                raise ResponseException(f"Simulation {sim_id} not found.")
             old_values = MetadataDataList.model_validate(
                 [meta.data() for meta in simulation.find_meta(key)]
             )
@@ -461,7 +458,7 @@ class SimulationMeta(Resource):
             clear_cache()
             return old_values
         except DatabaseError as err:
-            return ErrorResponse(error=str(err))
+            raise ResponseException(str(err)) from err
 
     @requires_auth("admin")
     @pydantic_validate(api)
@@ -470,25 +467,25 @@ class SimulationMeta(Resource):
         sim_id: str,
         user: Optional[User],
         body: Annotated[MetadataDeleteData, Body()],
-    ) -> PydanticResponse[MetadataDeleteResponse]:
+    ) -> MetadataDeleteResponse:
         try:
             simulation = current_app.db.get_simulation(sim_id)
             if simulation is None:
-                return ErrorResponse(error=f"Simulation {sim_id} not found.")
+                raise ResponseException(f"Simulation {sim_id} not found.")
 
             simulation.remove_meta(body.key)
             current_app.db.insert_simulation(simulation)
             clear_cache()
             return MetadataDeleteResponse()
         except DatabaseError as err:
-            return ErrorResponse(error=str(err))
+            raise ResponseException(str(err)) from err
 
 
 @api.route("/validate/<string:sim_id>")
 class ValidateSimulation(Resource):
     @requires_auth()
     @pydantic_validate(api)
-    def post(self, sim_id, user: User) -> PydanticResponse[ValidationResult]:
+    def post(self, sim_id, user: User) -> ValidationResult:
         try:
             simulation = current_app.db.get_simulation(sim_id)
             result = _validate(simulation, user)
@@ -496,7 +493,7 @@ class ValidateSimulation(Resource):
             clear_cache()
             return result
         except DatabaseError as err:
-            return ErrorResponse(error=str(err))
+            raise ResponseException(str(err)) from err
 
 
 @api.route("/trace/<path:sim_id>")
@@ -504,11 +501,11 @@ class SimulationTrace(Resource):
     @requires_auth()
     @cache.cached(key_prefix=cache_key)  # type: ignore[invalid-argument-type]
     @pydantic_validate(api)
-    def get(self, sim_id: str, user: User) -> PydanticResponse[SimulationTraceData]:
+    def get(self, sim_id: str, user: User) -> SimulationTraceData:
         try:
             return _build_trace(sim_id)
         except DatabaseError as err:
-            return ErrorResponse(error=str(err))
+            raise ResponseException(str(err)) from err
 
 
 @api.route("/simulation/package/<path:sim_id>")

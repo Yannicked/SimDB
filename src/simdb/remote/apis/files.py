@@ -18,9 +18,9 @@ from simdb.json import CustomDecoder
 from simdb.remote.core.auth import User, requires_auth
 from simdb.remote.core.errors import error
 from simdb.remote.core.path import find_common_root, secure_path
-from simdb.remote.core.pydantic_utils import PydanticResponse, pydantic_validate
+from simdb.remote.core.pydantic_utils import ResponseException, pydantic_validate
 from simdb.remote.core.typing import current_app
-from simdb.remote.models import ErrorResponse, FileDataList, FileGetDataResponse
+from simdb.remote.models import FileDataList, FileGetDataResponse
 from simdb.uri import URI
 
 api = Namespace("files", path="/")
@@ -173,7 +173,7 @@ def _handle_file_upload() -> Response:
 class FileList(Resource):
     @requires_auth()
     @pydantic_validate(api)
-    def get(self, user: User) -> PydanticResponse[FileDataList]:
+    def get(self, user: User) -> FileDataList:
         files = current_app.db.list_files()
         return FileDataList.model_validate([file.data() for file in files])
 
@@ -193,14 +193,12 @@ class FileList(Resource):
 class File(Resource):
     @requires_auth()
     @pydantic_validate(api)
-    def get(
-        self, file_uuid: str, user: Optional[User] = None
-    ) -> PydanticResponse[FileGetDataResponse]:
+    def get(self, file_uuid: str, user: Optional[User] = None) -> FileGetDataResponse:
         try:
             file = current_app.db.get_file(file_uuid)
             return file.to_model_with_path()
         except DatabaseError as err:
-            return ErrorResponse(error=str(err))
+            raise ResponseException(str(err)) from err
 
 
 @api.route("/file/download/<string:file_uuid>")
