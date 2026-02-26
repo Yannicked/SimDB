@@ -14,6 +14,7 @@ from simdb.remote.models import (
     MetadataDataList,
     SimulationData,
     SimulationDataResponse,
+    SimulationTraceData,
 )
 
 if sys.version_info < (3, 11):
@@ -418,6 +419,29 @@ class Simulation(Base):
             metadata=metadata,
             parents=[],
             children=[],
+        )
+
+    def to_model_trace(
+        self, recurse: bool = False, meta_keys: Optional[List[str]] = None
+    ) -> SimulationTraceData:
+        inputs = FileDataList()
+        outputs = FileDataList()
+        metadata = MetadataDataList()
+        if recurse:
+            inputs = FileDataList([f.to_model() for f in self.inputs])
+            outputs = FileDataList([f.to_model() for f in self.outputs])
+            metadata = MetadataDataList([m.to_model() for m in self.meta])
+        elif meta_keys:
+            metadata = MetadataDataList(
+                [m.to_model() for m in self.meta if m.element in meta_keys]
+            )
+        return SimulationTraceData(
+            uuid=self.uuid,
+            alias=self.alias,
+            datetime=self.datetime,
+            inputs=inputs,
+            outputs=outputs,
+            metadata=metadata,
         )
 
     def meta_dict(self) -> Dict[str, Union[Dict, Any]]:

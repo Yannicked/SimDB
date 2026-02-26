@@ -158,6 +158,7 @@ def pydantic_validate(
     *,
     response_model: type[BaseModel] | None = None,
     error_model: type[BaseModel] = ErrorResponse,
+    error_codes: tuple[int] = (400,),
 ) -> Any:
     """Decorator factory that wires up Pydantic validation for a Flask-RESTX endpoint.
 
@@ -269,7 +270,7 @@ def pydantic_validate(
             except Exception as err:
                 return Response(
                     response=_error_model(error=str(err)).model_dump_json(),
-                    status=400,
+                    status=400,  # HTTP status code 500 would make more sense
                     mimetype="application/json",
                 )
 
@@ -292,7 +293,8 @@ def pydantic_validate(
         if _resp_schema is not None:
             wrapper = ns.response(200, "Success", _resp_schema)(wrapper)
         if _error_schema is not None:
-            wrapper = ns.response(400, "Error", _error_schema)(wrapper)
+            for error_code in error_codes:
+                wrapper = ns.response(error_code, "Error", _error_schema)(wrapper)
 
         return wrapper
 

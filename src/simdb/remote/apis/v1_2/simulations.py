@@ -4,7 +4,7 @@ import itertools
 import tarfile
 from io import BytesIO
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Optional, Tuple, cast
+from typing import Annotated, List, Optional, Tuple
 
 from flask import request, send_file
 from flask_restx import Namespace, Resource
@@ -137,33 +137,29 @@ def _set_alias(alias: str):
 
 def _build_trace(sim_id: str) -> SimulationTraceData:
     simulation = current_app.db.get_simulation(sim_id)
-    data: Dict[str, Any] = cast(Dict[str, Any], simulation.data(recurse=False))
+    data = simulation.to_model_trace(recurse=False)
 
-    status = simulation.find_meta("status")
-    if status:
-        status_value = status[0].value
-        if isinstance(status_value, str):
-            data["status"] = status_value
-        else:
-            data["status"] = status_value.value
-        status_on_name = str(data["status"]) + "_on"
-        status_on = simulation.find_meta(status_on_name)
-        if status_on:
-            data[status_on_name] = status_on[0].value
+    def get_meta_val(key, default=None):
+        meta = simulation.find_meta(key)
+        return meta[0].value if meta else default
 
-    replaces = simulation.find_meta("replaces")
-    if replaces:
-        data["replaces"] = _build_trace(replaces[0].value)
+    status_val = get_meta_val("status")
+    if status_val:
+        data.status = status_val if isinstance(status_val, str) else status_val.value
 
-    replaced_on = simulation.find_meta("replaced_on")
-    if replaced_on:
-        data["deprecated_on"] = replaced_on[0].value
+        status_on_key = f"{data.status}_on"
+        status_on_val = get_meta_val(status_on_key)
+        if status_on_val:
+            setattr(data, status_on_key, status_on_val)
 
-    replaces_reason = simulation.find_meta("replaces_reason")
-    if replaces_reason:
-        data["replaces_reason"] = replaces_reason[0].value
+    replaces_id = get_meta_val("replaces")
+    if replaces_id:
+        data.replaces = _build_trace(replaces_id)
 
-    return SimulationTraceData.model_validate(data)
+    data.deprecated_on = get_meta_val("replaced_on")
+    data.replaces_reason = get_meta_val("replaces_reason")
+
+    return data
 
 
 @api.route("/simulations")
@@ -223,126 +219,121 @@ class SimulationList(Resource):
         user: User,
         body: Annotated[SimulationPostData, Body()],
     ) -> SimulationPostResponse:
-        try:
-            simulation = models_sim.Simulation.from_data_model(body.simulation)
+        simulation = models_sim.Simulation.from_data_model(body.simulation)
 
-            # Simulation Upload (Push) Date
-            simulation.datetime = datetime.datetime.now()
+        # Simulation Upload (Push) Date
+        simulation.datetime = datetime.datetime.now()
 
-            uploaded_by = body.uploaded_by or user.email or user.name or "anonymous"
+        uploaded_by = body.uploaded_by or user.email or user.name or "anonymous"
 
-            simulation.set_meta("uploaded_by", uploaded_by)
+        simulation.set_meta("uploaded_by", uploaded_by)
 
-            if body.add_watcher:
-                simulation.watchers.append(
-                    models_watcher.Watcher(
-                        user.name, user.email, models_watcher.Notification.ALL
-                    )
+        if body.add_watcher:
+            simulation.watchers.append(
+                models_watcher.Watcher(
+                    user.name, user.email, models_watcher.Notification.ALL
                 )
+            )
 
-            alias = body.simulation.alias
-            if alias is not None:
-                (updated_alias, next_id) = _set_alias(alias)
-                if updated_alias:
-                    simulation.meta.append(models_meta.MetaData("seqid", next_id))
-                    simulation.alias = updated_alias
-                else:
-                    simulation.alias = alias
+        alias = body.simulation.alias
+        if alias is not None:
+            (updated_alias, next_id) = _set_alias(alias)
+            if updated_alias:
+                simulation.meta.append(models_meta.MetaData("seqid", next_id))
+                simulation.alias = updated_alias
             else:
-                simulation.alias = simulation.uuid.hex
+                simulation.alias = alias
+        else:
+            simulation.alias = simulation.uuid.hex
 
-            files = list(itertools.chain(simulation.inputs, simulation.outputs))
-            sim_file_paths = simulation.file_paths()
-            common_root = find_common_root(sim_file_paths)
+        files = list(itertools.chain(simulation.inputs, simulation.outputs))
+        sim_file_paths = simulation.file_paths()
+        common_root = find_common_root(sim_file_paths)
 
-            config = current_app.simdb_config
-            copy_files = config.get_option("server.copy_files", default=True)
-            imas_remote_host = config.get_option(
-                "server.imas_remote_host", default=None
+        config = current_app.simdb_config
+        copy_files = config.get_option("server.copy_files", default=True)
+        imas_remote_host = config.get_option("server.imas_remote_host", default=None)
+
+        if copy_files or imas_remote_host:
+            staging_dir = (
+                Path(config.get_string_option("server.upload_folder"))
+                / simulation.uuid.hex
             )
 
-            if copy_files or imas_remote_host:
-                staging_dir = (
-                    Path(config.get_string_option("server.upload_folder"))
-                    / simulation.uuid.hex
-                )
+            for sim_file in files:
+                if (
+                    copy_files
+                    and sim_file.uri.scheme == "file"
+                    and sim_file.uri.path is not None
+                ):
+                    path = secure_path(sim_file.uri.path, common_root, staging_dir)
+                    if not path.exists():
+                        raise ResponseException(
+                            f"simulation file {sim_file.uuid} not uploaded"
+                        )
+                    sim_file.uri = URI(scheme="file", path=path)
+                elif sim_file.uri.scheme == "imas":
+                    if copy_files:
+                        path = secure_path(
+                            Path(sim_file.uri.query["path"]),
+                            common_root,
+                            staging_dir,
+                            is_file=common_root is not None,
+                        )
+                    else:
+                        path = Path(sim_file.uri.query["path"])
+                    sim_file.uri = convert_uri(sim_file.uri, path, config)
 
-                for sim_file in files:
-                    if (
-                        copy_files
-                        and sim_file.uri.scheme == "file"
-                        and sim_file.uri.path is not None
-                    ):
-                        path = secure_path(sim_file.uri.path, common_root, staging_dir)
-                        if not path.exists():
-                            raise ValueError(
-                                f"simulation file {sim_file.uuid} not uploaded"
-                            )
-                        sim_file.uri = URI(scheme="file", path=path)
-                    elif sim_file.uri.scheme == "imas":
-                        if copy_files:
-                            path = secure_path(
-                                Path(sim_file.uri.query["path"]),
-                                common_root,
-                                staging_dir,
-                                is_file=common_root is not None,
-                            )
-                        else:
-                            path = Path(sim_file.uri.query["path"])
-                        sim_file.uri = convert_uri(sim_file.uri, path, config)
+        result = SimulationPostResponse(
+            ingested=simulation.uuid, error=None, validation=None
+        )
 
-            result = SimulationPostResponse(
-                ingested=simulation.uuid, error=None, validation=None
-            )
+        error_on_fail = current_app.simdb_config.get_option(
+            "validation.error_on_fail", default=False
+        )
 
-            error_on_fail = current_app.simdb_config.get_option(
-                "validation.error_on_fail", default=False
-            )
+        if current_app.simdb_config.get_option(
+            "validation.auto_validate", default=False
+        ):
+            result.validation = _validate(simulation, user)
 
-            if current_app.simdb_config.get_option(
-                "validation.auto_validate", default=False
-            ):
-                result.validation = _validate(simulation, user)
-
-                if not result.validation.passed and error_on_fail:
-                    raise ResponseException(
-                        f"Simulation validation failed and server has "
-                        f"error_on_fail=True.\n{result.validation.error}"
-                    )
-            elif error_on_fail:
+            if not result.validation.passed and error_on_fail:
                 raise ResponseException(
-                    "Validation config option error_on_fail=True without "
-                    "auto_validate=True."
+                    f"Simulation validation failed and server has "
+                    f"error_on_fail=True.\n{result.validation.error}"
                 )
-
-            disable_replaces = config.get_option(
-                "development.disable_replaces", default=False
+        elif error_on_fail:
+            raise ResponseException(
+                "Validation config option error_on_fail=True without "
+                "auto_validate=True."
             )
-            replaces = simulation.find_meta("replaces")
 
-            if not disable_replaces and replaces and replaces[0].value:
-                sim_id = replaces[0].value
-                try:
-                    replaces_sim = current_app.db.get_simulation(sim_id)
-                except DatabaseError:
-                    replaces_sim = None
+        disable_replaces = config.get_option(
+            "development.disable_replaces", default=False
+        )
+        replaces = simulation.find_meta("replaces")
 
-                if replaces_sim is not None:
-                    _update_simulation_status(
-                        replaces_sim, models_sim.Simulation.Status.DEPRECATED, user
-                    )
-                    replaces_sim.set_meta("replaced_by", simulation.uuid)
-                    current_app.db.insert_simulation(replaces_sim)
+        if not disable_replaces and replaces and replaces[0].value:
+            sim_id = replaces[0].value
+            try:
+                replaces_sim = current_app.db.get_simulation(sim_id)
+            except DatabaseError:
+                replaces_sim = None
 
-            current_app.db.insert_simulation(simulation)
-            clear_cache()
+            if replaces_sim is not None:
+                _update_simulation_status(
+                    replaces_sim, models_sim.Simulation.Status.DEPRECATED, user
+                )
+                replaces_sim.set_meta("replaced_by", simulation.uuid)
+                current_app.db.insert_simulation(replaces_sim)
 
-            with contextlib.suppress(OSError):
-                create_alias_dir(simulation)
+        current_app.db.insert_simulation(simulation)
+        clear_cache()
 
-            return result
-        except (DatabaseError, ValueError) as err:
-            raise ResponseException(str(err)) from err
+        with contextlib.suppress(OSError):
+            create_alias_dir(simulation)
+
+        return result
 
 
 @api.route("/simulation/<path:sim_id>")
@@ -351,21 +342,14 @@ class Simulation(Resource):
     @cache.cached(key_prefix=cache_key)  # type: ignore[invalid-argument-type]
     @pydantic_validate(api)
     def get(self, sim_id: str, user: User) -> SimulationDataResponse:
-        try:
-            simulation = current_app.db.get_simulation(sim_id)
-            if simulation:
-                sim_data = simulation.to_model_with_refs(recurse=True)
+        simulation = current_app.db.get_simulation(sim_id)
+        if simulation:
+            sim_data = simulation.to_model_with_refs(recurse=True)
 
-                sim_data.children = current_app.db.get_simulation_children_ref(
-                    simulation
-                )
-                sim_data.parents = current_app.db.get_simulation_children_ref(
-                    simulation
-                )
-                return sim_data
-            raise ResponseException("Simulation not found")
-        except DatabaseError as err:
-            raise ResponseException(str(err)) from err
+            sim_data.children = current_app.db.get_simulation_children_ref(simulation)
+            sim_data.parents = current_app.db.get_simulation_children_ref(simulation)
+            return sim_data
+        raise ResponseException("Simulation not found")
 
     @requires_auth("admin")
     @pydantic_validate(api)
@@ -375,44 +359,38 @@ class Simulation(Resource):
         user: Optional[User],
         body: Annotated[StatusPatchData, Body()],
     ) -> SimulationPatchResponse:
-        try:
-            simulation = current_app.db.get_simulation(sim_id)
-            if simulation is None:
-                raise ValueError(f"Simulation {sim_id} not found.")
-            status = models_sim.Simulation.Status(body.status)
-            _update_simulation_status(simulation, status, user)
-            current_app.db.insert_simulation(simulation)
-            clear_cache()
-            return SimulationPatchResponse()
-        except DatabaseError as err:
-            raise ResponseException(str(err)) from err
+        simulation = current_app.db.get_simulation(sim_id)
+        if simulation is None:
+            raise ValueError(f"Simulation {sim_id} not found.")
+        status = models_sim.Simulation.Status(body.status)
+        _update_simulation_status(simulation, status, user)
+        current_app.db.insert_simulation(simulation)
+        clear_cache()
+        return SimulationPatchResponse()
 
     @requires_auth("admin")
     @pydantic_validate(api)
     def delete(self, sim_id: str, user: User) -> SimulationDeleteResponse:
-        try:
-            simulation = current_app.db.delete_simulation(sim_id)
-            clear_cache()
-            files = []
-            for file in itertools.chain(simulation.inputs, simulation.outputs):
-                if file.uri.scheme == "file":
-                    if file.uri.path is None:
-                        raise ValueError("File path not set")
-                    files.append(f"{file.uuid} ({file.uri.path.name})")
-                    file.uri.path.unlink()
-            if simulation.inputs or simulation.outputs:
-                first_file = (
-                    simulation.inputs[0] if simulation.inputs else simulation.outputs[0]
-                )
-                if first_file.uri.path is not None:
-                    directory = first_file.uri.path.parent
-                    if directory != Path() and directory != Path("/"):
-                        directory.rmdir()
-            return SimulationDeleteResponse(
-                deleted=DeletedSimulation(simulation=simulation.uuid, files=files)
+        simulation = current_app.db.delete_simulation(sim_id)
+        clear_cache()
+        files = []
+        for file in itertools.chain(simulation.inputs, simulation.outputs):
+            if file.uri.scheme == "file":
+                if file.uri.path is None:
+                    raise ValueError("File path not set")
+                files.append(f"{file.uuid} ({file.uri.path.name})")
+                file.uri.path.unlink()
+        if simulation.inputs or simulation.outputs:
+            first_file = (
+                simulation.inputs[0] if simulation.inputs else simulation.outputs[0]
             )
-        except DatabaseError as err:
-            raise ResponseException(str(err)) from err
+            if first_file.uri.path is not None:
+                directory = first_file.uri.path.parent
+                if directory != Path() and directory != Path("/"):
+                    directory.rmdir()
+        return SimulationDeleteResponse(
+            deleted=DeletedSimulation(simulation=simulation.uuid, files=files)
+        )
 
 
 @api.route("/simulation/metadata/<path:sim_id>")
@@ -421,15 +399,12 @@ class SimulationMeta(Resource):
     @cache.cached(key_prefix=cache_key)  # type: ignore[invalid-argument-type]
     @pydantic_validate(api)
     def get(self, sim_id: str, user: User) -> MetadataDataList:
-        try:
-            simulation = current_app.db.get_simulation(sim_id)
-            if simulation:
-                return MetadataDataList.model_validate(
-                    [meta.data() for meta in simulation.meta]
-                )
-            raise ResponseException("Simulation not found")
-        except DatabaseError as err:
-            raise ResponseException(str(err)) from err
+        simulation = current_app.db.get_simulation(sim_id)
+        if simulation:
+            return MetadataDataList.model_validate(
+                [meta.data() for meta in simulation.meta]
+            )
+        raise ResponseException("Simulation not found")
 
     @requires_auth("admin")
     @pydantic_validate(api)
@@ -439,26 +414,23 @@ class SimulationMeta(Resource):
         user: Optional[User],
         body: Annotated[MetadataPatchData, Body()],
     ) -> MetadataDataList:
-        try:
-            key = body.key
-            value = body.value.lower()
-            simulation = current_app.db.get_simulation(sim_id)
-            if simulation is None:
-                raise ResponseException(f"Simulation {sim_id} not found.")
-            old_values = MetadataDataList.model_validate(
-                [meta.data() for meta in simulation.find_meta(key)]
-            )
-            if key.lower() != "status":
-                simulation.set_meta(key, value)
-            else:
-                status = models_sim.Simulation.Status(value)
-                _update_simulation_status(simulation, status, user)
+        key = body.key
+        value = body.value.lower()
+        simulation = current_app.db.get_simulation(sim_id)
+        if simulation is None:
+            raise ResponseException(f"Simulation {sim_id} not found.")
+        old_values = MetadataDataList.model_validate(
+            [meta.data() for meta in simulation.find_meta(key)]
+        )
+        if key.lower() != "status":
+            simulation.set_meta(key, value)
+        else:
+            status = models_sim.Simulation.Status(value)
+            _update_simulation_status(simulation, status, user)
 
-            current_app.db.insert_simulation(simulation)
-            clear_cache()
-            return old_values
-        except DatabaseError as err:
-            raise ResponseException(str(err)) from err
+        current_app.db.insert_simulation(simulation)
+        clear_cache()
+        return old_values
 
     @requires_auth("admin")
     @pydantic_validate(api)
@@ -468,17 +440,14 @@ class SimulationMeta(Resource):
         user: Optional[User],
         body: Annotated[MetadataDeleteData, Body()],
     ) -> MetadataDeleteResponse:
-        try:
-            simulation = current_app.db.get_simulation(sim_id)
-            if simulation is None:
-                raise ResponseException(f"Simulation {sim_id} not found.")
+        simulation = current_app.db.get_simulation(sim_id)
+        if simulation is None:
+            raise ResponseException(f"Simulation {sim_id} not found.")
 
-            simulation.remove_meta(body.key)
-            current_app.db.insert_simulation(simulation)
-            clear_cache()
-            return MetadataDeleteResponse()
-        except DatabaseError as err:
-            raise ResponseException(str(err)) from err
+        simulation.remove_meta(body.key)
+        current_app.db.insert_simulation(simulation)
+        clear_cache()
+        return MetadataDeleteResponse()
 
 
 @api.route("/validate/<string:sim_id>")
@@ -486,14 +455,11 @@ class ValidateSimulation(Resource):
     @requires_auth()
     @pydantic_validate(api)
     def post(self, sim_id, user: User) -> ValidationResult:
-        try:
-            simulation = current_app.db.get_simulation(sim_id)
-            result = _validate(simulation, user)
-            current_app.db.insert_simulation(simulation)
-            clear_cache()
-            return result
-        except DatabaseError as err:
-            raise ResponseException(str(err)) from err
+        simulation = current_app.db.get_simulation(sim_id)
+        result = _validate(simulation, user)
+        current_app.db.insert_simulation(simulation)
+        clear_cache()
+        return result
 
 
 @api.route("/trace/<path:sim_id>")
@@ -502,10 +468,7 @@ class SimulationTrace(Resource):
     @cache.cached(key_prefix=cache_key)  # type: ignore[invalid-argument-type]
     @pydantic_validate(api)
     def get(self, sim_id: str, user: User) -> SimulationTraceData:
-        try:
-            return _build_trace(sim_id)
-        except DatabaseError as err:
-            raise ResponseException(str(err)) from err
+        return _build_trace(sim_id)
 
 
 @api.route("/simulation/package/<path:sim_id>")
