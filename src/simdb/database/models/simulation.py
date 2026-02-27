@@ -12,9 +12,9 @@ from typing import Any, Dict, List, Optional, Set, Union
 if sys.version_info < (3, 11):
     from backports.datetime_fromisoformat import MonkeyPatch
 
+from dateutil import parser as date_parser
 from sqlalchemy import Column, ForeignKey, Table
 from sqlalchemy import types as sql_types
-from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import relationship
 
@@ -43,7 +43,7 @@ from simdb.uri import URI
 
 from .base import Base
 from .file import File
-from .types import UUID
+from .types import UUID, JSONType
 from .utils import checked_get, flatten_dict, unflatten_dict
 from .watcher import Watcher
 
@@ -113,11 +113,7 @@ class Simulation(Base):
     datetime = Column(sql_types.DateTime, nullable=False)
     _metadata = Column(
         "metadata",
-        MutableDict.as_mutable(
-            postgresql.JSONB(astext_type=sql_types.Text()).with_variant(
-                sql_types.Text(), "sqlite"
-            )
-        ),
+        MutableDict.as_mutable(JSONType),
         nullable=True,
         default=dict,
     )
@@ -361,7 +357,7 @@ class Simulation(Base):
         simulation.alias = checked_get(data, "alias", str)
         if "datetime" not in data:
             data["datetime"] = datetime.now().isoformat()
-        simulation.datetime = datetime.fromisoformat(checked_get(data, "datetime", str))
+        simulation.datetime = date_parser.parse(checked_get(data, "datetime", str))
         if "inputs" in data:
             inputs = checked_get(data, "inputs", list)
             simulation.inputs = [File.from_data(el) for el in inputs]

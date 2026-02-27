@@ -129,7 +129,7 @@ def _build_trace(sim_id: str) -> Dict[str, Any]:
 
     status = simulation.find_meta("status")
     if status:
-        status_value = status[0].value
+        status_value = status[0]
         if isinstance(status_value, str):
             data["status"] = status_value
         else:
@@ -137,19 +137,19 @@ def _build_trace(sim_id: str) -> Dict[str, Any]:
         status_on_name = str(data["status"]) + "_on"
         status_on = simulation.find_meta(status_on_name)
         if status_on:
-            data[status_on_name] = status_on[0].value
+            data[status_on_name] = status_on[0]
 
     replaces = simulation.find_meta("replaces")
     if replaces:
-        data["replaces"] = _build_trace(replaces[0].value)
+        data["replaces"] = _build_trace(replaces[0])
 
     replaced_on = simulation.find_meta("replaced_on")
     if replaced_on:
-        data["deprecated_on"] = replaced_on[0].value
+        data["deprecated_on"] = replaced_on[0]
 
     replaces_reason = simulation.find_meta("replaces_reason")
     if replaces_reason:
-        data["replaces_reason"] = replaces_reason[0].value
+        data["replaces_reason"] = replaces_reason[0]
 
     return data
 
@@ -408,9 +408,9 @@ class SimulationList(Resource):
                     "development.disable_replaces", default=False
                 )
                 and replaces
-                and replaces[0].value
+                and replaces[0]
             ):
-                sim_id = replaces[0].value
+                sim_id = replaces[0]
                 try:
                     replaces_sim = current_app.db.get_simulation(sim_id)
                 except DatabaseError:
@@ -421,7 +421,7 @@ class SimulationList(Resource):
                     _update_simulation_status(
                         replaces_sim, models_sim.Simulation.Status.DEPRECATED, user
                     )
-                    replaces_sim.set_meta("replaced_by", simulation.uuid)
+                    replaces_sim.set_meta("replaced_by", simulation.uuid.hex)
                     current_app.db.insert_simulation(replaces_sim)
 
             current_app.db.insert_simulation(simulation)
@@ -537,7 +537,9 @@ class SimulationMeta(Resource):
             simulation = current_app.db.get_simulation(sim_id)
             if simulation is None:
                 raise ValueError(f"Simulation {sim_id} not found.")
-            old_values = [meta.data() for meta in simulation.find_meta(key)]
+            old_values = [
+                {"element": key, "value": v} for v in simulation.find_meta(key)
+            ]
             if key.lower() != "status":
                 simulation.set_meta(key, value)
             else:

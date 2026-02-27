@@ -1,4 +1,5 @@
 import enum
+import json
 import uuid
 from typing import Any, Dict, Optional
 
@@ -80,6 +81,50 @@ class URI(sql_types.TypeDecorator):
 
     def process_literal_param(self, value, dialect) -> Optional[urilib.URI]:
         return self.process_result_value(value, dialect)
+
+
+class JSONType(sql_types.TypeDecorator):
+    """
+    JSON type that properly handles serialization for SQLite and PostgreSQL.
+
+    Uses PostgreSQL's JSONB type, otherwise uses TEXT with JSON serialization.
+    """
+
+    impl = sql_types.Text
+    cache_ok = True
+
+    @property
+    def python_type(self):
+        return dict
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(
+                postgresql.JSONB(astext_type=sql_types.Text())
+            )
+        else:
+            return dialect.type_descriptor(sql_types.Text())
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        if dialect.name == "postgresql":
+            return value
+        else:
+            return json.dumps(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        if dialect.name == "postgresql":
+            return value
+        else:
+            if isinstance(value, str):
+                try:
+                    return json.loads(value)
+                except (json.JSONDecodeError, TypeError):
+                    return {}
+            return value
 
 
 class ChoiceType(sql_types.TypeDecorator):
