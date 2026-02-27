@@ -12,7 +12,6 @@ from flask import jsonify, request, send_file
 from flask_restx import Namespace, Resource
 
 from simdb.database import DatabaseError
-from simdb.database.models import metadata as models_meta
 from simdb.database.models import simulation as models_sim
 from simdb.database.models import watcher as models_watcher
 from simdb.email.server import EmailServer
@@ -320,7 +319,7 @@ class SimulationList(Resource):
                 if alias is not None:
                     (updated_alias, next_id) = _set_alias(alias)
                     if updated_alias:
-                        simulation.meta.append(models_meta.MetaData("seqid", next_id))
+                        simulation.set_meta("seqid", next_id)
                         simulation.alias = updated_alias
                     else:
                         simulation.alias = alias
