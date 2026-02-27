@@ -6,12 +6,15 @@ Create Date: 2026-02-26 17:01:30.925750
 
 """
 
+import json
+import pickle
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "28bee3aa2429"
 down_revision: Union[str, Sequence[str], None] = "9e9a4a7cd639"
@@ -63,10 +66,6 @@ def upgrade() -> None:
                 {"sim_id": sim_id},
             )
 
-            # Build JSON object
-            import json
-            import pickle
-
             meta_dict = {}
             for element, value in meta_rows:
                 # Value is stored as pickle, need to deserialize
@@ -75,7 +74,7 @@ def upgrade() -> None:
                         meta_dict[element] = (
                             pickle.loads(value) if isinstance(value, bytes) else value
                         )
-                    except:
+                    except Exception:
                         meta_dict[element] = value
                 else:
                     meta_dict[element] = None
@@ -120,10 +119,6 @@ def downgrade() -> None:
         """)
         conn.execute(migration_query)
     else:
-        # SQLite: Parse JSON and insert rows
-        import json
-        import pickle
-
         result = conn.execute(
             text("SELECT id, metadata FROM simulations WHERE metadata IS NOT NULL")
         )
@@ -136,7 +131,8 @@ def downgrade() -> None:
                         pickled_value = pickle.dumps(value, 0)
                         conn.execute(
                             text(
-                                "INSERT INTO metadata (sim_id, element, value) VALUES (:sim_id, :element, :value)"
+                                "INSERT INTO metadata (sim_id, element, value) " \
+                                "VALUES (:sim_id, :element, :value)"
                             ),
                             {
                                 "sim_id": sim_id,
@@ -144,7 +140,7 @@ def downgrade() -> None:
                                 "value": pickled_value,
                             },
                         )
-                except:
+                except Exception:
                     pass
 
     op.drop_column("simulations", "metadata")

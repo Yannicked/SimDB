@@ -9,11 +9,11 @@ from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Tuple, cast
 
 import appdirs
 import sqlalchemy.orm
-from sqlalchemy import String, Text, asc, create_engine, desc, func, or_
+from sqlalchemy import String, Text, create_engine, func
 from sqlalchemy import cast as sql_cast
 from sqlalchemy import or_ as sql_or
 from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Bundle, joinedload, scoped_session, sessionmaker
+from sqlalchemy.orm import scoped_session, sessionmaker
 
 from simdb.config import Config
 from simdb.query import QueryType, query_compare
@@ -186,7 +186,7 @@ class Database:
         :param meta_keys: List of metadata keys to include
         :param limit: Maximum number of results per page
         :param page: Page number (1-indexed)
-        :param sort_by: Field name to sort by (can be alias, uuid, datetime, or a metadata key)
+        :param sort_by: Field name to sort by (can be alias/uuid/datetime/metadata key)
         :param sort_asc: Sort in ascending order if True, descending if False
         :return: Tuple of (total_count, list of simulation dicts)
         """
@@ -430,13 +430,14 @@ class Database:
                 meta_dict = {}
 
             for name, value, query_type in constraints:
-                if name in ("alias", "uuid", "creation_date"):
+                if name in ("alias", "uuid", "creation_date") or (
+                    name in meta_dict
+                    and (
+                        query_type == QueryType.EXIST
+                        or query_compare(query_type, name, meta_dict[name], value)
+                    )
+                ):
                     sim_id_sets[(name, value, query_type)].add(row.id)
-                elif name in meta_dict:
-                    if query_type == QueryType.EXIST or query_compare(
-                        query_type, name, meta_dict[name], value
-                    ):
-                        sim_id_sets[(name, value, query_type)].add(row.id)
 
         if sim_id_sets:
             return set.intersection(*sim_id_sets.values())

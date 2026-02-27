@@ -2,7 +2,6 @@ import itertools
 import json
 import sys
 import uuid
-from collections import defaultdict
 from collections.abc import Iterable
 from datetime import datetime
 from enum import Enum
@@ -82,7 +81,7 @@ def _update_legacy_uri(data_object: DataObject):
 
 
 class MetaDataWrapper:
-    """Temporary wrapper class to provide backwards compatibility with MetaData interface."""
+    """Temporary wrapper to provide backwards compatibility with MetaData interface."""
 
     def __init__(self, element: str, value: Any):
         self.element = element
