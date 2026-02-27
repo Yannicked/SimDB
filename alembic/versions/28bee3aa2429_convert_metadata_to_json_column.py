@@ -131,7 +131,7 @@ def downgrade() -> None:
                         pickled_value = pickle.dumps(value, 0)
                         conn.execute(
                             text(
-                                "INSERT INTO metadata (sim_id, element, value) " \
+                                "INSERT INTO metadata (sim_id, element, value) "
                                 "VALUES (:sim_id, :element, :value)"
                             ),
                             {
