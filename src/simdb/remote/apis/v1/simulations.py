@@ -122,9 +122,6 @@ def _build_trace(sim_id: str) -> dict:
 
 @api.route("/simulations")
 class SimulationList(Resource):
-    LIMIT_HEADER = APIConstants.LIMIT_HEADER
-    PAGE_HEADER = APIConstants.PAGE_HEADER
-
     parser = api.parser()
     parser.add_argument(
         APIConstants.LIMIT_HEADER,
