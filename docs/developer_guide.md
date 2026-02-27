@@ -14,10 +14,12 @@ Create a virtual environment and install SimDB with all development dependencies
 using the `dev` dependency group defined in `pyproject.toml`:
 
 ```bash
-pip install -e --group dev .
+python3 -m venv venv --prompt SimDB
+source venv/bin/activate
+pip install -e . --group dev
 ```
 
-You could also use uv to install all dependencies:
+You could also use [uv](https://docs.astral.sh/uv/getting-started/installation/) to install all dependencies:
 
 ```bash
 uv sync
