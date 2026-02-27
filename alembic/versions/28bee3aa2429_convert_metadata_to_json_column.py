@@ -26,13 +26,13 @@ def upgrade() -> None:
     """Upgrade schema."""
     conn = op.get_bind()
 
-    # Add metadata JSON column to simulations table
-    # Use JSON type for PostgreSQL, Text for SQLite (will store JSON as text)
+    # Add metadata JSONB column to simulations table
+    # Use JSONB type for PostgreSQL, Text for SQLite (will store JSON as text)
     if conn.dialect.name == "postgresql":
         op.add_column(
             "simulations",
             sa.Column(
-                "metadata", postgresql.JSON(astext_type=sa.Text()), nullable=True
+                "metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=True
             ),
         )
     else:

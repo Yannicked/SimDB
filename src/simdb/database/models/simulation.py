@@ -9,15 +9,13 @@ from getpass import getuser
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
 
-from sqlalchemy import func, update
-from sqlalchemy.orm import object_session
-
 if sys.version_info < (3, 11):
     from backports.datetime_fromisoformat import MonkeyPatch
 
 from sqlalchemy import Column, ForeignKey, Table
 from sqlalchemy import types as sql_types
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import relationship
 
 if "sphinx" in sys.modules:
@@ -115,8 +113,10 @@ class Simulation(Base):
     datetime = Column(sql_types.DateTime, nullable=False)
     _metadata = Column(
         "metadata",
-        postgresql.JSON(astext_type=sql_types.Text()).with_variant(
-            sql_types.Text(), "sqlite"
+        MutableDict.as_mutable(
+            postgresql.JSONB(astext_type=sql_types.Text()).with_variant(
+                sql_types.Text(), "sqlite"
+            )
         ),
         nullable=True,
         default=dict,
@@ -308,74 +308,16 @@ class Simulation(Base):
             return [meta_dict[name]]
         return []
 
-    def _update_meta_sql(self, name: str, value: Any, op: str) -> bool:
-        """
-        Try to update metadata via SQL JSON functions.
-        Returns True if SQL path succeeded, False if fallback should be used.
-        op: "set" | "remove"
-        """
-        session = object_session(self)
-        if not (session and self.id):
-            return False
-
-        dialect = session.bind.dialect.name
-
-        try:
-            if dialect == "postgresql":
-                if op == "remove":
-                    expr = Simulation._metadata.op("-")(name)
-                else:  # set
-                    expr = Simulation._metadata.op("||")(json.dumps({name: value}))
-
-                session.execute(
-                    update(Simulation)
-                    .where(Simulation.id == self.id)
-                    .values(_metadata=expr)
-                )
-
-            elif dialect == "sqlite":
-                if op == "remove":
-                    expr = func.json_remove(Simulation._metadata, f"$.{name}")
-                else:  # set
-                    expr = func.json_set(
-                        func.coalesce(Simulation._metadata, "{}"),
-                        f"$.{name}",
-                        json.dumps(value),
-                    )
-
-                session.execute(
-                    update(Simulation)
-                    .where(Simulation.id == self.id)
-                    .values(_metadata=expr)
-                )
-
-            else:
-                return False
-
-            session.flush()
-            session.expire(self, ["_metadata"])
-            return True
-
-        except Exception:
-            return False
-
-    def _update_meta_python(self, name: str, value: Any, op: str) -> None:
-        meta_dict = self._get_metadata_dict()
-
-        if op == "remove":
-            meta_dict.pop(name, None)
-        else:  # set
-            meta_dict[name] = value
-
-        self._set_metadata_dict(meta_dict)
-
     def remove_meta(self, name: str) -> None:
-        if not self._update_meta_sql(name, None, "remove"):
-            self._update_meta_python(name, None, "remove")
+        if self._metadata is None:
+            return
+        if name in self._metadata:
+            del self._metadata[name]
 
     def set_meta(self, name: str, value: Any) -> None:
-        if not self._update_meta_sql(name, value, "set"):
-            self._update_meta_python(name, value, "set")
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata[name] = value
 
     def validate_meta(self) -> None:
         """
