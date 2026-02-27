@@ -83,11 +83,11 @@ def _update_legacy_uri(data_object: DataObject):
 
 class MetaDataWrapper:
     """Temporary wrapper class to provide backwards compatibility with MetaData interface."""
-    
+
     def __init__(self, element: str, value: Any):
         self.element = element
         self.value = value
-    
+
     def data(self, recurse: bool = False) -> Dict[str, Any]:
         return {"element": self.element, "value": self.value}
 
@@ -113,9 +113,11 @@ class Simulation(Base):
     datetime = Column(sql_types.DateTime, nullable=False)
     _metadata = Column(
         "metadata",
-        postgresql.JSON(astext_type=sql_types.Text()).with_variant(sql_types.Text(), "sqlite"),
+        postgresql.JSON(astext_type=sql_types.Text()).with_variant(
+            sql_types.Text(), "sqlite"
+        ),
         nullable=True,
-        default=dict
+        default=dict,
     )
     inputs: List["File"] = relationship(
         "File", secondary=simulation_input_files, backref="input_for"
@@ -135,7 +137,7 @@ class Simulation(Base):
         """
         meta_dict = self._get_metadata_dict()
         return [MetaDataWrapper(k, v) for k, v in meta_dict.items()]
-    
+
     @meta.setter
     def meta(self, value: List):
         """Setter for backwards compatibility - not typically used."""
@@ -150,7 +152,7 @@ class Simulation(Base):
             except (json.JSONDecodeError, TypeError):
                 return {}
         return self._metadata if isinstance(self._metadata, dict) else {}
-    
+
     def _set_metadata_dict(self, meta_dict: Dict[str, Any]) -> None:
         self._metadata = meta_dict
 
@@ -387,7 +389,9 @@ class Simulation(Base):
             data["inputs"] = [f.data(recurse=True) for f in self.inputs]
             data["outputs"] = [f.data(recurse=True) for f in self.outputs]
             meta_dict = self._get_metadata_dict()
-            data["metadata"] = [{"element": k, "value": v} for k, v in meta_dict.items()]
+            data["metadata"] = [
+                {"element": k, "value": v} for k, v in meta_dict.items()
+            ]
         elif meta_keys:
             meta_dict = self._get_metadata_dict()
             data["metadata"] = [

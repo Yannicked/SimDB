@@ -176,10 +176,12 @@ class Database:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def _get_simulation_data(self, query, meta_keys, limit, page, sort_by="", sort_asc=False) -> Tuple[int, List]:
+    def _get_simulation_data(
+        self, query, meta_keys, limit, page, sort_by="", sort_asc=False
+    ) -> Tuple[int, List]:
         """
         Build simulation data from query results with JSON metadata.
-        
+
         :param query: SQLAlchemy query object
         :param meta_keys: List of metadata keys to include
         :param limit: Maximum number of results per page
@@ -189,9 +191,9 @@ class Database:
         :return: Tuple of (total_count, list of simulation dicts)
         """
         total_count = query.count()
-        
+
         all_rows = query.all()
-        
+
         results = []
         for row in all_rows:
             sim_data = {
@@ -199,7 +201,7 @@ class Database:
                 "uuid": row.uuid,
                 "datetime": row.datetime.isoformat(),
             }
-            
+
             metadata_json = row._metadata
             if metadata_json:
                 if isinstance(metadata_json, str):
@@ -211,19 +213,20 @@ class Database:
                     meta_dict = metadata_json if isinstance(metadata_json, dict) else {}
             else:
                 meta_dict = {}
-            
+
             sim_data["_meta_dict"] = meta_dict
-            
+
             if meta_keys:
                 sim_data["metadata"] = [
                     {"element": k, "value": v}
                     for k, v in meta_dict.items()
                     if k in meta_keys
                 ]
-            
+
             results.append(sim_data)
-        
+
         if sort_by:
+
             def get_sort_key(item):
                 if sort_by in ("alias", "uuid", "datetime"):
                     val = item.get(sort_by, "")
@@ -234,26 +237,24 @@ class Database:
                     return ("", "") if sort_asc else ("~", "~")
                 # Convert to string for consistent sorting
                 return str(val).lower() if isinstance(val, str) else str(val)
-            
+
             results.sort(key=get_sort_key, reverse=not sort_asc)
-        
+
         for sim_data in results:
             sim_data.pop("_meta_dict", None)
-        
+
         if limit:
             start_idx = (page - 1) * limit
             end_idx = start_idx + limit
             results = results[start_idx:end_idx]
-        
+
         return total_count, results
 
     def _find_simulation(self, sim_ref: str) -> "Simulation":
         try:
             sim_uuid = uuid.UUID(sim_ref)
             simulation = (
-                self.session.query(Simulation)
-                .filter_by(uuid=sim_uuid)
-                .one_or_none()
+                self.session.query(Simulation).filter_by(uuid=sim_uuid).one_or_none()
             )
         except ValueError:
             try:
@@ -320,8 +321,10 @@ class Database:
         :return: A tuple of (total_count, list of simulation data dicts).
         """
         query = self.session.query(Simulation)
-        
-        return self._get_simulation_data(query, meta_keys, limit, page, sort_by, sort_asc)
+
+        return self._get_simulation_data(
+            query, meta_keys, limit, page, sort_by, sort_asc
+        )
 
     def get_simulation_data(self, query):
         limit_query = query
@@ -355,13 +358,18 @@ class Database:
     def _get_sim_ids_from_json(
         self, constraints: List[Tuple[str, str, "QueryType"]]
     ) -> Iterable[int]:
-        query = self.session.query(Simulation.id, Simulation._metadata, 
-                                   Simulation.alias, Simulation.uuid, Simulation.datetime)
-        
+        query = self.session.query(
+            Simulation.id,
+            Simulation._metadata,
+            Simulation.alias,
+            Simulation.uuid,
+            Simulation.datetime,
+        )
+
         sim_id_sets = {}
         for name, value, query_type in constraints:
             sim_id_sets[(name, value, query_type)] = set()
-        
+
         for name, value, query_type in constraints:
             if name == "alias":
                 if query_type == QueryType.EQ:
@@ -383,14 +391,16 @@ class Database:
                     )
                 elif query_type == QueryType.NI:
                     query = query.filter(
-                        func.REPLACE(sql_cast(Simulation.uuid, String), "-", "").notilike(
-                            "%{}%".format(value.replace("-", ""))
-                        )
+                        func.REPLACE(
+                            sql_cast(Simulation.uuid, String), "-", ""
+                        ).notilike("%{}%".format(value.replace("-", "")))
                     )
                 elif query_type == QueryType.NE:
                     query = query.filter(Simulation.uuid != uuid.UUID(value))
             elif name == "creation_date":
-                date_time = datetime.strptime(value.replace("_", ":"), "%Y-%m-%d %H:%M:%S")
+                date_time = datetime.strptime(
+                    value.replace("_", ":"), "%Y-%m-%d %H:%M:%S"
+                )
                 if query_type == QueryType.EQ:
                     query = query.filter(Simulation.datetime == date_time)
                 elif query_type == QueryType.GT:
@@ -403,10 +413,10 @@ class Database:
                     query = query.filter(Simulation.datetime <= date_time)
                 elif query_type == QueryType.NE:
                     query = query.filter(Simulation.datetime != date_time)
-        
+
         # Execute query and filter on JSON metadata in Python
         rows = query.all()
-        
+
         for row in rows:
             if row._metadata:
                 if isinstance(row._metadata, str):
@@ -418,7 +428,7 @@ class Database:
                     meta_dict = row._metadata if isinstance(row._metadata, dict) else {}
             else:
                 meta_dict = {}
-            
+
             for name, value, query_type in constraints:
                 if name in ("alias", "uuid", "creation_date"):
                     sim_id_sets[(name, value, query_type)].add(row.id)
@@ -427,10 +437,10 @@ class Database:
                         query_type, name, meta_dict[name], value
                     ):
                         sim_id_sets[(name, value, query_type)].add(row.id)
-        
+
         if sim_id_sets:
             return set.intersection(*sim_id_sets.values())
-        
+
         return []
 
     def query_meta(
@@ -469,8 +479,10 @@ class Database:
             return 0, []
 
         query = self.session.query(Simulation).filter(Simulation.id.in_(sim_ids))
-        
-        return self._get_simulation_data(query, meta_keys, limit, page, sort_by, sort_asc)
+
+        return self._get_simulation_data(
+            query, meta_keys, limit, page, sort_by, sort_asc
+        )
 
     def get_simulation(self, sim_ref: str) -> "Simulation":
         """
@@ -563,7 +575,7 @@ class Database:
 
     def list_metadata_keys(self) -> List[dict]:
         simulations = self.session.query(Simulation._metadata).all()
-        
+
         keys_dict = {}
         for (metadata_json,) in simulations:
             if metadata_json:
@@ -574,11 +586,11 @@ class Database:
                         continue
                 else:
                     meta_dict = metadata_json if isinstance(metadata_json, dict) else {}
-                
+
                 for key, value in meta_dict.items():
                     if key not in keys_dict:
                         keys_dict[key] = value
-        
+
         return [{"name": k, "type": type(v).__name__} for k, v in keys_dict.items()]
 
     def list_metadata_values(self, name: str) -> List[str]:
@@ -590,7 +602,7 @@ class Database:
         else:
             simulations = self.session.query(Simulation._metadata).all()
             values_set = set()
-            
+
             for (metadata_json,) in simulations:
                 if metadata_json:
                     if isinstance(metadata_json, str):
@@ -599,14 +611,16 @@ class Database:
                         except (json.JSONDecodeError, TypeError):
                             continue
                     else:
-                        meta_dict = metadata_json if isinstance(metadata_json, dict) else {}
-                    
+                        meta_dict = (
+                            metadata_json if isinstance(metadata_json, dict) else {}
+                        )
+
                     if name in meta_dict:
                         val = meta_dict[name]
                         values_set.add(str(val) if val is not None else None)
-            
+
             data = list(values_set)
-        
+
         try:
             return sorted(data)
         except TypeError:
