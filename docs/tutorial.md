@@ -174,7 +174,7 @@ The SimDB client is able to communication with multiple remote servers. You can 
 on your local client using:
 
 ```bash
-simdb remote --list
+simdb remote config list
 ```
 
 First, you will need to add the remote server and set it as default (name and url may differ):
