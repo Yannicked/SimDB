@@ -5,6 +5,7 @@ import copy
 import functools
 import gzip
 import inspect
+import logging
 from typing import (
     Annotated,
     Any,
@@ -13,17 +14,28 @@ from typing import (
 )
 
 from flask import Response, request
-from flask_restx import Namespace
+from flask_restx import Api, Namespace
 from pydantic import BaseModel, ValidationError
 
 from simdb.remote.core.errors import error as _error
 from simdb.remote.models import ErrorResponse
 
+logger = logging.getLogger(__name__)
+
 
 class ResponseException(Exception):
-    """Raised an error has occurred in the request."""
+    """Raised when a client error has occurred in the request (HTTP 4xx)."""
 
     def __init__(self, message, return_code=400):
+        super().__init__(message)
+        self.message = message
+        self.return_code = return_code
+
+
+class ServerException(Exception):
+    """Raised when an unexpected server-side error has occurred (HTTP 500)."""
+
+    def __init__(self, message, return_code=500):
         super().__init__(message)
         self.message = message
         self.return_code = return_code
@@ -55,7 +67,7 @@ class Query(_ParamSource):
 # ---------------------------------------------------------------------------
 
 
-def _register_defs(ns: Namespace, defs):
+def _register_defs(ns: Namespace | Api, defs):
     for name, schema in defs.items():
         # Clean the schema: rewrite refs and remove internal $defs
         clean_schema = copy.deepcopy(schema)
@@ -64,7 +76,7 @@ def _register_defs(ns: Namespace, defs):
         _register_defs(ns, children)
 
 
-def _collect_and_register(ns: Namespace, model: type[BaseModel]):
+def _collect_and_register(ns: Namespace | Api, model: type[BaseModel]):
     """
     Registers a Pydantic model and all nested dependencies to a Flask-RESTX Namespace.
     """
@@ -154,11 +166,11 @@ def _validate_param(
 
 
 def pydantic_validate(
-    ns: Namespace,
+    ns: Namespace | Api,
     *,
     response_model: type[BaseModel] | None = None,
     error_model: type[BaseModel] = ErrorResponse,
-    error_codes: tuple[int] = (400,),
+    client_error_codes: tuple[int, ...] = (400,),
 ) -> Any:
     """Decorator factory that wires up Pydantic validation for a Flask-RESTX endpoint.
 
@@ -176,6 +188,14 @@ def pydantic_validate(
     *response_model* is provided explicitly) the return value is automatically
     serialised with ``model_dump(mode="json")`` and wrapped in ``jsonify``.
 
+    Error handling distinguishes between client errors and server errors:
+
+    - :class:`ResponseException` (and request validation errors) → HTTP 4xx
+      (default 400). Use ``return_code`` to customise (e.g. 404, 422).
+    - :class:`ServerException` → HTTP 5xx (default 500). Use for explicit
+      server-side failures.
+    - Any other unhandled :class:`Exception` → HTTP 500, logged as an error.
+
     Parameters
     ----------
     ns:
@@ -183,6 +203,10 @@ def pydantic_validate(
     response_model:
         Optional explicit response model.  If ``None`` the decorator tries to
         infer it from the function's return annotation.
+    error_model:
+        Pydantic model used to serialise error responses.
+    client_error_codes:
+        HTTP status codes to document as client error responses in Swagger.
 
     Returns
     -------
@@ -193,10 +217,10 @@ def pydantic_validate(
     .. code-block:: python
 
         from typing import Annotated
-        from simdb.remote.core.pydantic_utils import restx_route, Header, Body, Query
+        from simdb.remote.core.pydantic_utils import pydantic_validate, Header, Body
 
         class SimulationList(Resource):
-            @restx_route(api)
+            @pydantic_validate(api)
             def get(
                 self,
                 user: User,
@@ -204,7 +228,7 @@ def pydantic_validate(
             ) -> PaginatedResponse:
                 ...
 
-            @restx_route(api)
+            @pydantic_validate(api)
             def post(
                 self,
                 user: User,
@@ -267,10 +291,18 @@ def pydantic_validate(
                     status=err.return_code,
                     mimetype="application/json",
                 )
+            except ServerException as err:
+                logger.error("Server error in %s: %s", f.__qualname__, err.message)
+                return Response(
+                    response=_error_model(error=err.message).model_dump_json(),
+                    status=err.return_code,
+                    mimetype="application/json",
+                )
             except Exception as err:
+                logger.exception("Unhandled exception in %s", f.__qualname__)
                 return Response(
                     response=_error_model(error=str(err)).model_dump_json(),
-                    status=400,  # HTTP status code 500 would make more sense
+                    status=500,
                     mimetype="application/json",
                 )
 
@@ -293,8 +325,11 @@ def pydantic_validate(
         if _resp_schema is not None:
             wrapper = ns.response(200, "Success", _resp_schema)(wrapper)
         if _error_schema is not None:
-            for error_code in error_codes:
-                wrapper = ns.response(error_code, "Error", _error_schema)(wrapper)
+            for error_code in client_error_codes:
+                wrapper = ns.response(error_code, "Client error", _error_schema)(
+                    wrapper
+                )
+            wrapper = ns.response(500, "Server error", _error_schema)(wrapper)
 
         for _param_name, model_type, source in annotated_params:
             if isinstance(source, (Query, Header)):
