@@ -188,6 +188,27 @@ class MetadataDeleteResponse(BaseModel):
     pass
 
 
+class MetadataKeyInfo(BaseModel):
+    """Information about a metadata key."""
+
+    name: str
+    """Metadata key name."""
+    type: str
+    """Python type name of the metadata value."""
+
+
+class MetadataKeyInfoList(RootModel):
+    """List of metadata key info items."""
+
+    root: List[MetadataKeyInfo] = []
+
+
+class MetadataValueList(RootModel):
+    """List of metadata values for a given key."""
+
+    root: List[Any] = []
+
+
 class SimulationReference(BaseModel):
     """Reference to a simulation."""
 
@@ -289,30 +310,25 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 
 class PaginationData(BaseModel):
-    """Pagination parameters from request headers."""
+    """Pagination parameters from request headers.
 
-    limit: int
+    Fields are populated from HTTP headers. The field aliases match the
+    lowercased header names as provided by Werkzeug / ``_validate_param``.
+    Use ``model_validate`` with ``by_alias=False`` (the default) or pass a
+    dict with the alias keys; Pydantic will resolve them via the
+    ``model_config`` ``populate_by_name=True`` setting.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, use_attribute_docstrings=True)
+
+    limit: int = Field(100, alias="simdb-result-limit")
     """Number of items per page."""
-    page: int
+    page: int = Field(1, alias="simdb-page")
     """Current page number."""
-    sort_by: str
+    sort_by: str = Field("", alias="simdb-sort-by")
     """Field to sort by."""
-    sort_asc: bool
+    sort_asc: bool = Field(False, alias="simdb-sort-asc")
     """Whether to sort ascending."""
-
-    @model_validator(mode="before")
-    @classmethod
-    def parse_headers(cls, data: Any):
-        """Parse pagination from HTTP headers."""
-        if not isinstance(data, dict):
-            return data
-        new_data = {
-            "limit": data.get("simdb-result-limit", 100),
-            "page": data.get("simdb-page", 1),
-            "sort_by": data.get("simdb-sort-by", ""),
-            "sort_asc": data.get("simdb-sort-asc", False),
-        }
-        return new_data
 
 
 class SimulationTraceData(SimulationData):
