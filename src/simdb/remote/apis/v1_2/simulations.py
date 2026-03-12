@@ -342,14 +342,18 @@ class Simulation(Resource):
     @cache.cached(key_prefix=cache_key)  # type: ignore[invalid-argument-type]
     @pydantic_validate(api)
     def get(self, sim_id: str, user: User) -> SimulationDataResponse:
-        simulation = current_app.db.get_simulation(sim_id)
-        if simulation:
-            sim_data = simulation.to_model_with_refs(recurse=True)
+        try:
+            simulation = current_app.db.get_simulation(sim_id)
+        except DatabaseError:
+            raise ResponseException(
+                f"Simulation with id {sim_id} could not be found"
+            ) from None
 
-            sim_data.children = current_app.db.get_simulation_children_ref(simulation)
-            sim_data.parents = current_app.db.get_simulation_children_ref(simulation)
-            return sim_data
-        raise ResponseException("Simulation not found")
+        sim_data = simulation.to_model_with_refs(recurse=True)
+
+        sim_data.children = current_app.db.get_simulation_children_ref(simulation)
+        sim_data.parents = current_app.db.get_simulation_parents_ref(simulation)
+        return sim_data
 
     @requires_auth("admin")
     @pydantic_validate(api)
@@ -361,7 +365,7 @@ class Simulation(Resource):
     ) -> SimulationPatchResponse:
         simulation = current_app.db.get_simulation(sim_id)
         if simulation is None:
-            raise ValueError(f"Simulation {sim_id} not found.")
+            raise ResponseException(f"Simulation {sim_id} not found.")
         status = models_sim.Simulation.Status(body.status)
         _update_simulation_status(simulation, status, user)
         current_app.db.insert_simulation(simulation)
