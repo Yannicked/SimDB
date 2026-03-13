@@ -58,9 +58,7 @@ def upgrade() -> None:
                 if value is not None:
                     try:
                         meta_dict[element] = (
-                            pickle.loads(value)
-                            if isinstance(value, bytes)
-                            else value
+                            pickle.loads(value) if isinstance(value, bytes) else value
                         )
                     except Exception:
                         meta_dict[element] = value
