@@ -39,47 +39,42 @@ def upgrade() -> None:
             )
         else:
             op.add_column(
-                "simulations", sa.Column("metadata", sa.Text(), nullable=True)
+                "simulations", sa.Column("metadata", sa.JSON(), nullable=True)
             )
 
     # Migrate existing data from metadata table if it still exists
     if "metadata" in inspector.get_table_names():
-        if conn.dialect.name == "postgresql":
-            migration_query = text("""
-                UPDATE simulations
-                SET metadata = subq.meta_json
-                FROM (
-                    SELECT sim_id, json_object_agg(element, value) as meta_json
-                    FROM metadata
-                    GROUP BY sim_id
-                ) AS subq
-                WHERE simulations.id = subq.sim_id
-            """)
-            conn.execute(migration_query)
-        else:
-            result = conn.execute(text("SELECT DISTINCT sim_id FROM metadata"))
-            sim_ids = [row[0] for row in result]
+        result = conn.execute(text("SELECT DISTINCT sim_id FROM metadata"))
+        sim_ids = [row[0] for row in result]
 
-            for sim_id in sim_ids:
-                meta_rows = conn.execute(
-                    text("SELECT element, value FROM metadata WHERE sim_id = :sim_id"),
-                    {"sim_id": sim_id},
+        for sim_id in sim_ids:
+            meta_rows = conn.execute(
+                text("SELECT element, value FROM metadata WHERE sim_id = :sim_id"),
+                {"sim_id": sim_id},
+            )
+
+            meta_dict = {}
+            for element, value in meta_rows:
+                if value is not None:
+                    try:
+                        meta_dict[element] = (
+                            pickle.loads(value)
+                            if isinstance(value, bytes)
+                            else value
+                        )
+                    except Exception:
+                        meta_dict[element] = value
+                else:
+                    meta_dict[element] = None
+
+            if conn.dialect.name == "postgresql":
+                conn.execute(
+                    text(
+                        "UPDATE simulations SET metadata = :metadata::jsonb WHERE id = :sim_id"
+                    ),
+                    {"metadata": json.dumps(meta_dict), "sim_id": sim_id},
                 )
-
-                meta_dict = {}
-                for element, value in meta_rows:
-                    if value is not None:
-                        try:
-                            meta_dict[element] = (
-                                pickle.loads(value)
-                                if isinstance(value, bytes)
-                                else value
-                            )
-                        except Exception:
-                            meta_dict[element] = value
-                    else:
-                        meta_dict[element] = None
-
+            else:
                 conn.execute(
                     text(
                         "UPDATE simulations SET metadata = :metadata WHERE id = :sim_id"

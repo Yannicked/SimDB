@@ -139,11 +139,6 @@ class Simulation(Base):
         meta_dict = self._get_metadata_dict()
         return [MetaDataWrapper(k, v) for k, v in meta_dict.items()]
 
-    @meta.setter
-    def meta(self, value: List):
-        """Setter for backwards compatibility - not typically used."""
-        pass
-
     def _get_metadata_dict(self) -> Dict[str, Any]:
         if self._metadata is None:
             return {}
