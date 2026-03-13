@@ -113,7 +113,9 @@ class Simulation(Base):
     _metadata = Column(
         "metadata",
         MutableDict.as_mutable(
-            postgresql.JSONB(astext_type=sql_types.Text()).with_variant(JSON(), "sqlite")
+            postgresql.JSONB(astext_type=sql_types.Text()).with_variant(
+                JSON(), "sqlite"
+            )
         ),
         nullable=True,
         default=dict,

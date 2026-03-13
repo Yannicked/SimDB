@@ -82,7 +82,6 @@ class URI(sql_types.TypeDecorator):
         return self.process_result_value(value, dialect)
 
 
-
 class ChoiceType(sql_types.TypeDecorator):
     impl = sql_types.CHAR
 
