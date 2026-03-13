@@ -25,68 +25,71 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
     conn = op.get_bind()
+    inspector = sa.inspect(conn)
 
-    # Add metadata JSONB column to simulations table
-    # Use JSONB type for PostgreSQL, Text for SQLite (will store JSON as text)
-    if conn.dialect.name == "postgresql":
-        op.add_column(
-            "simulations",
-            sa.Column(
-                "metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=True
-            ),
-        )
-    else:
-        op.add_column("simulations", sa.Column("metadata", sa.Text(), nullable=True))
-
-    # Migrate existing metadata from metadata table to JSON column
-    # First, we need to aggregate metadata by simulation
-    if conn.dialect.name == "postgresql":
-        # PostgreSQL: Use json_object_agg
-        migration_query = text("""
-            UPDATE simulations 
-            SET metadata = subq.meta_json
-            FROM (
-                SELECT sim_id, json_object_agg(element, value) as meta_json
-                FROM metadata
-                GROUP BY sim_id
-            ) AS subq
-            WHERE simulations.id = subq.sim_id
-        """)
-        conn.execute(migration_query)
-    else:
-        # SQLite: Build JSON manually using group_concat
-        # This is more complex, we'll handle it per simulation
-        result = conn.execute(text("SELECT DISTINCT sim_id FROM metadata"))
-        sim_ids = [row[0] for row in result]
-
-        for sim_id in sim_ids:
-            # Get all metadata for this simulation
-            meta_rows = conn.execute(
-                text("SELECT element, value FROM metadata WHERE sim_id = :sim_id"),
-                {"sim_id": sim_id},
+    # Add metadata column only if it doesn't already exist (e.g. created via create_all)
+    existing_columns = [col["name"] for col in inspector.get_columns("simulations")]
+    if "metadata" not in existing_columns:
+        if conn.dialect.name == "postgresql":
+            op.add_column(
+                "simulations",
+                sa.Column(
+                    "metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+                ),
+            )
+        else:
+            op.add_column(
+                "simulations", sa.Column("metadata", sa.Text(), nullable=True)
             )
 
-            meta_dict = {}
-            for element, value in meta_rows:
-                # Value is stored as pickle, need to deserialize
-                if value is not None:
-                    try:
-                        meta_dict[element] = (
-                            pickle.loads(value) if isinstance(value, bytes) else value
-                        )
-                    except Exception:
-                        meta_dict[element] = value
-                else:
-                    meta_dict[element] = None
+    # Migrate existing data from metadata table if it still exists
+    if "metadata" in inspector.get_table_names():
+        if conn.dialect.name == "postgresql":
+            migration_query = text("""
+                UPDATE simulations
+                SET metadata = subq.meta_json
+                FROM (
+                    SELECT sim_id, json_object_agg(element, value) as meta_json
+                    FROM metadata
+                    GROUP BY sim_id
+                ) AS subq
+                WHERE simulations.id = subq.sim_id
+            """)
+            conn.execute(migration_query)
+        else:
+            result = conn.execute(text("SELECT DISTINCT sim_id FROM metadata"))
+            sim_ids = [row[0] for row in result]
 
-            conn.execute(
-                text("UPDATE simulations SET metadata = :metadata WHERE id = :sim_id"),
-                {"metadata": json.dumps(meta_dict), "sim_id": sim_id},
-            )
+            for sim_id in sim_ids:
+                meta_rows = conn.execute(
+                    text("SELECT element, value FROM metadata WHERE sim_id = :sim_id"),
+                    {"sim_id": sim_id},
+                )
 
-    op.drop_index("metadata_index", table_name="metadata")
-    op.drop_index(op.f("ix_metadata_sim_id"), table_name="metadata")
-    op.drop_table("metadata")
+                meta_dict = {}
+                for element, value in meta_rows:
+                    if value is not None:
+                        try:
+                            meta_dict[element] = (
+                                pickle.loads(value)
+                                if isinstance(value, bytes)
+                                else value
+                            )
+                        except Exception:
+                            meta_dict[element] = value
+                    else:
+                        meta_dict[element] = None
+
+                conn.execute(
+                    text(
+                        "UPDATE simulations SET metadata = :metadata WHERE id = :sim_id"
+                    ),
+                    {"metadata": json.dumps(meta_dict), "sim_id": sim_id},
+                )
+
+        op.drop_index("metadata_index", table_name="metadata")
+        op.drop_index(op.f("ix_metadata_sim_id"), table_name="metadata")
+        op.drop_table("metadata")
 
 
 def downgrade() -> None:
