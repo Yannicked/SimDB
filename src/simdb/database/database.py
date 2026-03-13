@@ -1,5 +1,4 @@
 import contextlib
-import json
 import sys
 import uuid
 from datetime import datetime
@@ -202,17 +201,7 @@ class Database:
                 "datetime": row.datetime.isoformat(),
             }
 
-            metadata_json = row._metadata
-            if metadata_json:
-                if isinstance(metadata_json, str):
-                    try:
-                        meta_dict = json.loads(metadata_json)
-                    except (json.JSONDecodeError, TypeError):
-                        meta_dict = {}
-                else:
-                    meta_dict = metadata_json if isinstance(metadata_json, dict) else {}
-            else:
-                meta_dict = {}
+            meta_dict = row._metadata or {}
 
             sim_data["_meta_dict"] = meta_dict
 
@@ -418,16 +407,7 @@ class Database:
         rows = query.all()
 
         for row in rows:
-            if row._metadata:
-                if isinstance(row._metadata, str):
-                    try:
-                        meta_dict = json.loads(row._metadata)
-                    except (json.JSONDecodeError, TypeError):
-                        meta_dict = {}
-                else:
-                    meta_dict = row._metadata if isinstance(row._metadata, dict) else {}
-            else:
-                meta_dict = {}
+            meta_dict = row._metadata or {}
 
             for name, value, query_type in constraints:
                 if name in ("alias", "uuid", "creation_date") or (
@@ -578,16 +558,8 @@ class Database:
         simulations = self.session.query(Simulation._metadata).all()
 
         keys_dict = {}
-        for (metadata_json,) in simulations:
-            if metadata_json:
-                if isinstance(metadata_json, str):
-                    try:
-                        meta_dict = json.loads(metadata_json)
-                    except (json.JSONDecodeError, TypeError):
-                        continue
-                else:
-                    meta_dict = metadata_json if isinstance(metadata_json, dict) else {}
-
+        for (meta_dict,) in simulations:
+            if meta_dict:
                 for key, value in meta_dict.items():
                     if key not in keys_dict:
                         keys_dict[key] = value
@@ -604,21 +576,10 @@ class Database:
             simulations = self.session.query(Simulation._metadata).all()
             values_set = set()
 
-            for (metadata_json,) in simulations:
-                if metadata_json:
-                    if isinstance(metadata_json, str):
-                        try:
-                            meta_dict = json.loads(metadata_json)
-                        except (json.JSONDecodeError, TypeError):
-                            continue
-                    else:
-                        meta_dict = (
-                            metadata_json if isinstance(metadata_json, dict) else {}
-                        )
-
-                    if name in meta_dict:
-                        val = meta_dict[name]
-                        values_set.add(str(val) if val is not None else None)
+            for (meta_dict,) in simulations:
+                if meta_dict and name in meta_dict:
+                    val = meta_dict[name]
+                    values_set.add(str(val) if val is not None else None)
 
             data = list(values_set)
 

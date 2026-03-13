@@ -1,8 +1,6 @@
 import itertools
-import json
 import sys
 import uuid
-from collections.abc import Iterable
 from datetime import datetime
 from enum import Enum
 from getpass import getuser
@@ -13,8 +11,9 @@ if sys.version_info < (3, 11):
     from backports.datetime_fromisoformat import MonkeyPatch
 
 from dateutil import parser as date_parser
-from sqlalchemy import Column, ForeignKey, Table
+from sqlalchemy import JSON, Column, ForeignKey, Table
 from sqlalchemy import types as sql_types
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import relationship
 
@@ -43,7 +42,7 @@ from simdb.uri import URI
 
 from .base import Base
 from .file import File
-from .types import UUID, JSONType
+from .types import UUID
 from .utils import checked_get, flatten_dict, unflatten_dict
 from .watcher import Watcher
 
@@ -113,7 +112,9 @@ class Simulation(Base):
     datetime = Column(sql_types.DateTime, nullable=False)
     _metadata = Column(
         "metadata",
-        MutableDict.as_mutable(JSONType),
+        MutableDict.as_mutable(
+            postgresql.JSONB(astext_type=sql_types.Text()).with_variant(JSON(), "sqlite")
+        ),
         nullable=True,
         default=dict,
     )
@@ -144,12 +145,7 @@ class Simulation(Base):
     def _get_metadata_dict(self) -> Dict[str, Any]:
         if self._metadata is None:
             return {}
-        if isinstance(self._metadata, str):
-            try:
-                return json.loads(self._metadata)
-            except (json.JSONDecodeError, TypeError):
-                return {}
-        return self._metadata if isinstance(self._metadata, dict) else {}
+        return self._metadata
 
     def _set_metadata_dict(self, meta_dict: Dict[str, Any]) -> None:
         self._metadata = meta_dict
@@ -271,12 +267,7 @@ class Simulation(Base):
         result += "metadata:\n"
         meta_dict = self._get_metadata_dict()
         for element, value in meta_dict.items():
-            if (
-                isinstance(value, Iterable)
-                and not isinstance(value, np.ndarray)
-                and isinstance(value, str)
-                and "\n" in value
-            ):
+            if isinstance(value, str) and "\n" in value:
                 first_line = True
                 for line in value.split("\n"):
                     if first_line:
