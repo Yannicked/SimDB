@@ -189,9 +189,8 @@ class Database:
         :param sort_asc: Sort in ascending order if True, descending if False
         :return: Tuple of (total_count, list of simulation dicts)
         """
-        total_count = query.count()
-
         all_rows = query.all()
+        total_count = len(all_rows)
 
         results = []
         for row in all_rows:
@@ -223,8 +222,7 @@ class Database:
                     val = item.get("_meta_dict", {}).get(sort_by, "")
                 # Handle None values - put them at the end
                 if val is None:
-                    return ("", "") if sort_asc else ("~", "~")
-                # Convert to string for consistent sorting
+                    return "" if sort_asc else "~"
                 return str(val).lower() if isinstance(val, str) else str(val)
 
             results.sort(key=get_sort_key, reverse=not sort_asc)
@@ -569,7 +567,7 @@ class Database:
     def list_metadata_values(self, name: str) -> List[str]:
         if name == "alias":
             query = self.session.query(Simulation.alias).filter(
-                Simulation.alias is not None
+                Simulation.alias.isnot(None)
             )
             data = [row[0] for row in query.all()]
         else:
