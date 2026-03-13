@@ -68,7 +68,8 @@ def upgrade() -> None:
             if conn.dialect.name == "postgresql":
                 conn.execute(
                     text(
-                        "UPDATE simulations SET metadata = :metadata::jsonb WHERE id = :sim_id"
+                        "UPDATE simulations SET metadata = :metadata::jsonb"
+                        " WHERE id = :sim_id"
                     ),
                     {"metadata": json.dumps(meta_dict), "sim_id": sim_id},
                 )
