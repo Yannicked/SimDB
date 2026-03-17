@@ -26,7 +26,6 @@ from pydantic import (
     ConfigDict,
     Field,
     PlainSerializer,
-    field_serializer,
     model_validator,
 )
 from pydantic import (
@@ -127,41 +126,39 @@ class FileDataList(RootModel):
         return self.root[item]
 
 
-MetadataValue = Union[
-    CustomUUID,
-    str,
-    int,
-    float,
-    bool,
-    list,
-    dict,
-    np.ndarray,
-    np.generic,
-    None,
+def _coerce_numpy(v: Any) -> Any:
+    """Convert numpy arrays and scalars to plain Python types before validation."""
+    if isinstance(v, np.ndarray):
+        return v.tolist()
+    if isinstance(v, np.generic):
+        return v.item()
+    return v
+
+
+MetadataValue = Annotated[
+    Union[
+        CustomUUID,
+        str,
+        int,
+        float,
+        bool,
+        list,
+        dict,
+        None,
+    ],
+    BeforeValidator(_coerce_numpy),
 ]
-"""Supported types for simulation metadata values."""
+"""Supported types for simulation metadata values. Numpy arrays and scalars are
+automatically converted to their plain Python equivalents before validation."""
 
 
 class MetadataData(BaseModel):
     """Key-value pair for simulation metadata."""
 
-    model_config = ConfigDict(
-        use_attribute_docstrings=True, arbitrary_types_allowed=True
-    )
-
     element: str
     """Metadata key/name."""
     value: MetadataValue
     """Metadata value."""
-
-    @field_serializer("value")
-    def serialize_value(self, value: Any, _info: Any) -> Any:
-        """Serialize numpy arrays and scalars to JSON-compatible types."""
-        if isinstance(value, np.ndarray):
-            return value.tolist()
-        if isinstance(value, np.generic):
-            return value.item()
-        return value
 
     def as_dict(self) -> dict:
         """Convert to dictionary."""
