@@ -17,6 +17,7 @@ from typing import (
 from urllib.parse import urlencode
 from uuid import UUID, uuid1
 
+import numpy as np
 from pydantic import (
     BaseModel as _BaseModel,
 )
@@ -25,6 +26,7 @@ from pydantic import (
     ConfigDict,
     Field,
     PlainSerializer,
+    field_serializer,
     model_validator,
 )
 from pydantic import (
@@ -125,13 +127,41 @@ class FileDataList(RootModel):
         return self.root[item]
 
 
+MetadataValue = Union[
+    CustomUUID,
+    str,
+    int,
+    float,
+    bool,
+    list,
+    dict,
+    np.ndarray,
+    np.generic,
+    None,
+]
+"""Supported types for simulation metadata values."""
+
+
 class MetadataData(BaseModel):
     """Key-value pair for simulation metadata."""
 
+    model_config = ConfigDict(
+        use_attribute_docstrings=True, arbitrary_types_allowed=True
+    )
+
     element: str
     """Metadata key/name."""
-    value: Union[CustomUUID, Any]
+    value: MetadataValue
     """Metadata value."""
+
+    @field_serializer("value")
+    def serialize_value(self, value: Any, _info: Any) -> Any:
+        """Serialize numpy arrays and scalars to JSON-compatible types."""
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        if isinstance(value, np.generic):
+            return value.item()
+        return value
 
     def as_dict(self) -> dict:
         """Convert to dictionary."""
