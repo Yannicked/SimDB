@@ -287,34 +287,40 @@ def pydantic_validate(
                 result = f(*args, **kwargs)
             except ResponseException as err:
                 return Response(
-                    response=_error_model(error=err.message).model_dump_json(),
+                    response=_error_model(error=err.message).model_dump_json(
+                        exclude_none=False
+                    ),
                     status=err.return_code,
                     mimetype="application/json",
                 )
             except ServerException as err:
                 logger.error("Server error in %s: %s", f.__qualname__, err.message)
                 return Response(
-                    response=_error_model(error=err.message).model_dump_json(),
+                    response=_error_model(error=err.message).model_dump_json(
+                        exclude_none=False
+                    ),
                     status=err.return_code,
                     mimetype="application/json",
                 )
             except Exception as err:
                 logger.exception("Unhandled exception in %s", f.__qualname__)
                 return Response(
-                    response=_error_model(error=str(err)).model_dump_json(),
+                    response=_error_model(error=str(err)).model_dump_json(
+                        exclude_none=False
+                    ),
                     status=500,
                     mimetype="application/json",
                 )
 
             if isinstance(result, ErrorResponse):
                 return Response(
-                    response=result.model_dump_json(),
+                    response=result.model_dump_json(exclude_none=False),
                     status=400,
                     mimetype="application/json",
                 )
             if isinstance(result, BaseModel):
                 return Response(
-                    result.model_dump_json(),
+                    result.model_dump_json(exclude_none=False),
                     mimetype="application/json",
                 )
 
