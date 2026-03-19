@@ -22,7 +22,6 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-
 def _make_json_serializable(value: Any) -> Any:
     """Recursively convert a value to something JSON-serializable.
 
