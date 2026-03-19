@@ -1,5 +1,6 @@
 """Pydantic models for the SimDB remote API."""
 
+import base64
 from datetime import datetime as dt
 from datetime import timezone
 from pathlib import Path
@@ -25,6 +26,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    InstanceOf,
     PlainSerializer,
     model_validator,
 )
@@ -126,27 +128,43 @@ class FileDataList(RootModel):
         return self.root[item]
 
 
-def _coerce_numpy(v: Any) -> Any:
-    """Convert numpy arrays and scalars to plain Python types before validation."""
+def _deserialize_numpy(v: Any) -> Any:
     if isinstance(v, np.ndarray):
-        return v.tolist()
-    if isinstance(v, np.generic):
-        return v.item()
-    return v
+        return v
+    if isinstance(v, dict) and v.get("_type") == "numpy.ndarray":
+        np_bytes = base64.b64decode(v["bytes"].encode())
+        return np.frombuffer(np_bytes, dtype=v["dtype"]).reshape(v["shape"])
+    raise ValueError(f"Cannot deserialize {v} to np.ndarray")
 
 
-MetadataValue = Annotated[
-    Union[
-        CustomUUID,
-        str,
-        int,
-        float,
-        bool,
-        list,
-        dict,
-        None,
-    ],
-    BeforeValidator(_coerce_numpy),
+def _serialize_numpy(o: np.ndarray) -> dict:
+    """Serialize numpy arrays to dict format for the web dashboard."""
+    encoded_bytes = base64.b64encode(o.data).decode()
+    return {
+        "_type": "numpy.ndarray",
+        "dtype": o.dtype.name,
+        "shape": o.shape,
+        "bytes": encoded_bytes,
+    }
+
+
+NumpyArray = Annotated[
+    InstanceOf[np.ndarray],
+    BeforeValidator(_deserialize_numpy),
+    PlainSerializer(_serialize_numpy, return_type=dict),
+]
+
+
+MetadataValue = Union[
+    CustomUUID,
+    str,
+    int,
+    float,
+    bool,
+    list,
+    dict,
+    NumpyArray,
+    None,
 ]
 """Supported types for simulation metadata values. Numpy arrays and scalars are
 automatically converted to their plain Python equivalents before validation."""
@@ -233,7 +251,7 @@ class MetadataKeyInfoList(RootModel):
 class MetadataValueList(RootModel):
     """List of metadata values for a given key."""
 
-    root: List[Any] = []
+    root: List[MetadataValue] = []
 
 
 class SimulationReference(BaseModel):
