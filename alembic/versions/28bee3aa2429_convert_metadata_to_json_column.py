@@ -8,7 +8,7 @@ Create Date: 2026-02-26 17:01:30.925750
 
 import json
 import pickle
-from typing import Sequence, Union
+from typing import Any, Sequence, Union
 
 import sqlalchemy as sa
 from sqlalchemy import text
@@ -20,6 +20,23 @@ revision: str = "28bee3aa2429"
 down_revision: Union[str, Sequence[str], None] = "9e9a4a7cd639"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+
+
+def _make_json_serializable(value: Any) -> Any:
+    """Recursively convert a value to something JSON-serializable.
+
+    Numpy arrays fall through to str(), which uses numpy's print threshold and
+    truncates large arrays — avoiding multi-hundred-MB JSON for array-valued metadata.
+    """
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, (list, tuple)):
+        return [_make_json_serializable(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _make_json_serializable(v) for k, v in value.items()}
+    # Covers numpy arrays (truncated by numpy's print threshold), datetimes, etc.
+    return str(value)
 
 
 def upgrade() -> None:
@@ -57,11 +74,12 @@ def upgrade() -> None:
             for element, value in meta_rows:
                 if value is not None:
                     try:
-                        meta_dict[element] = (
+                        unpickled = (
                             pickle.loads(value) if isinstance(value, bytes) else value
                         )
                     except Exception:
-                        meta_dict[element] = value
+                        unpickled = repr(value)
+                    meta_dict[element] = _make_json_serializable(unpickled)
                 else:
                     meta_dict[element] = None
 
