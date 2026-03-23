@@ -8,14 +8,15 @@ from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Tuple, cast
 
 import appdirs
 import sqlalchemy.orm
-from sqlalchemy import String, Text, create_engine, func
+from sqlalchemy import String, Text, create_engine, exists, func, literal_column, text
 from sqlalchemy import cast as sql_cast
 from sqlalchemy import or_ as sql_or
 from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.types import Numeric
 
 from simdb.config import Config
-from simdb.query import QueryType, query_compare
+from simdb.query import QueryType
 
 from .models import Base
 from .models.file import File
@@ -175,11 +176,184 @@ class Database:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+    def _json_extract(self, key: str):
+        """
+        Return a SQLAlchemy column expression that extracts a JSON metadata value
+        by key, adapted to the current database dialect.
+
+        For PostgreSQL (JSONB) this uses the ``->`` / ``->>`` operators via
+        SQLAlchemy's subscript notation.  For SQLite it uses ``json_extract``.
+        The returned expression always yields a *text* value so that string
+        comparisons work uniformly across both dialects.
+        """
+        dialect = self.engine.dialect.name
+        if dialect == "postgresql":
+            return Simulation._metadata[key].astext
+        else:
+            return func.json_extract(Simulation._metadata, f"$.{key}")
+
+    def _json_exists(self, key: str):
+        """
+        Return a SQLAlchemy filter expression that is True when *key* exists in
+        the JSON metadata column.
+        """
+        dialect = self.engine.dialect.name
+        if dialect == "postgresql":
+            return Simulation._metadata.has_key(key)
+        else:
+            return func.json_type(Simulation._metadata, f"$.{key}").isnot(None)
+
+    def _apply_json_filter(self, query, name: str, value: str, query_type: "QueryType"):
+        """
+        Append a WHERE clause to *query* that filters on a JSON metadata key
+        using the database's native JSON operators.
+
+        Numeric comparisons (GT / GE / LT / LE) cast the extracted text to a
+        NUMERIC type so that ``"10" > "9"`` evaluates correctly.
+
+        :param query: The current SQLAlchemy query.
+        :param name: The metadata key to filter on.
+        :param value: The value to compare against (always a string from the URL).
+        :param query_type: The comparison operator.
+        :return: The updated query.
+        """
+        col_text = self._json_extract(name)
+
+        if query_type == QueryType.EXIST:
+            return query.filter(self._json_exists(name))
+
+        if query_type == QueryType.EQ:
+            return query.filter(func.lower(col_text) == value.lower())
+
+        if query_type == QueryType.NE:
+            return query.filter(func.lower(col_text) != value.lower())
+
+        if query_type == QueryType.IN:
+            return query.filter(func.lower(col_text).contains(value.lower()))
+
+        if query_type == QueryType.NI:
+            return query.filter(
+                sql_or(
+                    col_text.is_(None),
+                    ~func.lower(col_text).contains(value.lower()),
+                )
+            )
+
+        col_num = sql_cast(col_text, Numeric)
+        try:
+            num_value = float(value)
+        except (ValueError, TypeError):
+            # Fall back to text comparison when the value is not numeric
+            col_num = col_text
+            num_value = value
+
+        if query_type == QueryType.GT:
+            return query.filter(col_num > num_value)
+        if query_type == QueryType.GE:
+            return query.filter(col_num >= num_value)
+        if query_type == QueryType.LT:
+            return query.filter(col_num < num_value)
+        if query_type == QueryType.LE:
+            return query.filter(col_num <= num_value)
+
+        # AGT / AGE / ALT / ALE: "any element of the array satisfies the comparison"
+        # Use an EXISTS subquery that unnests the JSON array and compares each element.
+        if query_type in (QueryType.AGT, QueryType.AGE, QueryType.ALT, QueryType.ALE):
+            return query.filter(self._any_array_element_filter(name, num_value, query_type))
+
+        return query
+
+    def _any_array_element_filter(self, name: str, num_value, query_type: "QueryType"):
+        """
+        Return an EXISTS clause that is True when *any* element of the JSON array
+        stored at metadata key *name* satisfies the numeric comparison *query_type*.
+
+        For PostgreSQL the subquery uses ``jsonb_array_elements_text``.
+        For SQLite the subquery uses ``json_each``.
+
+        :param name: The metadata key whose value is a JSON array.
+        :param num_value: The numeric threshold to compare against.
+        :param query_type: One of AGT / AGE / ALT / ALE.
+        :return: A SQLAlchemy clause element suitable for use in ``.filter()``.
+        """
+        dialect = self.engine.dialect.name
+
+        ops = {
+            QueryType.AGT: ">",
+            QueryType.AGE: ">=",
+            QueryType.ALT: "<",
+            QueryType.ALE: "<=",
+        }
+        op = ops[query_type]
+
+        if dialect == "postgresql":
+            raw = text(
+                f"EXISTS ("
+                f"  SELECT 1"
+                f"  FROM jsonb_array_elements_text(simulations.metadata -> :key) AS elem"
+                f"  WHERE CAST(elem AS NUMERIC) {op} :val"
+                f")"
+            ).bindparams(key=name, val=num_value)
+        else:
+            raw = text(
+                f"EXISTS ("
+                f"  SELECT 1"
+                f"  FROM json_each(simulations.metadata, '$.' || :key) AS je"
+                f"  WHERE CAST(je.value AS REAL) {op} :val"
+                f")"
+            ).bindparams(key=name, val=num_value)
+
+        return raw
+
+    def _apply_sort(self, query, sort_by: str, sort_asc: bool):
+        """
+        Append an ORDER BY clause to *query*.
+
+        Sorting on ``alias``, ``uuid`` and ``datetime`` uses the corresponding
+        ORM columns directly.  Sorting on any other field extracts the value
+        from the JSON metadata column using the dialect-appropriate expression.
+
+        NULL values are always sorted last regardless of direction.
+        """
+        if not sort_by:
+            return query
+
+        dialect = self.engine.dialect.name
+
+        if sort_by == "alias":
+            col = Simulation.alias
+        elif sort_by == "uuid":
+            col = sql_cast(Simulation.uuid, String)
+        elif sort_by == "datetime":
+            col = Simulation.datetime
+        else:
+            col = self._json_extract(sort_by)
+
+        if sort_asc:
+            if dialect == "postgresql":
+                from sqlalchemy import asc, nulls_last
+
+                order_expr = nulls_last(asc(col))
+            else:
+                order_expr = col.asc()
+        else:
+            if dialect == "postgresql":
+                from sqlalchemy import desc, nulls_last
+
+                order_expr = nulls_last(desc(col))
+            else:
+                order_expr = col.desc()
+
+        return query.order_by(order_expr)
+
     def _get_simulation_data(
         self, query, meta_keys, limit, page, sort_by="", sort_asc=False
     ) -> Tuple[int, List]:
         """
         Build simulation data from query results with JSON metadata.
+
+        Sorting is pushed to the database via :meth:`_apply_sort`.  Pagination
+        is also performed at the database level when a *limit* is given.
 
         :param query: SQLAlchemy query object
         :param meta_keys: List of metadata keys to include
@@ -189,11 +363,17 @@ class Database:
         :param sort_asc: Sort in ascending order if True, descending if False
         :return: Tuple of (total_count, list of simulation dicts)
         """
-        all_rows = query.all()
-        total_count = len(all_rows)
+        # Apply DB-level sorting before counting / paginating
+        query = self._apply_sort(query, sort_by, sort_asc)
+
+        total_count = query.count()
+
+        if limit:
+            offset = (page - 1) * limit
+            query = query.limit(limit).offset(offset)
 
         results = []
-        for row in all_rows:
+        for row in query.all():
             sim_data = {
                 "alias": row.alias,
                 "uuid": row.uuid,
@@ -201,8 +381,6 @@ class Database:
             }
 
             meta_dict = row._metadata or {}
-
-            sim_data["_meta_dict"] = meta_dict
 
             if meta_keys:
                 sim_data["metadata"] = [
@@ -212,28 +390,6 @@ class Database:
                 ]
 
             results.append(sim_data)
-
-        if sort_by:
-
-            def get_sort_key(item):
-                if sort_by in ("alias", "uuid", "datetime"):
-                    val = item.get(sort_by, "")
-                else:
-                    val = item.get("_meta_dict", {}).get(sort_by, "")
-                # Handle None values - put them at the end
-                if val is None:
-                    return "" if sort_asc else "~"
-                return str(val).lower() if isinstance(val, str) else str(val)
-
-            results.sort(key=get_sort_key, reverse=not sort_asc)
-
-        for sim_data in results:
-            sim_data.pop("_meta_dict", None)
-
-        if limit:
-            start_idx = (page - 1) * limit
-            end_idx = start_idx + limit
-            results = results[start_idx:end_idx]
 
         return total_count, results
 
@@ -342,85 +498,82 @@ class Database:
         self.session.commit()
         return simulation
 
-    def _get_sim_ids_from_json(
-        self, constraints: List[Tuple[str, str, "QueryType"]]
-    ) -> Iterable[int]:
-        query = self.session.query(
-            Simulation.id,
-            Simulation._metadata,
-            Simulation.alias,
-            Simulation.uuid,
-            Simulation.datetime,
-        )
+    def _build_constrained_query(self, base_query, constraints: List[Tuple[str, str, "QueryType"]]):
+        """
+        Apply all *constraints* as WHERE clauses to *base_query* and return the
+        updated query.
 
-        sim_id_sets = {}
-        for name, value, query_type in constraints:
-            sim_id_sets[(name, value, query_type)] = set()
+        Filtering is performed entirely at the database level using SQLAlchemy's
+        JSON column operators so that no full table scan in Python is required.
+        Each constraint is translated to a WHERE clause via
+        :meth:`_apply_json_filter` for metadata keys, or via direct ORM column
+        comparisons for the special fields ``alias``, ``uuid`` and
+        ``creation_date``.
 
+        :param base_query: A SQLAlchemy query to add filters to.
+        :param constraints: List of ``(name, value, query_type)`` tuples.
+        :return: The updated query with all filters applied.
+        """
         for name, value, query_type in constraints:
             if name == "alias":
                 if query_type == QueryType.EQ:
-                    query = query.filter(func.lower(Simulation.alias) == value.lower())
+                    base_query = base_query.filter(
+                        func.lower(Simulation.alias) == value.lower()
+                    )
                 elif query_type == QueryType.IN:
-                    query = query.filter(Simulation.alias.ilike(f"%{value}%"))
-                elif query_type == QueryType.NI:
-                    query = query.filter(Simulation.alias.notilike(f"%{value}%"))
-                elif query_type == QueryType.NE:
-                    query = query.filter(func.lower(Simulation.alias) != value.lower())
-            elif name == "uuid":
-                if query_type == QueryType.EQ:
-                    query = query.filter(Simulation.uuid == uuid.UUID(value))
-                elif query_type == QueryType.IN:
-                    query = query.filter(
-                        func.REPLACE(sql_cast(Simulation.uuid, String), "-", "").ilike(
-                            "%{}%".format(value.replace("-", ""))
-                        )
+                    base_query = base_query.filter(
+                        Simulation.alias.ilike(f"%{value}%")
                     )
                 elif query_type == QueryType.NI:
-                    query = query.filter(
+                    base_query = base_query.filter(
+                        Simulation.alias.notilike(f"%{value}%")
+                    )
+                elif query_type == QueryType.NE:
+                    base_query = base_query.filter(
+                        func.lower(Simulation.alias) != value.lower()
+                    )
+            elif name == "uuid":
+                if query_type == QueryType.EQ:
+                    base_query = base_query.filter(
+                        Simulation.uuid == uuid.UUID(value)
+                    )
+                elif query_type == QueryType.IN:
+                    base_query = base_query.filter(
+                        func.REPLACE(
+                            sql_cast(Simulation.uuid, String), "-", ""
+                        ).ilike("%{}%".format(value.replace("-", "")))
+                    )
+                elif query_type == QueryType.NI:
+                    base_query = base_query.filter(
                         func.REPLACE(
                             sql_cast(Simulation.uuid, String), "-", ""
                         ).notilike("%{}%".format(value.replace("-", "")))
                     )
                 elif query_type == QueryType.NE:
-                    query = query.filter(Simulation.uuid != uuid.UUID(value))
+                    base_query = base_query.filter(
+                        Simulation.uuid != uuid.UUID(value)
+                    )
             elif name == "creation_date":
                 date_time = datetime.strptime(
                     value.replace("_", ":"), "%Y-%m-%d %H:%M:%S"
                 )
                 if query_type == QueryType.EQ:
-                    query = query.filter(Simulation.datetime == date_time)
+                    base_query = base_query.filter(Simulation.datetime == date_time)
                 elif query_type == QueryType.GT:
-                    query = query.filter(Simulation.datetime > date_time)
+                    base_query = base_query.filter(Simulation.datetime > date_time)
                 elif query_type == QueryType.GE:
-                    query = query.filter(Simulation.datetime >= date_time)
+                    base_query = base_query.filter(Simulation.datetime >= date_time)
                 elif query_type == QueryType.LT:
-                    query = query.filter(Simulation.datetime < date_time)
+                    base_query = base_query.filter(Simulation.datetime < date_time)
                 elif query_type == QueryType.LE:
-                    query = query.filter(Simulation.datetime <= date_time)
+                    base_query = base_query.filter(Simulation.datetime <= date_time)
                 elif query_type == QueryType.NE:
-                    query = query.filter(Simulation.datetime != date_time)
+                    base_query = base_query.filter(Simulation.datetime != date_time)
+            else:
+                # JSON metadata field - push the filter to the database
+                base_query = self._apply_json_filter(base_query, name, value, query_type)
 
-        # Execute query and filter on JSON metadata in Python
-        rows = query.all()
-
-        for row in rows:
-            meta_dict = row._metadata or {}
-
-            for name, value, query_type in constraints:
-                if name in ("alias", "uuid", "creation_date") or (
-                    name in meta_dict
-                    and (
-                        query_type == QueryType.EXIST
-                        or query_compare(query_type, name, meta_dict[name], value)
-                    )
-                ):
-                    sim_id_sets[(name, value, query_type)].add(row.id)
-
-        if sim_id_sets:
-            return set.intersection(*sim_id_sets.values())
-
-        return []
+        return base_query
 
     def query_meta(
         self, constraints: List[Tuple[str, str, "QueryType"]]
@@ -428,14 +581,14 @@ class Database:
         """
         Query the metadata and return matching simulations.
 
-        :return:
+        All filtering is performed at the database level via
+        :meth:`_build_constrained_query`.
+
+        :return: List of matching :class:`Simulation` objects.
         """
-
-        sim_ids = self._get_sim_ids_from_json(constraints)
-        if not sim_ids:
-            return []
-
-        query = self.session.query(Simulation).filter(Simulation.id.in_(sim_ids))
+        query = self._build_constrained_query(
+            self.session.query(Simulation), constraints
+        )
         return query.all()
 
     def query_meta_data(
@@ -448,17 +601,17 @@ class Database:
         sort_asc: bool = False,
     ) -> Tuple[int, List[dict]]:
         """
-        Query the metadata and return matching simulations.
+        Query the metadata and return matching simulations as plain dicts.
 
-        :return:
+        All filtering is performed at the database level via
+        :meth:`_build_constrained_query`.  Sorting and pagination are also
+        pushed to the database inside :meth:`_get_simulation_data`.
+
+        :return: Tuple of ``(total_count, list of simulation data dicts)``.
         """
-
-        sim_ids = self._get_sim_ids_from_json(constraints)
-        if not sim_ids:
-            return 0, []
-
-        query = self.session.query(Simulation).filter(Simulation.id.in_(sim_ids))
-
+        query = self._build_constrained_query(
+            self.session.query(Simulation), constraints
+        )
         return self._get_simulation_data(
             query, meta_keys, limit, page, sort_by, sort_asc
         )
@@ -571,15 +724,14 @@ class Database:
             )
             data = [row[0] for row in query.all()]
         else:
-            simulations = self.session.query(Simulation._metadata).all()
-            values_set = set()
-
-            for (meta_dict,) in simulations:
-                if meta_dict and name in meta_dict:
-                    val = meta_dict[name]
-                    values_set.add(str(val) if val is not None else None)
-
-            data = list(values_set)
+            # Extract the specific key from the JSON column at the database level
+            col = self._json_extract(name)
+            query = (
+                self.session.query(col.label("val"))
+                .filter(self._json_exists(name))
+                .distinct()
+            )
+            data = [str(row.val) for row in query.all() if row.val is not None]
 
         try:
             return sorted(data)

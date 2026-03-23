@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
+import numpy as np
 
 revision: str = "28bee3aa2429"
 down_revision: Union[str, Sequence[str], None] = "9e9a4a7cd639"
@@ -30,11 +31,14 @@ def _make_json_serializable(value: Any) -> Any:
     """
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
+    if isinstance(value, np.ndarray):
+        return _make_json_serializable(
+            [x if np.isfinite(x) else str(x) for x in value.tolist()]
+        )
     if isinstance(value, (list, tuple)):
         return [_make_json_serializable(v) for v in value]
     if isinstance(value, dict):
         return {str(k): _make_json_serializable(v) for k, v in value.items()}
-    # Covers numpy arrays (truncated by numpy's print threshold), datetimes, etc.
     return str(value)
 
 
@@ -74,7 +78,9 @@ def upgrade() -> None:
                 if value is not None:
                     try:
                         unpickled = (
-                            pickle.loads(value) if isinstance(value, bytes) else value
+                            pickle.loads(value)
+                            if isinstance(value, (bytes, bytearray, memoryview))
+                            else value
                         )
                     except Exception:
                         unpickled = repr(value)
@@ -82,21 +88,10 @@ def upgrade() -> None:
                 else:
                     meta_dict[element] = None
 
-            if conn.dialect.name == "postgresql":
-                conn.execute(
-                    text(
-                        "UPDATE simulations SET metadata = :metadata::jsonb"
-                        " WHERE id = :sim_id"
-                    ),
-                    {"metadata": json.dumps(meta_dict), "sim_id": sim_id},
-                )
-            else:
-                conn.execute(
-                    text(
-                        "UPDATE simulations SET metadata = :metadata WHERE id = :sim_id"
-                    ),
-                    {"metadata": json.dumps(meta_dict), "sim_id": sim_id},
-                )
+            conn.execute(
+                text("UPDATE simulations SET metadata = :metadata WHERE id = :sim_id"),
+                {"metadata": json.dumps(meta_dict, allow_nan=False), "sim_id": sim_id},
+            )
 
         op.drop_index("metadata_index", table_name="metadata")
         op.drop_index(op.f("ix_metadata_sim_id"), table_name="metadata")
