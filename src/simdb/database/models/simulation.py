@@ -273,6 +273,12 @@ class Simulation(Base):
                         indent = " " * (len(element) + 2)
                         result += f"  {indent}{line}"
                     first_line = False
+            elif isinstance(value, dict) and set(value) == {"min", "mean", "max"}:
+                result += (
+                    f"  {element}: "
+                    f"[min={value['min']:.4g}, mean={value['mean']:.4g}, "
+                    f"max={value['max']:.4g}]\n"
+                )
             elif isinstance(value, np.ndarray):
                 string = np.array2string(value, threshold=10)
                 result += f"  {element}: {string}\n"
@@ -298,10 +304,47 @@ class Simulation(Base):
         if name in self._metadata:
             del self._metadata[name]
 
+    @staticmethod
+    def _array_to_range(value: Any) -> Any:
+        """
+        Convert a numeric array (numpy ndarray or list/tuple of numbers) to a
+        ``{"min": …, "mean": …, "max": …}`` dict so that it can be stored as
+        structured JSON and queried efficiently.
+
+        Non-array values are returned unchanged.  Arrays that are empty or
+        contain only NaN/Inf are stored as-is (as a plain list) so that the
+        caller can still see the raw data.
+        """
+        if isinstance(value, np.ndarray):
+            finite = value[np.isfinite(value)]
+            if finite.size == 0:
+                # All values are NaN/Inf – store the raw list so nothing is lost
+                return value.tolist()
+            return {
+                "min": float(np.min(finite)),
+                "mean": float(np.mean(finite)),
+                "max": float(np.max(finite)),
+            }
+        if isinstance(value, (list, tuple)) and value:
+            try:
+                arr = np.array(value, dtype=float)
+                finite = arr[np.isfinite(arr)]
+                if finite.size == 0:
+                    return list(value)
+                return {
+                    "min": float(np.min(finite)),
+                    "mean": float(np.mean(finite)),
+                    "max": float(np.max(finite)),
+                }
+            except (TypeError, ValueError):
+                # Not a numeric list – store as-is
+                pass
+        return value
+
     def set_meta(self, name: str, value: Any) -> None:
         if self._metadata is None:
             self._metadata = {}
-        self._metadata[name] = value
+        self._metadata[name] = self._array_to_range(value)
 
     def validate_meta(self) -> None:
         """

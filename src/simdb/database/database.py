@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Tuple, cast
 
 import appdirs
 import sqlalchemy.orm
-from sqlalchemy import String, Text, create_engine, exists, func, literal_column, text
+from sqlalchemy import String, Text, create_engine, func
 from sqlalchemy import cast as sql_cast
 from sqlalchemy import or_ as sql_or
 from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
@@ -176,32 +176,47 @@ class Database:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def _json_extract(self, key: str):
+    def _json_extract(self, key: str, *subkeys: str):
         """
-        Return a SQLAlchemy column expression that extracts a JSON metadata value
-        by key, adapted to the current database dialect.
+        Return a SQLAlchemy column expression that extracts a JSON metadata value.
 
-        For PostgreSQL (JSONB) this uses the ``->`` / ``->>`` operators via
-        SQLAlchemy's subscript notation.  For SQLite it uses ``json_extract``.
-        The returned expression always yields a *text* value so that string
-        comparisons work uniformly across both dialects.
+        *key* is the top-level metadata key (stored as a single flat key in the
+        JSON object, even if it contains dots).  Any additional *subkeys* are
+        chained as further subscripts into the value at *key* — for example,
+        ``_json_extract("field", "max")`` navigates ``metadata["field"]["max"]``.
+
+        For PostgreSQL (JSONB) this builds the expression using a loop over
+        subscript operators (``->`` / ``->>``).  For SQLite it uses
+        ``json_extract`` with a quoted path so that dots in *key* are treated
+        literally.  The returned expression always yields a *text* value.
         """
         dialect = self.engine.dialect.name
         if dialect == "postgresql":
-            return Simulation._metadata[key].astext
+            expr = Simulation._metadata
+            for part in (key, *subkeys):
+                expr = expr[part]
+            return expr.astext
         else:
-            return func.json_extract(Simulation._metadata, f"$.{key}")
+            # Quote the top-level key so dots in it are treated literally,
+            # then append any subkeys unquoted.
+            path = f'$."{ key }"'
+            for subkey in subkeys:
+                path += f".{subkey}"
+            return func.json_extract(Simulation._metadata, path)
 
     def _json_exists(self, key: str):
         """
         Return a SQLAlchemy filter expression that is True when *key* exists in
         the JSON metadata column.
+
+        The top-level *key* is quoted in the SQLite path so that dots in the
+        key name are treated literally rather than as path separators.
         """
         dialect = self.engine.dialect.name
         if dialect == "postgresql":
             return Simulation._metadata.has_key(key)
         else:
-            return func.json_type(Simulation._metadata, f"$.{key}").isnot(None)
+            return func.json_type(Simulation._metadata, f'$."{ key }"').isnot(None)
 
     def _apply_json_filter(self, query, name: str, value: str, query_type: "QueryType"):
         """
@@ -256,54 +271,26 @@ class Database:
         if query_type == QueryType.LE:
             return query.filter(col_num <= num_value)
 
-        # AGT / AGE / ALT / ALE: "any element of the array satisfies the comparison"
-        # Use an EXISTS subquery that unnests the JSON array and compares each element.
-        if query_type in (QueryType.AGT, QueryType.AGE, QueryType.ALT, QueryType.ALE):
-            return query.filter(self._any_array_element_filter(name, num_value, query_type))
+        # AGT / AGE - "any element > threshold"
+        # Arrays are stored as {"min":…,"mean":…,"max":…}.
+        # If max > threshold then at least one element satisfies the condition.
+        if query_type == QueryType.AGT:
+            col_max = sql_cast(self._json_extract(name, "max"), Numeric)
+            return query.filter(col_max > num_value)
+        if query_type == QueryType.AGE:
+            col_max = sql_cast(self._json_extract(name, "max"), Numeric)
+            return query.filter(col_max >= num_value)
+
+        # ALT / ALE - "any element < threshold"
+        # If min < threshold then at least one element satisfies the condition.
+        if query_type == QueryType.ALT:
+            col_min = sql_cast(self._json_extract(name, "min"), Numeric)
+            return query.filter(col_min < num_value)
+        if query_type == QueryType.ALE:
+            col_min = sql_cast(self._json_extract(name, "min"), Numeric)
+            return query.filter(col_min <= num_value)
 
         return query
-
-    def _any_array_element_filter(self, name: str, num_value, query_type: "QueryType"):
-        """
-        Return an EXISTS clause that is True when *any* element of the JSON array
-        stored at metadata key *name* satisfies the numeric comparison *query_type*.
-
-        For PostgreSQL the subquery uses ``jsonb_array_elements_text``.
-        For SQLite the subquery uses ``json_each``.
-
-        :param name: The metadata key whose value is a JSON array.
-        :param num_value: The numeric threshold to compare against.
-        :param query_type: One of AGT / AGE / ALT / ALE.
-        :return: A SQLAlchemy clause element suitable for use in ``.filter()``.
-        """
-        dialect = self.engine.dialect.name
-
-        ops = {
-            QueryType.AGT: ">",
-            QueryType.AGE: ">=",
-            QueryType.ALT: "<",
-            QueryType.ALE: "<=",
-        }
-        op = ops[query_type]
-
-        if dialect == "postgresql":
-            raw = text(
-                f"EXISTS ("
-                f"  SELECT 1"
-                f"  FROM jsonb_array_elements_text(simulations.metadata -> :key) AS elem"
-                f"  WHERE CAST(elem AS NUMERIC) {op} :val"
-                f")"
-            ).bindparams(key=name, val=num_value)
-        else:
-            raw = text(
-                f"EXISTS ("
-                f"  SELECT 1"
-                f"  FROM json_each(simulations.metadata, '$.' || :key) AS je"
-                f"  WHERE CAST(je.value AS REAL) {op} :val"
-                f")"
-            ).bindparams(key=name, val=num_value)
-
-        return raw
 
     def _apply_sort(self, query, sort_by: str, sort_asc: bool):
         """
