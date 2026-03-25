@@ -7,6 +7,7 @@ from sqlalchemy.orm import validates
 
 from simdb.docstrings import inherit_docstrings
 from simdb.notifications import Notification
+from simdb.remote.models import WatcherData
 
 from .base import Base
 from .types import ChoiceType
@@ -59,3 +60,6 @@ class Watcher(Base):
             "notification": str(self.notification),
         }
         return data
+
+    def to_model(self) -> WatcherData:
+        return WatcherData.model_validate(self.data())

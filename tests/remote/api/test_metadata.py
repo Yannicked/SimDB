@@ -1,8 +1,11 @@
+import numpy as np
 from conftest import (
     HEADERS,
     generate_simulation_data,
     post_simulation,
 )
+
+from simdb.remote.models import MetadataKeyInfoList, MetadataValueList
 
 
 def test_get_metadata_keys(client):
@@ -47,6 +50,31 @@ def test_get_metadata_values(client):
     assert isinstance(rv.json, list)
     # Should contain both machine values
     assert "machine-a" in rv.json or "machine-b" in rv.json
+
+
+def test_get_metadata_array_value(client):
+    """Test metadata ndarray storage"""
+    # Create a simulation with array metadata
+    array_data = np.array([1, 2, 3])
+    simulation_data_1 = generate_simulation_data(metadata={"array_machine": array_data})
+    rv_post_1 = post_simulation(client, simulation_data_1)
+    assert rv_post_1.status_code == 200
+
+    rv = client.get("/v1.2/metadata", headers=HEADERS)
+    assert rv.status_code == 200
+    mkeys = MetadataKeyInfoList.model_validate_json(rv.data)
+    for k in mkeys.root:
+        if k.name == "array_machine":
+            mkey = k
+    assert mkey.type == "ndarray"
+
+    rv = client.get("/v1.2/metadata/array_machine", headers=HEADERS)
+
+    assert rv.status_code == 200
+    mdata = MetadataValueList.model_validate_json(rv.data)
+    assert len(mdata.root) == 1
+    a = mdata.root[0]
+    assert isinstance(a, np.ndarray)
 
 
 def test_get_metadata_values_nonexistent_key(client):

@@ -2,7 +2,7 @@ import gzip
 import json
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, cast
+from typing import Dict, Iterable, List, Optional
 
 import magic
 from flask import Response, jsonify, request, send_file, stream_with_context
@@ -18,7 +18,9 @@ from simdb.json import CustomDecoder
 from simdb.remote.core.auth import User, requires_auth
 from simdb.remote.core.errors import error
 from simdb.remote.core.path import find_common_root, secure_path
+from simdb.remote.core.pydantic_utils import pydantic_validate
 from simdb.remote.core.typing import current_app
+from simdb.remote.models import FileDataList, FileGetDataResponse
 from simdb.uri import URI
 
 api = Namespace("files", path="/")
@@ -170,9 +172,10 @@ def _handle_file_upload() -> Response:
 @api.route("/files")
 class FileList(Resource):
     @requires_auth()
-    def get(self, user: User):
+    @pydantic_validate(api)
+    def get(self, user: User) -> FileDataList:
         files = current_app.db.list_files()
-        return jsonify([file.data() for file in files])
+        return FileDataList.model_validate([file.to_model() for file in files])
 
     @requires_auth()
     def post(self, user: User):
@@ -189,25 +192,10 @@ class FileList(Resource):
 @api.route("/file/<string:file_uuid>")
 class File(Resource):
     @requires_auth()
-    def get(self, file_uuid: str, user: Optional[User] = None):
-        try:
-            file = current_app.db.get_file(file_uuid)
-            data = cast(Dict[str, Any], file.data(recurse=True))
-            if file.type == DataObject.Type.FILE:
-                data["files"] = [
-                    {
-                        "path": str(file.uri.path),
-                        "checksum": file.checksum,
-                    }
-                ]
-            else:
-                data["files"] = [
-                    {"path": str(path), "checksum": sha1_checksum(URI(f"file:{path}"))}
-                    for path in imas_files(file.uri)
-                ]
-            return jsonify(data)
-        except DatabaseError as err:
-            return error(str(err))
+    @pydantic_validate(api)
+    def get(self, file_uuid: str, user: Optional[User] = None) -> FileGetDataResponse:
+        file = current_app.db.get_file(file_uuid)
+        return file.to_model_with_path()
 
 
 @api.route("/file/download/<string:file_uuid>")
