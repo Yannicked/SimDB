@@ -668,7 +668,7 @@ class RemoteAPI:
         path: Path,
         uuid: uuid.UUID,
         file_type: str,
-        sim_data: Dict,
+        sim_data: Dict[str, Any],
         chunk_size: int,
         out_stream: IO,
         type: DataObject.Type,

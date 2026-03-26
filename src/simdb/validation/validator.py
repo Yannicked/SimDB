@@ -22,8 +22,8 @@ class ValidationError(Exception):
     pass
 
 
-class CustomValidator(cerberus.Validator):  # type: ignore[misc]
-    types_mapping = cerberus.Validator.types_mapping.copy()  # type: ignore[attr-defined]
+class CustomValidator(cerberus.Validator):  # type: ignore
+    types_mapping = cerberus.Validator.types_mapping.copy()  # type: ignore
     types_mapping["numpy"] = cerberus.TypeDefinition("numpy", (np.ndarray,), ())
 
     def _validate_exists(self, check_exists, field, value):

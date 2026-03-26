@@ -316,7 +316,7 @@ class Database:
             for name in meta_keys:
                 if name in ("alias", "uuid"):
                     continue
-                names_filters.append(m_b.c.element.ilike(name))  # type: ignore[union-attr]
+                names_filters.append(m_b.c.element.ilike(name))  # type: ignore
             if names_filters:
                 query = query.filter(or_(*names_filters))
 
@@ -533,11 +533,11 @@ class Database:
             query = (
                 self.session.query(s_b, m_b)
                 .outerjoin(Simulation.meta)
-                .filter(s_b.c.id.in_(sim_ids))  # type: ignore[union-attr]
+                .filter(s_b.c.id.in_(sim_ids))  # type: ignore
             )
-            query = query.filter(m_b.c.element.in_(meta_keys))  # type: ignore[union-attr]
+            query = query.filter(m_b.c.element.in_(meta_keys))  # type: ignore
         else:
-            query = self.session.query(s_b).filter(s_b.c.id.in_(sim_ids))  # type: ignore[union-attr]
+            query = self.session.query(s_b).filter(s_b.c.id.in_(sim_ids))  # type: ignore
 
         if sort_query is not None:
             query = query.join(sort_query, Simulation.id == sort_query.c.id).order_by(

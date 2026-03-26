@@ -339,7 +339,7 @@ class SimulationList(Resource):
 @api.route("/simulation/<path:sim_id>")
 class Simulation(Resource):
     @requires_auth()
-    @cache.cached(key_prefix=cache_key)  # type: ignore[invalid-argument-type]
+    @cache.cached(key_prefix=cache_key)  # type: ignore
     @pydantic_validate(api)
     def get(self, sim_id: str, user: User) -> SimulationDataResponse:
         try:
@@ -400,7 +400,7 @@ class Simulation(Resource):
 @api.route("/simulation/metadata/<path:sim_id>")
 class SimulationMeta(Resource):
     @requires_auth()
-    @cache.cached(key_prefix=cache_key)  # type: ignore[invalid-argument-type]
+    @cache.cached(key_prefix=cache_key)  # type: ignore
     @pydantic_validate(api)
     def get(self, sim_id: str, user: User) -> MetadataDataList:
         simulation = current_app.db.get_simulation(sim_id)
@@ -469,7 +469,7 @@ class ValidateSimulation(Resource):
 @api.route("/trace/<path:sim_id>")
 class SimulationTrace(Resource):
     @requires_auth()
-    @cache.cached(key_prefix=cache_key)  # type: ignore[invalid-argument-type]
+    @cache.cached(key_prefix=cache_key)  # type: ignore
     @pydantic_validate(api)
     def get(self, sim_id: str, user: User) -> SimulationTraceData:
         return _build_trace(sim_id)

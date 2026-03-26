@@ -28,7 +28,7 @@ if "sphinx" in sys.modules:
     # Patch to allow sphix doc generation
     from sqlalchemy.sql.elements import ClauseElement
 
-    ClauseElement.__bool__ = lambda self: True  # type: ignore[invalid-assignment]
+    ClauseElement.__bool__ = lambda self: True  # type: ignore
 
 import re
 
@@ -357,8 +357,8 @@ class Simulation(Base):
 
     def data(
         self, recurse: bool = False, meta_keys: Optional[List[str]] = None
-    ) -> Dict[str, Union[str, List]]:
-        data = {
+    ) -> Dict[str, Any]:
+        data: Dict[str, Any] = {
             "uuid": self.uuid,
             "alias": self.alias,
             "datetime": self.datetime.isoformat(),
