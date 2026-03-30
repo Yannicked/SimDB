@@ -97,6 +97,7 @@ def create_app(
     CORS(app, resources={r"/*": {"origins": "*"}})
     app.config["TESTING"] = testing
     app.config["DEBUG"] = debug
+    app.config["RESTX_INCLUDE_ALL_MODELS"] = True
     app.config["PROFILE"] = profile
     app.json_encoder = cast(Type[JSONEncoder], CustomEncoder)
     app.json_decoder = cast(Type[JSONDecoder], CustomDecoder)

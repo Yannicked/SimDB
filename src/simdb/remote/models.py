@@ -1,5 +1,6 @@
 """Pydantic models for the SimDB remote API."""
 
+import base64
 from datetime import datetime as dt
 from datetime import timezone
 from pathlib import Path
@@ -17,19 +18,34 @@ from typing import (
 from urllib.parse import urlencode
 from uuid import UUID, uuid1
 
+import numpy as np
 from pydantic import (
-    BaseModel,
+    BaseModel as _BaseModel,
+)
+from pydantic import (
     BeforeValidator,
+    ConfigDict,
     Field,
+    InstanceOf,
     PlainSerializer,
-    RootModel,
     model_validator,
+)
+from pydantic import (
+    RootModel as _RootModel,
 )
 
 from simdb.cli.manifest import DataObject
 
 HexUUID = Annotated[UUID, PlainSerializer(lambda x: x.hex, return_type=str)]
 """UUID serialized as a hex string."""
+
+
+class BaseModel(_BaseModel):
+    model_config = ConfigDict(use_attribute_docstrings=True)
+
+
+class RootModel(_RootModel):
+    model_config = ConfigDict(use_attribute_docstrings=True)
 
 
 def _deserialize_custom_uuid(v: Any) -> UUID:
@@ -64,7 +80,7 @@ class StatusPatchData(BaseModel):
 class DeletedSimulation(BaseModel):
     """Reference to a deleted simulation."""
 
-    uuid: UUID
+    simulation: UUID
     """UUID of the deleted simulation."""
     files: List[str]
     """List of deleted file paths."""
@@ -112,12 +128,54 @@ class FileDataList(RootModel):
         return self.root[item]
 
 
+def _deserialize_numpy(v: Any) -> Any:
+    if isinstance(v, np.ndarray):
+        return v
+    if isinstance(v, dict) and v.get("_type") == "numpy.ndarray":
+        np_bytes = base64.b64decode(v["bytes"].encode())
+        return np.frombuffer(np_bytes, dtype=v["dtype"]).reshape(v["shape"])
+    raise ValueError(f"Cannot deserialize {v} to np.ndarray")
+
+
+def _serialize_numpy(o: np.ndarray) -> dict:
+    """Serialize numpy arrays to dict format for the web dashboard."""
+    encoded_bytes = base64.b64encode(o.data).decode()
+    return {
+        "_type": "numpy.ndarray",
+        "dtype": o.dtype.name,
+        "shape": o.shape,
+        "bytes": encoded_bytes,
+    }
+
+
+NumpyArray = Annotated[
+    InstanceOf[np.ndarray],
+    BeforeValidator(_deserialize_numpy),
+    PlainSerializer(_serialize_numpy, return_type=dict),
+]
+
+
+MetadataValue = Union[
+    CustomUUID,
+    str,
+    int,
+    float,
+    bool,
+    list,
+    dict,
+    NumpyArray,
+    None,
+]
+"""Supported types for simulation metadata values. Numpy arrays and scalars are
+automatically converted to their plain Python equivalents before validation."""
+
+
 class MetadataData(BaseModel):
     """Key-value pair for simulation metadata."""
 
     element: str
     """Metadata key/name."""
-    value: Union[CustomUUID, Any]
+    value: MetadataValue
     """Metadata value."""
 
     def as_dict(self) -> dict:
@@ -171,6 +229,31 @@ class MetadataDataList(RootModel):
         return urlencode(self.as_dict())
 
 
+class MetadataDeleteResponse(BaseModel):
+    pass
+
+
+class MetadataKeyInfo(BaseModel):
+    """Information about a metadata key."""
+
+    name: str
+    """Metadata key name."""
+    type: str
+    """Python type name of the metadata value."""
+
+
+class MetadataKeyInfoList(RootModel):
+    """List of metadata key info items."""
+
+    root: List[MetadataKeyInfo] = []
+
+
+class MetadataValueList(RootModel):
+    """List of metadata values for a given key."""
+
+    root: List[MetadataValue] = []
+
+
 class SimulationReference(BaseModel):
     """Reference to a simulation."""
 
@@ -204,6 +287,10 @@ class SimulationDataResponse(SimulationData):
     """Parent simulations."""
     children: List[SimulationReference]
     """Child simulations."""
+
+
+class SimulationPatchResponse(BaseModel):
+    pass
 
 
 class SimulationPostData(BaseModel):
@@ -268,30 +355,25 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 
 class PaginationData(BaseModel):
-    """Pagination parameters from request headers."""
+    """Pagination parameters from request headers.
 
-    limit: int
+    Fields are populated from HTTP headers. The field aliases match the
+    lowercased header names as provided by Werkzeug / ``_validate_param``.
+    Use ``model_validate`` with ``by_alias=False`` (the default) or pass a
+    dict with the alias keys; Pydantic will resolve them via the
+    ``model_config`` ``populate_by_name=True`` setting.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, use_attribute_docstrings=True)
+
+    limit: int = Field(100, alias="simdb-result-limit")
     """Number of items per page."""
-    page: int
+    page: int = Field(1, alias="simdb-page")
     """Current page number."""
-    sort_by: str
+    sort_by: str = Field("", alias="simdb-sort-by")
     """Field to sort by."""
-    sort_asc: bool
+    sort_asc: bool = Field(False, alias="simdb-sort-asc")
     """Whether to sort ascending."""
-
-    @model_validator(mode="before")
-    @classmethod
-    def parse_headers(cls, data: Any):
-        """Parse pagination from HTTP headers."""
-        if not isinstance(data, dict):
-            return data
-        new_data = {
-            "limit": data.get("simdb-result-limit", 100),
-            "page": data.get("simdb-page", 1),
-            "sort_by": data.get("simdb-sort-by", ""),
-            "sort_asc": data.get("simdb-sort-asc", False),
-        }
-        return new_data
 
 
 class SimulationTraceData(SimulationData):
@@ -469,3 +551,10 @@ class StagingDirectoryResponse(BaseModel):
 
     staging_dir: Path
     """Path to the staging dir."""
+
+
+class ErrorResponse(BaseModel):
+    """Response model for server errors."""
+
+    error: str
+    """Error description."""

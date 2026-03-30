@@ -7,6 +7,14 @@ from getpass import getuser
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
 
+from simdb.remote.models import (
+    FileDataList,
+    MetadataDataList,
+    SimulationData,
+    SimulationDataResponse,
+    SimulationTraceData,
+)
+
 if sys.version_info < (3, 11):
     from backports.datetime_fromisoformat import MonkeyPatch
 
@@ -363,6 +371,17 @@ class Simulation(Base):
             simulation._set_metadata_dict(meta_dict)
         return simulation
 
+    @classmethod
+    def from_data_model(cls, data: SimulationData) -> "Simulation":
+        simulation = Simulation(None)
+        simulation.uuid = data.uuid
+        simulation.alias = data.alias
+        simulation.datetime = data.datetime
+        simulation.inputs = [File.from_data_model(el) for el in data.inputs.root]
+        simulation.outputs = [File.from_data_model(el) for el in data.outputs.root]
+        simulation.meta = [MetaData.from_data_model(el) for el in data.metadata.root]
+        return simulation
+
     def data(
         self, recurse: bool = False, meta_keys: Optional[List[str]] = None
     ) -> Dict[str, Union[str, List]]:
@@ -386,6 +405,77 @@ class Simulation(Base):
                 if k in meta_keys
             ]
         return data
+
+    def to_model(
+        self, recurse: bool = False, meta_keys: Optional[List[str]] = None
+    ) -> SimulationData:
+        inputs = FileDataList()
+        outputs = FileDataList()
+        metadata = MetadataDataList()
+        if recurse:
+            inputs = FileDataList([f.to_model() for f in self.inputs])
+            outputs = FileDataList([f.to_model() for f in self.outputs])
+            metadata = MetadataDataList([m.to_model() for m in self.meta])
+        elif meta_keys:
+            metadata = MetadataDataList(
+                [m.to_model() for m in self.meta if m.element in meta_keys]
+            )
+        return SimulationData(
+            uuid=self.uuid,
+            alias=self.alias,
+            datetime=self.datetime,
+            inputs=inputs,
+            outputs=outputs,
+            metadata=metadata,
+        )
+
+    def to_model_with_refs(
+        self, recurse: bool = False, meta_keys: Optional[List[str]] = None
+    ) -> SimulationDataResponse:
+        inputs = FileDataList()
+        outputs = FileDataList()
+        metadata = MetadataDataList()
+        if recurse:
+            inputs = FileDataList([f.to_model() for f in self.inputs])
+            outputs = FileDataList([f.to_model() for f in self.outputs])
+            metadata = MetadataDataList([m.to_model() for m in self.meta])
+        elif meta_keys:
+            metadata = MetadataDataList(
+                [m.to_model() for m in self.meta if m.element in meta_keys]
+            )
+        return SimulationDataResponse(
+            uuid=self.uuid,
+            alias=self.alias,
+            datetime=self.datetime,
+            inputs=inputs,
+            outputs=outputs,
+            metadata=metadata,
+            parents=[],
+            children=[],
+        )
+
+    def to_model_trace(
+        self, recurse: bool = False, meta_keys: Optional[List[str]] = None
+    ) -> SimulationTraceData:
+        inputs = FileDataList()
+        outputs = FileDataList()
+        metadata = MetadataDataList()
+        if recurse:
+            inputs = FileDataList([f.to_model() for f in self.inputs])
+            outputs = FileDataList([f.to_model() for f in self.outputs])
+            metadata = MetadataDataList([m.to_model() for m in self.meta])
+        elif meta_keys:
+            metadata = MetadataDataList(
+                [m.to_model() for m in self.meta if m.element in meta_keys]
+            )
+        return SimulationTraceData(
+            uuid=self.uuid,
+            alias=self.alias,
+            datetime=self.datetime,
+            inputs=inputs,
+            outputs=outputs,
+            metadata=metadata,
+        )
 
     def meta_dict(self) -> Dict[str, Union[Dict, Any]]:
         meta = self._get_metadata_dict()

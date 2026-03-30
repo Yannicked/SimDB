@@ -736,6 +736,61 @@ def test_delete_simulation_metadata(client):
     assert data == simulation_data.simulation.metadata
 
 
+def test_get_simulation_parents_and_children(client):
+    """GET /v1.2/simulation/{id} must return correct parents and
+    children.
+    """
+    shared_checksum = "shared_checksum_for_parent_child_test"
+
+    # Parent simulation: produces an output file with a known checksum
+    parent_output = generate_simulation_file()
+    parent_output.checksum = shared_checksum
+    parent_data = generate_simulation_data(
+        alias="parent-sim-pc-test",
+        outputs=[parent_output],
+    )
+    rv_parent = post_simulation(client, parent_data)
+    assert rv_parent.status_code == 200
+
+    # Child simulation: consumes an input file with the same checksum
+    child_input = generate_simulation_file()
+    child_input.checksum = shared_checksum
+    child_data = generate_simulation_data(
+        alias="child-sim-pc-test",
+        inputs=[child_input],
+    )
+    rv_child = post_simulation(client, child_data)
+    assert rv_child.status_code == 200
+
+    # Fetch the parent and verify its children list contains the child
+    # and its parents list is empty (the parent has no parents of its own).
+    rv = client.get(
+        f"/v1.2/simulation/{parent_data.simulation.uuid.hex}", headers=HEADERS
+    )
+    assert rv.status_code == 200
+    parent_response = SimulationDataResponse.model_validate(rv.json)
+
+    parent_children_uuids = [ref.uuid for ref in parent_response.children]
+    parent_parents_uuids = [ref.uuid for ref in parent_response.parents]
+
+    assert child_data.simulation.uuid in parent_children_uuids
+    assert child_data.simulation.uuid not in parent_parents_uuids
+
+    # Fetch the child and verify its parents list contains the parent
+    # and its children list is empty.
+    rv = client.get(
+        f"/v1.2/simulation/{child_data.simulation.uuid.hex}", headers=HEADERS
+    )
+    assert rv.status_code == 200
+    child_response = SimulationDataResponse.model_validate(rv.json)
+
+    child_parents_uuids = [ref.uuid for ref in child_response.parents]
+    child_children_uuids = [ref.uuid for ref in child_response.children]
+
+    assert parent_data.simulation.uuid in child_parents_uuids
+    assert parent_data.simulation.uuid not in child_children_uuids
+
+
 def test_trace_endpoint(client):
     """Test trace endpoint returns valid SimulationTraceData and handles replacement
     chains."""
