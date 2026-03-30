@@ -312,8 +312,8 @@ class SimulationList(Resource):
         )
         replaces = simulation.find_meta("replaces")
 
-        if not disable_replaces and replaces and replaces[0].value:
-            sim_id = replaces[0].value
+        if not disable_replaces and replaces and replaces[0]:
+            sim_id = replaces[0]
             try:
                 replaces_sim = current_app.db.get_simulation(sim_id)
             except DatabaseError:
@@ -423,7 +423,7 @@ class SimulationMeta(Resource):
         if simulation is None:
             raise ResponseException(f"Simulation {sim_id} not found.")
         old_values = MetadataDataList.model_validate(
-            [meta.data() for meta in simulation.find_meta(key)]
+            [{"element": key, "value": v} for v in simulation.find_meta(key)]
         )
         if key.lower() != "status":
             simulation.set_meta(key, value)
@@ -434,7 +434,6 @@ class SimulationMeta(Resource):
         current_app.db.insert_simulation(simulation)
         clear_cache()
         return old_values
-
 
     @requires_auth("admin")
     @pydantic_validate(api)

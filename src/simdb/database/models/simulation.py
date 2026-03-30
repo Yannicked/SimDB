@@ -379,7 +379,9 @@ class Simulation(Base):
         simulation.datetime = data.datetime
         simulation.inputs = [File.from_data_model(el) for el in data.inputs.root]
         simulation.outputs = [File.from_data_model(el) for el in data.outputs.root]
-        simulation.meta = [MetaData.from_data_model(el) for el in data.metadata.root]
+        simulation._set_metadata_dict(
+            {el.element: el.value for el in data.metadata.root}
+        )
         return simulation
 
     def data(
