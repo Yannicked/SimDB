@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Set, Union
 
 from simdb.remote.models import (
     FileDataList,
+    MetadataData,
     MetadataDataList,
     SimulationData,
     SimulationDataResponse,
@@ -97,6 +98,9 @@ class MetaDataWrapper:
 
     def data(self, recurse: bool = False) -> Dict[str, Any]:
         return {"element": self.element, "value": self.value}
+
+    def to_model(self) -> "MetadataData":
+        return MetadataData(element=self.element, value=self.value)
 
 
 @inherit_docstrings
