@@ -1,4 +1,5 @@
 import contextlib
+import json
 import sys
 import uuid
 from datetime import datetime
@@ -15,6 +16,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from simdb.config import Config
+from simdb.json import CustomDecoder, CustomEncoder
 from simdb.query import QueryType, query_compare
 from simdb.remote.models import SimulationReference
 
@@ -102,8 +104,11 @@ class Database:
         if db_type == Database.DBMS.SQLITE:
             if "file" not in kwargs:
                 raise ValueError("Missing file parameter for SQLITE database")
+
             self.engine: sqlalchemy.engine.Engine = create_engine(
-                "sqlite:///{file}".format(**kwargs)
+                "sqlite:///{file}".format(**kwargs),
+                json_serializer=lambda obj: json.dumps(obj, cls=CustomEncoder),
+                json_deserializer=lambda s: json.loads(s, cls=CustomDecoder),
             )
             with contextlib.closing(self.engine.connect()) as con:
                 res: sqlalchemy.engine.ResultProxy = con.execute(
@@ -609,14 +614,21 @@ class Database:
             data = [row[0] for row in query.all()]
         else:
             simulations = self.session.query(Simulation._metadata).all()
-            values_set = set()
+            seen: set = set()
+            data_list = []
 
             for (meta_dict,) in simulations:
                 if meta_dict and name in meta_dict:
                     val = meta_dict[name]
-                    values_set.add(str(val) if val is not None else None)
+                    try:
+                        if val not in seen:
+                            seen.add(val)
+                            data_list.append(val)
+                    except TypeError:
+                        # unhashable types (e.g. numpy arrays) — include without dedup
+                        data_list.append(val)
 
-            data = list(values_set)
+            data = data_list
 
         try:
             return sorted(data)

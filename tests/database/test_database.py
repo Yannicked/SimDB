@@ -8,7 +8,11 @@ from simdb.database import Database
 @mock.patch("simdb.database.database.create_engine")
 def test_create_sqlite_database(create_engine):
     db = Database(Database.DBMS.SQLITE, file="simdb.db")
-    create_engine.assert_called_once_with("sqlite:///simdb.db")
+    create_engine.assert_called_once_with(
+        "sqlite:///simdb.db",
+        json_serializer=mock.ANY,
+        json_deserializer=mock.ANY,
+    )
     assert db.engine == create_engine.return_value
 
 

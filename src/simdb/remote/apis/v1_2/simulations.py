@@ -323,7 +323,7 @@ class SimulationList(Resource):
                 _update_simulation_status(
                     replaces_sim, models_sim.Simulation.Status.DEPRECATED, user
                 )
-                replaces_sim.set_meta("replaced_by", simulation.uuid)
+                replaces_sim.set_meta("replaced_by", simulation.uuid.hex)
                 current_app.db.insert_simulation(replaces_sim)
 
         current_app.db.insert_simulation(simulation)
