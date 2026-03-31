@@ -10,7 +10,7 @@ api = Namespace("metadata", path="/")
 
 @api.route("/metadata")
 class MetaData(Resource):
-    @cache.cached(key_prefix=cache_key)  # type: ignore[invalid-argument-type]
+    @cache.cached(key_prefix=cache_key)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
     @pydantic_validate(api)
     def get(self) -> MetadataKeyInfoList:
         return MetadataKeyInfoList.model_validate(current_app.db.list_metadata_keys())
@@ -18,7 +18,7 @@ class MetaData(Resource):
 
 @api.route("/metadata/<string:name>")
 class MetaDataValues(Resource):
-    @cache.cached(key_prefix=cache_key)  # type: ignore[invalid-argument-type]
+    @cache.cached(key_prefix=cache_key)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
     @pydantic_validate(api)
     def get(self, name: str) -> MetadataValueList:
         return MetadataValueList.model_validate(

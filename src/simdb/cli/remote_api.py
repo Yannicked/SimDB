@@ -797,11 +797,9 @@ class RemoteAPI:
                         ):
                             continue
                         sim_file = next(
-                            f
-                            for f in sim_data["inputs"]
-                            if f.get("uuid") == file.uuid  # type: ignore[union-attr]
+                            f for f in sim_data["inputs"] if f.get("uuid") == file.uuid
                         )
-                        sim_file["uri"] = f"file:{path}"  # type: ignore[invalid-assignment]
+                        sim_file["uri"] = f"file:{path}"
                         self._push_file(
                             path,
                             file.uuid,
@@ -859,12 +857,12 @@ class RemoteAPI:
                             (
                                 f
                                 for f in sim_data["outputs"]
-                                if f.get("uuid") == file.uuid  # type: ignore[union-attr]
+                                if f.get("uuid") == file.uuid
                             ),
                             None,
                         )
                         if sim_file:
-                            sim_file["uri"] = f"file:{path}"  # type: ignore[invalid-assignment]
+                            sim_file["uri"] = f"file:{path}"
                         self._push_file(
                             path,
                             file.uuid,

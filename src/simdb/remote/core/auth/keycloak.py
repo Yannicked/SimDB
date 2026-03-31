@@ -1,7 +1,10 @@
 from typing import Optional
 
 from flask import Request
-from keycloak import KeycloakError, KeycloakOpenID
+from keycloak import (  # type: ignore[import]  # ty: ignore[unresolved-import]
+    KeycloakError,
+    KeycloakOpenID,
+)
 
 from simdb.config import Config
 
