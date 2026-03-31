@@ -1,7 +1,7 @@
 from enum import Enum, auto
 from typing import Any, Tuple
 
-import numpy as np
+from simdb.json import Range
 
 
 class QueryType(Enum):
@@ -59,8 +59,7 @@ def query_compare(query_type: QueryType, name: str, value: Any, compare: str) ->
 
     :param query_type: The type of comparison being performed.
     :param name: The name of the field being compared. Used when reporting an error.
-    :param value: The value being compared. This can be a string, a number or a numpy
-                  array.
+    :param value: The value being compared. This can be a string, a number or a Range.
     :param compare: The string representation of the value being compared against.
     :return: The result of the comparison.
     :raise ValueError: If the comparison could not be performed.
@@ -71,8 +70,8 @@ def query_compare(query_type: QueryType, name: str, value: Any, compare: str) ->
         value = value.lower()
 
     if query_type == QueryType.EQ:
-        if isinstance(value, np.ndarray):
-            return bool(np.any(value == float(compare)))
+        if isinstance(value, Range):
+            return value.min <= float(compare) <= value.max
         elif isinstance(value, int):
             return value == int(float(compare))
         elif isinstance(value, float):
@@ -80,8 +79,9 @@ def query_compare(query_type: QueryType, name: str, value: Any, compare: str) ->
         else:
             return str(value) == compare
     elif query_type == QueryType.NE:
-        if isinstance(value, np.ndarray):
-            return bool(np.all(value != float(compare)))
+        if isinstance(value, Range):
+            cmp = float(compare)
+            return cmp < value.min or cmp > value.max
         elif isinstance(value, int):
             return value != int(float(compare))
         elif isinstance(value, float):
@@ -89,8 +89,8 @@ def query_compare(query_type: QueryType, name: str, value: Any, compare: str) ->
         else:
             return str(value) != compare
     elif query_type == QueryType.IN:
-        if isinstance(value, np.ndarray):
-            return float(compare) in value
+        if isinstance(value, Range):
+            return value.min <= float(compare) <= value.max
         elif isinstance(value, (int, float)):
             raise ValueError(
                 f"Cannot use 'in' query selection for scalar metadata field {name}."
@@ -98,8 +98,9 @@ def query_compare(query_type: QueryType, name: str, value: Any, compare: str) ->
         elif value is not None:
             return compare in str(value)
     elif query_type == QueryType.NI:
-        if isinstance(value, np.ndarray):
-            return float(compare) in value
+        if isinstance(value, Range):
+            cmp = float(compare)
+            return cmp < value.min or cmp > value.max
         elif isinstance(value, (int, float)):
             raise ValueError(
                 f"Cannot use 'ni' query selection for scalar metadata field {name}."
@@ -107,68 +108,68 @@ def query_compare(query_type: QueryType, name: str, value: Any, compare: str) ->
         elif value is not None:
             return compare not in str(value)
     elif query_type == QueryType.GT:
-        if isinstance(value, np.ndarray):
-            return bool(np.all(value > float(compare)))
+        if isinstance(value, Range):
+            return value.min > float(compare)
         elif isinstance(value, (int, float)):
             return value > float(compare)
         elif value is not None:
             return value > compare
     elif query_type == QueryType.GE:
-        if isinstance(value, np.ndarray):
-            return bool(np.all(value >= float(compare)))
+        if isinstance(value, Range):
+            return value.min >= float(compare)
         elif isinstance(value, (int, float)):
             return value >= float(compare)
         elif value is not None:
             return value >= compare
     elif query_type == QueryType.LT:
-        if isinstance(value, np.ndarray):
-            return bool(np.all(value < float(compare)))
+        if isinstance(value, Range):
+            return value.max < float(compare)
         elif isinstance(value, (int, float)):
             return value < float(compare)
         elif value is not None:
             return value < compare
     elif query_type == QueryType.LE:
-        if isinstance(value, np.ndarray):
-            return bool(np.all(value <= float(compare)))
+        if isinstance(value, Range):
+            return value.max <= float(compare)
         elif isinstance(value, (int, float)):
             return value <= float(compare)
         elif value is not None:
             return value <= compare
     elif query_type == QueryType.AGT:
-        if isinstance(value, np.ndarray):
-            return bool(np.any(value > float(compare)))
+        if isinstance(value, Range):
+            return value.max > float(compare)
         elif isinstance(value, (int, float)):
             return value > float(compare)
         else:
             raise ValueError(
-                f"Cannot use 'agt' query selection for non-array metadata field {name}."
+                f"Cannot use 'agt' query selection for non-range metadata field {name}."
             )
     elif query_type == QueryType.AGE:
-        if isinstance(value, np.ndarray):
-            return bool(np.any(value >= float(compare)))
+        if isinstance(value, Range):
+            return value.max >= float(compare)
         elif isinstance(value, (int, float)):
             return value >= float(compare)
         else:
             raise ValueError(
-                f"Cannot use 'age' query selection for non-array metadata field {name}."
+                f"Cannot use 'age' query selection for non-range metadata field {name}."
             )
     elif query_type == QueryType.ALT:
-        if isinstance(value, np.ndarray):
-            return bool(np.any(value < float(compare)))
+        if isinstance(value, Range):
+            return value.min < float(compare)
         elif isinstance(value, (int, float)):
             return value < float(compare)
         else:
             raise ValueError(
-                f"Cannot use 'alt' query selection for non-array metadata field {name}."
+                f"Cannot use 'alt' query selection for non-range metadata field {name}."
             )
     elif query_type == QueryType.ALE:
-        if isinstance(value, np.ndarray):
-            return bool(np.any(value <= float(compare)))
+        if isinstance(value, Range):
+            return value.min <= float(compare)
         elif isinstance(value, (int, float)):
             return value <= float(compare)
         else:
             raise ValueError(
-                f"Cannot use 'ale' query selection for non-array metadata field {name}."
+                f"Cannot use 'ale' query selection for non-range metadata field {name}."
             )
     else:
         raise ValueError(f"Unknown query type {query_type}.")

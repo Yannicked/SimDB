@@ -10,6 +10,7 @@ import json
 import pickle
 from typing import Any, Sequence, Union
 
+import numpy as np
 import sqlalchemy as sa
 from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
@@ -25,8 +26,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def _make_json_serializable(value: Any) -> Any:
     """Recursively convert a value to something JSON-serializable.
 
-    Numpy arrays fall through to str(), which uses numpy's print threshold and
-    truncates large arrays — avoiding multi-hundred-MB JSON for array-valued metadata.
+    Numpy arrays are converted to Range dicts using their min and max values.
     """
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
@@ -34,7 +34,16 @@ def _make_json_serializable(value: Any) -> Any:
         return [_make_json_serializable(v) for v in value]
     if isinstance(value, dict):
         return {str(k): _make_json_serializable(v) for k, v in value.items()}
-    # Covers numpy arrays (truncated by numpy's print threshold), datetimes, etc.
+    # Convert numpy arrays to Range format
+    try:
+        if isinstance(value, np.ndarray) and value.size > 0:
+            return {
+                "_type": "simdb.Range",
+                "min": float(value.min()),
+                "max": float(value.max()),
+            }
+    except ImportError:
+        pass
     return str(value)
 
 

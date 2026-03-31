@@ -1,6 +1,5 @@
 """Pydantic models for the SimDB remote API."""
 
-import base64
 from datetime import datetime as dt
 from datetime import timezone
 from pathlib import Path
@@ -18,7 +17,6 @@ from typing import (
 from urllib.parse import urlencode
 from uuid import UUID, uuid1
 
-import numpy as np
 from pydantic import (
     BaseModel as _BaseModel,
 )
@@ -35,6 +33,7 @@ from pydantic import (
 )
 
 from simdb.cli.manifest import DataObject
+from simdb.json import Range
 
 HexUUID = Annotated[UUID, PlainSerializer(lambda x: x.hex, return_type=str)]
 """UUID serialized as a hex string."""
@@ -128,30 +127,22 @@ class FileDataList(RootModel):
         return self.root[item]
 
 
-def _deserialize_numpy(v: Any) -> Any:
-    if isinstance(v, np.ndarray):
+def _deserialize_range(v: Any) -> Range:
+    if isinstance(v, Range):
         return v
-    if isinstance(v, dict) and v.get("_type") == "numpy.ndarray":
-        np_bytes = base64.b64decode(v["bytes"].encode())
-        return np.frombuffer(np_bytes, dtype=v["dtype"]).reshape(v["shape"])
-    raise ValueError(f"Cannot deserialize {v} to np.ndarray")
+    if isinstance(v, dict) and v.get("_type") == "simdb.Range":
+        return Range(min=v["min"], max=v["max"])
+    raise ValueError(f"Cannot deserialize {v} to Range")
 
 
-def _serialize_numpy(o: np.ndarray) -> dict:
-    """Serialize numpy arrays to dict format for the web dashboard."""
-    encoded_bytes = base64.b64encode(o.data).decode()
-    return {
-        "_type": "numpy.ndarray",
-        "dtype": o.dtype.name,
-        "shape": o.shape,
-        "bytes": encoded_bytes,
-    }
+def _serialize_range(r: Range) -> dict:
+    return {"_type": "simdb.Range", "min": r.min, "max": r.max}
 
 
-NumpyArray = Annotated[
-    InstanceOf[np.ndarray],
-    BeforeValidator(_deserialize_numpy),
-    PlainSerializer(_serialize_numpy, return_type=dict),
+RangeValue = Annotated[
+    InstanceOf[Range],
+    BeforeValidator(_deserialize_range),
+    PlainSerializer(_serialize_range, return_type=dict),
 ]
 
 
@@ -162,8 +153,8 @@ MetadataValue = Union[
     float,
     bool,
     list,
+    RangeValue,
     dict,
-    NumpyArray,
     None,
 ]
 """Supported types for simulation metadata values. Numpy arrays and scalars are

@@ -34,8 +34,6 @@ if "sphinx" in sys.modules:
 
 import re
 
-import numpy as np
-
 from simdb.cli.manifest import DataObject, Manifest
 from simdb.config.config import Config
 from simdb.docstrings import inherit_docstrings
@@ -47,6 +45,7 @@ from simdb.imas.utils import (
     list_idss,
     open_imas,
 )
+from simdb.json import Range
 from simdb.uri import URI
 
 from .base import Base
@@ -285,9 +284,8 @@ class Simulation(Base):
                         indent = " " * (len(element) + 2)
                         result += f"  {indent}{line}"
                     first_line = False
-            elif isinstance(value, np.ndarray):
-                string = np.array2string(value, threshold=10)
-                result += f"  {element}: {string}\n"
+            elif isinstance(value, Range):
+                result += f"  {element}: [{value.min}, {value.max}]\n"
             else:
                 result += f"  {element}: {value}\n"
         result += "inputs:\n"

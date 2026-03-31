@@ -2,7 +2,8 @@ from collections import OrderedDict
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, TypeVar
 
 import click
-import numpy
+
+from simdb.json import Range
 
 if TYPE_CHECKING:
     # Only importing these for type checking and documentation generation in order to
@@ -28,9 +29,11 @@ def _flatten_dict(values: Dict) -> List[Tuple[str, str]]:
 
 def _format_meta_value(meta_value: Any, max_len: int) -> str:
     """
-    Format the meta value as a string, limiting array values to max_len.
+    Format the meta value as a string, limiting list values to max_len.
     """
-    if isinstance(meta_value, (list, numpy.ndarray)):
+    if isinstance(meta_value, Range):
+        return f"[{meta_value.min}, {meta_value.max}]"
+    if isinstance(meta_value, list):
         values = []
         for i, v in enumerate(meta_value):
             values.append(f"{v:.2f}")
