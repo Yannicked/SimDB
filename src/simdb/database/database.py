@@ -1,11 +1,12 @@
 import contextlib
 import json
 import sys
+import time
 import uuid
 from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple, cast
 
 import appdirs
 import sqlalchemy.orm
@@ -473,13 +474,11 @@ class Database:
 
         return None
 
-    def _get_sim_ids_from_json(
-        self, constraints: List[Tuple[str, str, "QueryType"]]
-    ) -> Iterable[int]:
+    def _build_json_query(self, constraints: List[Tuple[str, str, "QueryType"]]) -> Any:
         if not constraints:
-            return []
+            return self.session.query(Simulation)
 
-        query = self.session.query(Simulation.id)
+        query = self.session.query(Simulation)
 
         for name, value, query_type in constraints:
             if name == "alias":
@@ -541,7 +540,7 @@ class Database:
                     if meta_filter is not None:
                         query = query.filter(meta_filter)
 
-        return [row.id for row in query.all()]
+        return query
 
     def query_meta(
         self, constraints: List[Tuple[str, str, "QueryType"]]
@@ -551,13 +550,9 @@ class Database:
 
         :return:
         """
-
-        sim_ids = self._get_sim_ids_from_json(constraints)
-        if not sim_ids:
-            return []
-
-        query = self.session.query(Simulation).filter(Simulation.id.in_(sim_ids))
-        return query.all()
+        query = self._build_json_query(constraints)
+        result = query.all()
+        return result
 
     def query_meta_data(
         self,
@@ -573,16 +568,11 @@ class Database:
 
         :return:
         """
-
-        sim_ids = self._get_sim_ids_from_json(constraints)
-        if not sim_ids:
-            return 0, []
-
-        query = self.session.query(Simulation).filter(Simulation.id.in_(sim_ids))
-
-        return self._get_simulation_data(
+        query = self._build_json_query(constraints)
+        result = self._get_simulation_data(
             query, meta_keys, limit, page, sort_by, sort_asc
         )
+        return result
 
     def get_simulation(self, sim_ref: str) -> "Simulation":
         """

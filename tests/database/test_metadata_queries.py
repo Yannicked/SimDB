@@ -298,14 +298,14 @@ class TestListSimulationData:
 
 
 class TestQueryMetaData:
-    def test_query_meta_data_empty_constraints_returns_empty(self, db):
+    def test_query_meta_data_empty_constraints(self, db):
         sim = create_simulation(alias="test_sim", metadata={"status": "passed"})
         db.insert_simulation(sim)
         db.session.commit()
 
         count, results = db.query_meta_data([], ["status"])
-        assert count == 0
-        assert results == []
+        assert count == 1, results
+        assert results[0]["metadata"] == [{"element": "status", "value": "passed"}]
 
     def test_query_meta_data_with_constraint(self, db):
         sim1 = create_simulation(metadata={"status": "passed", "type": "A"})
