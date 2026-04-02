@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import Enum
 from getpass import getuser
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set, Union, cast
 
 from simdb.remote.models import (
     FileDataList,
@@ -339,11 +339,14 @@ class Simulation(Base):
                 )
             return None
 
-        file_paths = set(
-            filter(
-                lambda el: el is not None,
-                (_get_path(f) for f in itertools.chain(self.inputs, self.outputs)),
-            )
+        file_paths = cast(
+            Set[Path],
+            set(
+                filter(
+                    lambda el: el is not None,
+                    (_get_path(f) for f in itertools.chain(self.inputs, self.outputs)),
+                )
+            ),
         )
         return file_paths
 
