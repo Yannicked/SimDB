@@ -76,7 +76,7 @@ def _array_to_range(value: Any) -> Any:
     if isinstance(value, np.ndarray):
         value = value.tolist()
 
-    if  isinstance(value, (list, tuple)):
+    if isinstance(value, (list, tuple)):
         if len(value) == 0:
             return value
 

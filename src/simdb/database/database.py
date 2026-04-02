@@ -250,7 +250,7 @@ class Database:
 
         if sort_by == "alias":
             return query.order_by(
-                order_func(Simulation.alias.is_(None), Simulation.alias != None)
+                order_func(Simulation.alias.is_(None), Simulation.alias is not None)
                 if not sort_asc
                 else Simulation.alias
             )
@@ -276,13 +276,12 @@ class Database:
         :param dialect: Database dialect name
         :return: Column expression for ORDER BY
         """
-        if dialect == "postgresql":
-            return Simulation._metadata.op("->>")(key)
-        elif dialect == "sqlite":
-            return func.json_extract(Simulation._metadata, f'$."{key}"')
-        elif dialect == "mssql":
-            return Simulation._metadata.op("JSON_VALUE")(f"$.{key}")
-        return None
+        sort_exprs = {
+            "postgresql": Simulation._metadata.op("->>")(key),
+            "sqlite": func.json_extract(Simulation._metadata, f'$."{key}"'),
+            "mssql": Simulation._metadata.op("JSON_VALUE")(f"$.{key}"),
+        }
+        return sort_exprs.get(dialect)
 
     def _find_simulation(self, sim_ref: str) -> "Simulation":
         try:
@@ -421,86 +420,47 @@ class Database:
         except ValueError:
             cmp_float = None
 
+        def _string_cmp(op):
+            if dialect == "postgresql":
+                return op(json_access, compare_value)
+            return op(func.cast(json_access, String), compare_value)
+
+        def _number_cmp(cmp_op):
+            if dialect == "postgresql":
+                return sql_and(
+                    func.jsonb_typeof(json_obj) == "number",
+                    json_max.is_(None),
+                    sql_cast(json_access, Float) > cmp_float,
+                )
+            return sql_and(
+                func.json_type(func.json_extract(column, f'$."{key}"')).in_(
+                    ["integer", "real"]
+                ),
+                json_max.is_(None),
+                func.cast(json_access, Float) > cmp_float,
+            )
+
+        def _num_with_op(cmp_op):
+            if cmp_float is None:
+                return None
+            return _number_cmp(cmp_op)
+
         if query_type == QueryType.EQ:
-            if dialect == "postgresql":
-                return json_access == compare_value
-            return func.cast(json_access, String) == compare_value
+            return _string_cmp(lambda a, b: a == b)
         elif query_type == QueryType.NE:
-            if dialect == "postgresql":
-                return json_access != compare_value
-            return func.cast(json_access, String) != compare_value
+            return _string_cmp(lambda a, b: a != b)
         elif query_type == QueryType.IN:
-            if dialect == "postgresql":
-                return json_access.ilike(f"%{compare_value}%")
-            return func.cast(json_access, String).ilike(f"%{compare_value}%")
+            return _string_cmp(lambda a, b: a.ilike(f"%{b}%"))
         elif query_type == QueryType.NI:
-            if dialect == "postgresql":
-                return json_access.notilike(f"%{compare_value}%")
-            return func.cast(json_access, String).notilike(f"%{compare_value}%")
+            return _string_cmp(lambda a, b: a.notilike(f"%{b}%"))
         elif query_type == QueryType.GT:
-            if cmp_float is not None:
-                if dialect == "postgresql":
-                    return sql_and(
-                        func.jsonb_typeof(json_obj) == "number",
-                        json_max.is_(None),
-                        sql_cast(json_access, Float) > cmp_float,
-                    )
-                return sql_and(
-                    func.json_type(func.json_extract(column, f'$."{key}"')).in_(
-                        ["integer", "real"]
-                    ),
-                    json_max.is_(None),
-                    func.cast(json_access, Float) > cmp_float,
-                )
-            return func.cast(json_access, String) > compare_value
+            return _num_with_op(lambda: sql_cast(json_access, Float) > cmp_float)
         elif query_type == QueryType.GE:
-            if cmp_float is not None:
-                if dialect == "postgresql":
-                    return sql_and(
-                        func.jsonb_typeof(json_obj) == "number",
-                        json_max.is_(None),
-                        sql_cast(json_access, Float) >= cmp_float,
-                    )
-                return sql_and(
-                    func.json_type(func.json_extract(column, f'$."{key}"')).in_(
-                        ["integer", "real"]
-                    ),
-                    json_max.is_(None),
-                    func.cast(json_access, Float) >= cmp_float,
-                )
-            return func.cast(json_access, String) >= compare_value
+            return _num_with_op(lambda: sql_cast(json_access, Float) >= cmp_float)
         elif query_type == QueryType.LT:
-            if cmp_float is not None:
-                if dialect == "postgresql":
-                    return sql_and(
-                        func.jsonb_typeof(json_obj) == "number",
-                        json_max.is_(None),
-                        sql_cast(json_access, Float) < cmp_float,
-                    )
-                return sql_and(
-                    func.json_type(func.json_extract(column, f'$."{key}"')).in_(
-                        ["integer", "real"]
-                    ),
-                    json_max.is_(None),
-                    func.cast(json_access, Float) < cmp_float,
-                )
-            return func.cast(json_access, String) < compare_value
+            return _num_with_op(lambda: sql_cast(json_access, Float) < cmp_float)
         elif query_type == QueryType.LE:
-            if cmp_float is not None:
-                if dialect == "postgresql":
-                    return sql_and(
-                        func.jsonb_typeof(json_obj) == "number",
-                        json_max.is_(None),
-                        sql_cast(json_access, Float) <= cmp_float,
-                    )
-                return sql_and(
-                    func.json_type(func.json_extract(column, f'$."{key}"')).in_(
-                        ["integer", "real"]
-                    ),
-                    json_max.is_(None),
-                    func.cast(json_access, Float) <= cmp_float,
-                )
-            return func.cast(json_access, String) <= compare_value
+            return _num_with_op(lambda: sql_cast(json_access, Float) <= cmp_float)
         elif query_type == QueryType.AGT:
             if cmp_float is not None:
                 return sql_cast(json_max, Float) > cmp_float
@@ -510,9 +470,8 @@ class Database:
         elif query_type == QueryType.ALT:
             if cmp_float is not None:
                 return sql_cast(json_min, Float) < cmp_float
-        elif query_type == QueryType.ALE:
-            if cmp_float is not None:
-                return sql_cast(json_min, Float) <= cmp_float
+        elif query_type == QueryType.ALE and cmp_float is not None:
+            return sql_cast(json_min, Float) <= cmp_float
 
         return None
 
@@ -522,68 +481,58 @@ class Database:
         if not constraints:
             return []
 
-        dialect = self.engine.dialect.name
         query = self.session.query(Simulation.id)
 
         for name, value, query_type in constraints:
             if name == "alias":
-                if query_type == QueryType.EQ:
-                    query = query.filter(func.lower(Simulation.alias) == value.lower())
-                elif query_type == QueryType.IN:
-                    query = query.filter(Simulation.alias.ilike(f"%{value}%"))
-                elif query_type == QueryType.NI:
-                    query = query.filter(Simulation.alias.notilike(f"%{value}%"))
-                elif query_type == QueryType.NE:
-                    query = query.filter(func.lower(Simulation.alias) != value.lower())
-                elif query_type == QueryType.EXIST:
-                    query = query.filter(Simulation.alias.isnot(None))
+                v = value
+                alias_filters = {
+                    QueryType.EQ: lambda v=v: func.lower(Simulation.alias) == v.lower(),
+                    QueryType.IN: lambda v=v: Simulation.alias.ilike(f"%{v}%"),
+                    QueryType.NI: lambda v=v: Simulation.alias.notilike(f"%{v}%"),
+                    QueryType.NE: lambda v=v: func.lower(Simulation.alias) != v.lower(),
+                    QueryType.EXIST: lambda: Simulation.alias.isnot(None),
+                }
+                filter_fn = alias_filters.get(query_type)
+                if filter_fn:
+                    query = query.filter(filter_fn())
             elif name == "uuid":
-                if query_type == QueryType.EQ:
-                    query = query.filter(Simulation.uuid == uuid.UUID(value))
-                elif query_type == QueryType.IN:
-                    query = query.filter(
-                        func.REPLACE(sql_cast(Simulation.uuid, String), "-", "").ilike(
-                            "%{}%".format(value.replace("-", ""))
-                        )
-                    )
-                elif query_type == QueryType.NI:
-                    query = query.filter(
-                        func.REPLACE(
-                            sql_cast(Simulation.uuid, String), "-", ""
-                        ).notilike("%{}%".format(value.replace("-", "")))
-                    )
-                elif query_type == QueryType.NE:
-                    query = query.filter(Simulation.uuid != uuid.UUID(value))
-                elif query_type == QueryType.EXIST:
-                    query = query.filter(Simulation.uuid.isnot(None))
+                v = value
+                uuid_filters = {
+                    QueryType.EQ: lambda v=v: Simulation.uuid == uuid.UUID(v),
+                    QueryType.IN: lambda v=v: func.REPLACE(
+                        sql_cast(Simulation.uuid, String), "-", ""
+                    ).ilike(f"%{v.replace('-', '')}%"),
+                    QueryType.NI: lambda v=v: func.REPLACE(
+                        sql_cast(Simulation.uuid, String), "-", ""
+                    ).notilike(f"%{v.replace('-', '')}%"),
+                    QueryType.NE: lambda v=v: Simulation.uuid != uuid.UUID(v),
+                    QueryType.EXIST: lambda: Simulation.uuid.isnot(None),
+                }
+                filter_fn = uuid_filters.get(query_type)
+                if filter_fn:
+                    query = query.filter(filter_fn())
             elif name == "creation_date":
                 date_time = datetime.strptime(
                     value.replace("_", ":"), "%Y-%m-%d %H:%M:%S"
                 )
-                if query_type == QueryType.EQ:
-                    query = query.filter(Simulation.datetime == date_time)
-                elif query_type == QueryType.GT:
-                    query = query.filter(Simulation.datetime > date_time)
-                elif query_type == QueryType.GE:
-                    query = query.filter(Simulation.datetime >= date_time)
-                elif query_type == QueryType.LT:
-                    query = query.filter(Simulation.datetime < date_time)
-                elif query_type == QueryType.LE:
-                    query = query.filter(Simulation.datetime <= date_time)
-                elif query_type == QueryType.NE:
-                    query = query.filter(Simulation.datetime != date_time)
-                elif query_type == QueryType.EXIST:
-                    query = query.filter(Simulation.datetime.isnot(None))
+                dt_filters = {
+                    QueryType.EQ: Simulation.datetime == date_time,
+                    QueryType.GT: Simulation.datetime > date_time,
+                    QueryType.GE: Simulation.datetime >= date_time,
+                    QueryType.LT: Simulation.datetime < date_time,
+                    QueryType.LE: Simulation.datetime <= date_time,
+                    QueryType.NE: Simulation.datetime != date_time,
+                    QueryType.EXIST: Simulation.datetime.isnot(None),
+                }
+                filter_expr = dt_filters.get(query_type)
+                if filter_expr:
+                    query = query.filter(filter_expr)
             else:
                 if query_type == QueryType.EXIST:
-                    if dialect == "postgresql" or dialect == "sqlite":
-                        query = query.filter(
-                            Simulation._metadata.op("->>")(name).isnot(None)
-                        )
-                    else:
-                        query = query.filter(
-                            Simulation._metadata.op("->>")(name).isnot(None)
-                        )
+                    query = query.filter(
+                        Simulation._metadata.op("->>")(name).isnot(None)
+                    )
                 else:
                     meta_filter = self._build_json_filter(
                         Simulation._metadata,
