@@ -1,7 +1,6 @@
 import contextlib
 import json
 import sys
-import time
 import uuid
 from datetime import datetime
 from enum import Enum, auto
