@@ -9,15 +9,17 @@ from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Tuple, cast
 
 import appdirs
 import sqlalchemy.orm
-from sqlalchemy import String, Text, create_engine, func
+from sqlalchemy import Float, String, Text, create_engine, func
+from sqlalchemy import and_ as sql_and
 from sqlalchemy import cast as sql_cast
 from sqlalchemy import or_ as sql_or
 from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.sql import elements
 
 from simdb.config import Config
 from simdb.json import CustomDecoder, CustomEncoder
-from simdb.query import QueryType, query_compare
+from simdb.query import QueryType
 from simdb.remote.models import SimulationReference
 
 from .models import Base
@@ -134,6 +136,8 @@ class Database:
                 max_overflow=50,
                 pool_pre_ping=True,
                 pool_recycle=3600,
+                json_serializer=lambda obj: json.dumps(obj, cls=CustomEncoder),
+                json_deserializer=lambda s: json.loads(s, cls=CustomDecoder),
             )
             with contextlib.closing(self.engine.connect()) as con:
                 res: sqlalchemy.engine.ResultProxy = con.execute(
@@ -195,8 +199,13 @@ class Database:
         :param sort_asc: Sort in ascending order if True, descending if False
         :return: Tuple of (total_count, list of simulation dicts)
         """
+        total_count = query.count()
+
+        if limit:
+            offset = (page - 1) * limit
+            query = query.limit(limit).offset(offset)
+
         all_rows = query.all()
-        total_count = len(all_rows)
 
         results = []
         for row in all_rows:
@@ -219,14 +228,13 @@ class Database:
 
             results.append(sim_data)
 
-        if sort_by:
+        if sort_by and not limit:
 
             def get_sort_key(item):
                 if sort_by in ("alias", "uuid", "datetime"):
                     val = item.get(sort_by, "")
                 else:
                     val = item.get("_meta_dict", {}).get(sort_by, "")
-                # Handle None values - put them at the end
                 if val is None:
                     return "" if sort_asc else "~"
                 return str(val).lower() if isinstance(val, str) else str(val)
@@ -235,11 +243,6 @@ class Database:
 
         for sim_data in results:
             sim_data.pop("_meta_dict", None)
-
-        if limit:
-            start_idx = (page - 1) * limit
-            end_idx = start_idx + limit
-            results = results[start_idx:end_idx]
 
         return total_count, results
 
@@ -348,20 +351,141 @@ class Database:
         self.session.commit()
         return simulation
 
+    def _build_json_filter(
+        self,
+        column: Any,
+        key: str,
+        query_type: "QueryType",
+        compare_value: str,
+    ) -> Optional[elements.BinaryExpression]:
+        dialect = self.engine.dialect.name
+
+        if dialect == "postgresql":
+            json_obj = column.op("->")(key)
+            json_access = column.op("->>")(key)
+            json_min = column.op("->")(key).op("->>")("min")
+            json_max = column.op("->")(key).op("->>")("max")
+        elif dialect == "sqlite":
+            json_obj = func.json_extract(column, f'$."{key}"')
+            json_access = func.json_extract(column, f'$."{key}"')
+            json_min = func.json_extract(column, f'$."{key}".min')
+            json_max = func.json_extract(column, f'$."{key}".max')
+        elif dialect == "mssql":
+            json_obj = None
+            json_access = column.op("JSON_VALUE")(f"$.{key}")
+            json_min = column.op("JSON_VALUE")(f"$.{key}.min")
+            json_max = column.op("JSON_VALUE")(f"$.{key}.max")
+        else:
+            return None
+
+        try:
+            cmp_float = float(compare_value)
+        except ValueError:
+            cmp_float = None
+
+        if query_type == QueryType.EQ:
+            if dialect == "postgresql":
+                return json_access == compare_value
+            return func.cast(json_access, String) == compare_value
+        elif query_type == QueryType.NE:
+            if dialect == "postgresql":
+                return json_access != compare_value
+            return func.cast(json_access, String) != compare_value
+        elif query_type == QueryType.IN:
+            if dialect == "postgresql":
+                return json_access.ilike(f"%{compare_value}%")
+            return func.cast(json_access, String).ilike(f"%{compare_value}%")
+        elif query_type == QueryType.NI:
+            if dialect == "postgresql":
+                return json_access.notilike(f"%{compare_value}%")
+            return func.cast(json_access, String).notilike(f"%{compare_value}%")
+        elif query_type == QueryType.GT:
+            if cmp_float is not None:
+                if dialect == "postgresql":
+                    return sql_and(
+                        func.jsonb_typeof(json_obj) == "number",
+                        json_max.is_(None),
+                        sql_cast(json_access, Float) > cmp_float,
+                    )
+                return sql_and(
+                    func.json_type(func.json_extract(column, f'$."{key}"')).in_(
+                        ["integer", "real"]
+                    ),
+                    json_max.is_(None),
+                    func.cast(json_access, Float) > cmp_float,
+                )
+            return func.cast(json_access, String) > compare_value
+        elif query_type == QueryType.GE:
+            if cmp_float is not None:
+                if dialect == "postgresql":
+                    return sql_and(
+                        func.jsonb_typeof(json_obj) == "number",
+                        json_max.is_(None),
+                        sql_cast(json_access, Float) >= cmp_float,
+                    )
+                return sql_and(
+                    func.json_type(func.json_extract(column, f'$."{key}"')).in_(
+                        ["integer", "real"]
+                    ),
+                    json_max.is_(None),
+                    func.cast(json_access, Float) >= cmp_float,
+                )
+            return func.cast(json_access, String) >= compare_value
+        elif query_type == QueryType.LT:
+            if cmp_float is not None:
+                if dialect == "postgresql":
+                    return sql_and(
+                        func.jsonb_typeof(json_obj) == "number",
+                        json_max.is_(None),
+                        sql_cast(json_access, Float) < cmp_float,
+                    )
+                return sql_and(
+                    func.json_type(func.json_extract(column, f'$."{key}"')).in_(
+                        ["integer", "real"]
+                    ),
+                    json_max.is_(None),
+                    func.cast(json_access, Float) < cmp_float,
+                )
+            return func.cast(json_access, String) < compare_value
+        elif query_type == QueryType.LE:
+            if cmp_float is not None:
+                if dialect == "postgresql":
+                    return sql_and(
+                        func.jsonb_typeof(json_obj) == "number",
+                        json_max.is_(None),
+                        sql_cast(json_access, Float) <= cmp_float,
+                    )
+                return sql_and(
+                    func.json_type(func.json_extract(column, f'$."{key}"')).in_(
+                        ["integer", "real"]
+                    ),
+                    json_max.is_(None),
+                    func.cast(json_access, Float) <= cmp_float,
+                )
+            return func.cast(json_access, String) <= compare_value
+        elif query_type == QueryType.AGT:
+            if cmp_float is not None:
+                return sql_cast(json_max, Float) > cmp_float
+        elif query_type == QueryType.AGE:
+            if cmp_float is not None:
+                return sql_cast(json_max, Float) >= cmp_float
+        elif query_type == QueryType.ALT:
+            if cmp_float is not None:
+                return sql_cast(json_min, Float) < cmp_float
+        elif query_type == QueryType.ALE:
+            if cmp_float is not None:
+                return sql_cast(json_min, Float) <= cmp_float
+
+        return None
+
     def _get_sim_ids_from_json(
         self, constraints: List[Tuple[str, str, "QueryType"]]
     ) -> Iterable[int]:
-        query = self.session.query(
-            Simulation.id,
-            Simulation._metadata,
-            Simulation.alias,
-            Simulation.uuid,
-            Simulation.datetime,
-        )
+        if not constraints:
+            return []
 
-        sim_id_sets = {}
-        for name, value, query_type in constraints:
-            sim_id_sets[(name, value, query_type)] = set()
+        dialect = self.engine.dialect.name
+        query = self.session.query(Simulation.id)
 
         for name, value, query_type in constraints:
             if name == "alias":
@@ -373,6 +497,8 @@ class Database:
                     query = query.filter(Simulation.alias.notilike(f"%{value}%"))
                 elif query_type == QueryType.NE:
                     query = query.filter(func.lower(Simulation.alias) != value.lower())
+                elif query_type == QueryType.EXIST:
+                    query = query.filter(Simulation.alias.isnot(None))
             elif name == "uuid":
                 if query_type == QueryType.EQ:
                     query = query.filter(Simulation.uuid == uuid.UUID(value))
@@ -390,6 +516,8 @@ class Database:
                     )
                 elif query_type == QueryType.NE:
                     query = query.filter(Simulation.uuid != uuid.UUID(value))
+                elif query_type == QueryType.EXIST:
+                    query = query.filter(Simulation.uuid.isnot(None))
             elif name == "creation_date":
                 date_time = datetime.strptime(
                     value.replace("_", ":"), "%Y-%m-%d %H:%M:%S"
@@ -406,27 +534,29 @@ class Database:
                     query = query.filter(Simulation.datetime <= date_time)
                 elif query_type == QueryType.NE:
                     query = query.filter(Simulation.datetime != date_time)
-
-        # Execute query and filter on JSON metadata in Python
-        rows = query.all()
-
-        for row in rows:
-            meta_dict = row._metadata or {}
-
-            for name, value, query_type in constraints:
-                if name in ("alias", "uuid", "creation_date") or (
-                    name in meta_dict
-                    and (
-                        query_type == QueryType.EXIST
-                        or query_compare(query_type, name, meta_dict[name], value)
+                elif query_type == QueryType.EXIST:
+                    query = query.filter(Simulation.datetime.isnot(None))
+            else:
+                if query_type == QueryType.EXIST:
+                    if dialect == "postgresql" or dialect == "sqlite":
+                        query = query.filter(
+                            Simulation._metadata.op("->>")(name).isnot(None)
+                        )
+                    else:
+                        query = query.filter(
+                            Simulation._metadata.op("->>")(name).isnot(None)
+                        )
+                else:
+                    meta_filter = self._build_json_filter(
+                        Simulation._metadata,
+                        name,
+                        query_type,
+                        value,
                     )
-                ):
-                    sim_id_sets[(name, value, query_type)].add(row.id)
+                    if meta_filter is not None:
+                        query = query.filter(meta_filter)
 
-        if sim_id_sets:
-            return set.intersection(*sim_id_sets.values())
-
-        return []
+        return [row.id for row in query.all()]
 
     def query_meta(
         self, constraints: List[Tuple[str, str, "QueryType"]]
@@ -604,7 +734,12 @@ class Database:
                     if key not in keys_dict:
                         keys_dict[key] = value
 
-        return [{"name": k, "type": type(v).__name__} for k, v in keys_dict.items()]
+        def get_type_name(v: Any) -> str:
+            if isinstance(v, dict) and "min" in v and "max" in v:
+                return "Range"
+            return type(v).__name__
+
+        return [{"name": k, "type": get_type_name(v)} for k, v in keys_dict.items()]
 
     def list_metadata_values(self, name: str) -> List[str]:
         if name == "alias":

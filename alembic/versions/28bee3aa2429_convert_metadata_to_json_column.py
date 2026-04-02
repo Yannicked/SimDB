@@ -28,19 +28,20 @@ def _make_json_serializable(value: Any) -> Any:
 
     Numpy arrays are converted to Range dicts using their min and max values.
     """
-    if value is None or isinstance(value, (str, int, float, bool)):
+    if value is None or isinstance(value, (str, bool)):
+        return value
+    if isinstance(value, (int, float)) and np.isfinite(value):
         return value
     if isinstance(value, (list, tuple)):
-        return [_make_json_serializable(v) for v in value]
+        return _make_json_serializable(np.array(value))
     if isinstance(value, dict):
         return {str(k): _make_json_serializable(v) for k, v in value.items()}
     # Convert numpy arrays to Range format
     try:
         if isinstance(value, np.ndarray) and value.size > 0:
             return {
-                "_type": "simdb.Range",
-                "min": float(value.min()),
-                "max": float(value.max()),
+                "min": _make_json_serializable(value.min()),
+                "max": _make_json_serializable(value.max()),
             }
     except ImportError:
         pass
@@ -83,7 +84,9 @@ def upgrade() -> None:
                 if value is not None:
                     try:
                         unpickled = (
-                            pickle.loads(value) if isinstance(value, bytes) else value
+                            pickle.loads(value)
+                            if isinstance(value, (bytes, bytearray, memoryview))
+                            else value
                         )
                     except Exception:
                         unpickled = repr(value)
@@ -94,8 +97,7 @@ def upgrade() -> None:
             if conn.dialect.name == "postgresql":
                 conn.execute(
                     text(
-                        "UPDATE simulations SET metadata = :metadata::jsonb"
-                        " WHERE id = :sim_id"
+                        "UPDATE simulations SET metadata = :metadata WHERE id = :sim_id"
                     ),
                     {"metadata": json.dumps(meta_dict), "sim_id": sim_id},
                 )

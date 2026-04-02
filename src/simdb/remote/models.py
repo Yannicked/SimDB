@@ -17,6 +17,7 @@ from typing import (
 from urllib.parse import urlencode
 from uuid import UUID, uuid1
 
+import numpy as np
 from pydantic import (
     BaseModel as _BaseModel,
 )
@@ -24,7 +25,6 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
-    InstanceOf,
     PlainSerializer,
     model_validator,
 )
@@ -33,7 +33,6 @@ from pydantic import (
 )
 
 from simdb.cli.manifest import DataObject
-from simdb.json import Range
 
 HexUUID = Annotated[UUID, PlainSerializer(lambda x: x.hex, return_type=str)]
 """UUID serialized as a hex string."""
@@ -67,6 +66,51 @@ StatusLiteral = Literal[
     "not validated", "accepted", "failed", "passed", "deprecated", "deleted"
 ]
 """String representation of a simulation status"""
+
+
+def _array_to_range(value: Any) -> Any:
+    """Convert a numpy array or list to a RangeValue if it contains numeric data."""
+    if value is None:
+        return None
+
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
+
+    if  isinstance(value, (list, tuple)):
+        if len(value) == 0:
+            return value
+
+        try:
+            float_values = [float(v) for v in value]
+            return RangeValue(min=min(float_values), max=max(float_values))
+        except (TypeError, ValueError):
+            return value
+
+    return value
+
+
+class RangeValue(BaseModel):
+    """A numeric range with min and max bounds."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    min: float
+    max: float
+
+
+MetadataValue = Union[
+    CustomUUID,
+    str,
+    int,
+    float,
+    bool,
+    list,
+    RangeValue,
+    dict[str, Any],
+    None,
+]
+"""Supported types for simulation metadata values. Numpy arrays and regular arrays
+containing numeric data are automatically converted to RangeValue."""
 
 
 class StatusPatchData(BaseModel):
@@ -127,40 +171,6 @@ class FileDataList(RootModel):
         return self.root[item]
 
 
-def _deserialize_range(v: Any) -> Range:
-    if isinstance(v, Range):
-        return v
-    if isinstance(v, dict) and v.get("_type") == "simdb.Range":
-        return Range(min=v["min"], max=v["max"])
-    raise ValueError(f"Cannot deserialize {v} to Range")
-
-
-def _serialize_range(r: Range) -> dict:
-    return {"_type": "simdb.Range", "min": r.min, "max": r.max}
-
-
-RangeValue = Annotated[
-    InstanceOf[Range],
-    BeforeValidator(_deserialize_range),
-    PlainSerializer(_serialize_range, return_type=dict),
-]
-
-
-MetadataValue = Union[
-    CustomUUID,
-    str,
-    int,
-    float,
-    bool,
-    list,
-    RangeValue,
-    dict,
-    None,
-]
-"""Supported types for simulation metadata values. Numpy arrays and scalars are
-automatically converted to their plain Python equivalents before validation."""
-
-
 class MetadataData(BaseModel):
     """Key-value pair for simulation metadata."""
 
@@ -168,6 +178,14 @@ class MetadataData(BaseModel):
     """Metadata key/name."""
     value: MetadataValue
     """Metadata value."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def convert_array_to_range(cls, data: Any) -> Any:
+        """Convert numpy arrays and lists containing numeric data to RangeValue."""
+        if isinstance(data, dict) and "value" in data:
+            data["value"] = _array_to_range(data["value"])
+        return data
 
     def as_dict(self) -> dict:
         """Convert to dictionary."""

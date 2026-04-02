@@ -3,8 +3,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, TypeVar
 
 import click
 
-from simdb.json import Range
-
 if TYPE_CHECKING:
     # Only importing these for type checking and documentation generation in order to
     # speed up runtime startup.
@@ -31,8 +29,8 @@ def _format_meta_value(meta_value: Any, max_len: int) -> str:
     """
     Format the meta value as a string, limiting list values to max_len.
     """
-    if isinstance(meta_value, Range):
-        return f"[{meta_value.min}, {meta_value.max}]"
+    if isinstance(meta_value, dict) and "min" in meta_value and "max" in meta_value:
+        return f"[{meta_value['min']}, {meta_value['max']}]"
     if isinstance(meta_value, list):
         values = []
         for i, v in enumerate(meta_value):

@@ -1,7 +1,8 @@
 import enum
 import uuid
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict
+
+from simdb.remote.models import RangeValue
 
 if TYPE_CHECKING:
     import json
@@ -12,19 +13,9 @@ else:
         import json
 
 
-@dataclass(frozen=True)
-class Range:
-    """A numeric range with min and max bounds."""
-
-    min: float
-    max: float
-
-
 def _custom_hook(obj: Dict[str, str]) -> Any:
     if "_type" in obj:
-        if obj["_type"] == "simdb.Range":
-            return Range(min=float(obj["min"]), max=float(obj["max"]))
-        elif obj["_type"] == "uuid.UUID":
+        if obj["_type"] == "uuid.UUID":
             return uuid.UUID(obj["hex"])
         else:
             obj_type = obj["_type"]
@@ -46,8 +37,8 @@ class CustomEncoder(json.JSONEncoder):
         super().__init__(*args, **kwargs)
 
     def default(self, o: Any) -> Any:
-        if isinstance(o, Range):
-            return {"_type": "simdb.Range", "min": o.min, "max": o.max}
+        if isinstance(o, RangeValue):
+            return {"min": o.min, "max": o.max}
         elif isinstance(o, uuid.UUID):
             return {"_type": "uuid.UUID", "hex": o.hex}
         elif isinstance(o, enum.Enum):

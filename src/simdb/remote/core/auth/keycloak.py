@@ -1,7 +1,7 @@
 from typing import Optional
 
 from flask import Request
-from keycloak import (  # type: ignore[import]  # ty: ignore[unresolved-import]
+from keycloak import (  # type: ignore[import]
     KeycloakError,
     KeycloakOpenID,
 )

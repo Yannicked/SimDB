@@ -45,7 +45,6 @@ from simdb.imas.utils import (
     list_idss,
     open_imas,
 )
-from simdb.json import Range
 from simdb.uri import URI
 
 from .base import Base
@@ -284,8 +283,8 @@ class Simulation(Base):
                         indent = " " * (len(element) + 2)
                         result += f"  {indent}{line}"
                     first_line = False
-            elif isinstance(value, Range):
-                result += f"  {element}: [{value.min}, {value.max}]\n"
+            elif isinstance(value, dict) and "min" in value and "max" in value:
+                result += f"  {element}: [{value['min']}, {value['max']}]\n"
             else:
                 result += f"  {element}: {value}\n"
         result += "inputs:\n"

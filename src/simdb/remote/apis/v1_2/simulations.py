@@ -181,7 +181,7 @@ class SimulationList(Resource):
                 values = request.args.getlist(name)
                 for value in values:
                     constraint = parse_query_arg(value)
-                    if constraint[0]:
+                    if constraint[0] or constraint[1] == QueryType.EXIST:
                         constraints.append((name, *constraint))
 
         if constraints:

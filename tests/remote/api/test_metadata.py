@@ -4,8 +4,7 @@ from conftest import (
     post_simulation,
 )
 
-from simdb.json import Range
-from simdb.remote.models import MetadataKeyInfoList, MetadataValueList
+from simdb.remote.models import MetadataKeyInfoList, MetadataValueList, RangeValue
 
 
 def test_get_metadata_keys(client):
@@ -55,7 +54,7 @@ def test_get_metadata_values(client):
 def test_get_metadata_range_value(client):
     """Test metadata Range storage"""
     # Create a simulation with a range metadata value
-    range_data = Range(min=1.0, max=3.0)
+    range_data = RangeValue(min=1.0, max=3.0)
     simulation_data_1 = generate_simulation_data(metadata={"range_machine": range_data})
     rv_post_1 = post_simulation(client, simulation_data_1)
     assert rv_post_1.status_code == 200
@@ -74,7 +73,7 @@ def test_get_metadata_range_value(client):
     mdata = MetadataValueList.model_validate_json(rv.data)
     assert len(mdata.root) == 1
     a = mdata.root[0]
-    assert isinstance(a, Range)
+    assert isinstance(a, RangeValue)
     assert a.min == 1.0
     assert a.max == 3.0
 
