@@ -31,6 +31,8 @@ def test_create_postrges_database(create_engine):
         max_overflow=50,
         pool_pre_ping=True,
         pool_recycle=3600,
+        json_serializer=mock.ANY,
+        json_deserializer=mock.ANY,
     )
     assert db.engine == create_engine.return_value
 

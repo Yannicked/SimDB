@@ -201,6 +201,9 @@ class Database:
         """
         total_count = query.count()
 
+        if sort_by:
+            query = self._apply_sort_by(query, sort_by, sort_asc)
+
         if limit:
             offset = (page - 1) * limit
             query = query.limit(limit).offset(offset)
@@ -228,23 +231,58 @@ class Database:
 
             results.append(sim_data)
 
-        if sort_by and not limit:
-
-            def get_sort_key(item):
-                if sort_by in ("alias", "uuid", "datetime"):
-                    val = item.get(sort_by, "")
-                else:
-                    val = item.get("_meta_dict", {}).get(sort_by, "")
-                if val is None:
-                    return "" if sort_asc else "~"
-                return str(val).lower() if isinstance(val, str) else str(val)
-
-            results.sort(key=get_sort_key, reverse=not sort_asc)
-
         for sim_data in results:
             sim_data.pop("_meta_dict", None)
 
         return total_count, results
+
+    def _apply_sort_by(self, query, sort_by: str, sort_asc: bool):
+        """
+        Apply ORDER BY clause to query for given sort field.
+
+        :param query: SQLAlchemy query object
+        :param sort_by: Field name to sort by
+        :param sort_asc: Sort in ascending order if True, descending if False
+        :return: Query with ORDER BY applied
+        """
+        dialect = self.engine.dialect.name
+        order_func = sql_or if sort_asc else sql_and
+
+        if sort_by == "alias":
+            return query.order_by(
+                order_func(Simulation.alias.is_(None), Simulation.alias != None)
+                if not sort_asc
+                else Simulation.alias
+            )
+        elif sort_by == "uuid":
+            return query.order_by(
+                Simulation.uuid if sort_asc else Simulation.uuid.desc()
+            )
+        elif sort_by == "datetime":
+            return query.order_by(
+                Simulation.datetime if sort_asc else Simulation.datetime.desc()
+            )
+        else:
+            sort_col = self._get_json_sort_column(sort_by, dialect)
+            if sort_col is not None:
+                return query.order_by(sort_col if sort_asc else sort_col.desc())
+        return query
+
+    def _get_json_sort_column(self, key: str, dialect: str):
+        """
+        Get SQLAlchemy column expression for sorting by JSON metadata key.
+
+        :param key: Metadata key to sort by
+        :param dialect: Database dialect name
+        :return: Column expression for ORDER BY
+        """
+        if dialect == "postgresql":
+            return Simulation._metadata.op("->>")(key)
+        elif dialect == "sqlite":
+            return func.json_extract(Simulation._metadata, f'$."{key}"')
+        elif dialect == "mssql":
+            return Simulation._metadata.op("JSON_VALUE")(f"$.{key}")
+        return None
 
     def _find_simulation(self, sim_ref: str) -> "Simulation":
         try:
