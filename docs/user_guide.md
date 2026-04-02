@@ -44,6 +44,9 @@ Before diving into SimDB functionality, it's important to understand these key t
 
 **Workflow**: Typically, you create and manage simulations locally, then push them to a remote SimDB server for sharing. The data referenced by your simulation can be either local (on your machine) or remote (on a data server).
 
+**IMAS Access Layer compatibility**:
+SimDB uses imas-python to read IMAS data. [imas-python](https://pypi.org/project/imas-python/) requires Access Layer 5 (AL5) or later and does not support the older Access Layer 4 (AL4). If your IMAS data was written using AL4 (e.g., MDSplus-based AL4 databases), you must convert it to AL5 format before use. See [AL4 MDSplus data migration](user_guide.md#al4-mdsplus-data-migration) below.
+
 ## Local simulation management
 
 In order to ingest a local simulation you need a manifest file. This is a `yaml` file which contains details about the simulation and what data is associated with it. See the [Tutorial - Creating a simulation manifest](tutorial.md#creating-a-simulation-manifest) for detailed guidelines on how to create a well-formed manifest.
@@ -57,14 +60,15 @@ inputs:
 - uri: file:///my/input/file
 - uri: imas:hdf5?path=/path/to/imas/data
 outputs:
+- uri: file:///my/output/file
 - uri: imas:hdf5?path=/path/to/more/data
 metadata:
 - machine: name of machine i.e. ITER.
 - code:
-    name: code name i.e. ASTRA, JETTO, DINA, CORSICA, MITES, SOLPS, JINTRAC etc.
-- description: |-
+    name: code name i.e. ASTRA, JETTO, DINA, CORSICA, METIS, SOLPS, JINTRAC etc.
+	version: code version
+- description: |
     Sample plasma physics simulation for ITER tokamak modeling
-- reference_name: ITER simulation
 - ids_properties:
     creation_date: 'YYYY-MM-DD HH:mm:ss'
 ```
@@ -76,7 +80,17 @@ metadata:
 | inputs/outputs | Lists of simulation input and output files. Supported URI schemes:<br/>• file - Standard file system paths<br/>• imas - IMAS entry URIs (see IMAS URI schema below) |
 | metadata |  Contains simulation metadata and properties. The metadata section associates information with the summary IDS data:<br/>• summary - A hierarchical dictionary structure containing key-value pairs that provide summary information extracted from IDS datasets. This includes condensed representations of simulation results, computed quantities, free descriptions, any references, and creation dates if not available in summary IDS.</li>
 
-### IMAS URI schema
+## Alias Naming Rules
+<ul><li>Must be unique within the SimDB</ul></li>
+<ul><li>Cannot start with a digit (0-9) or forward slash (/)</ul></li>
+<ul><li>Cannot end with a forward slash (/)</ul></li>
+<ul><li>Should be descriptive and meaningful for easy identification</ul></li>
+
+Examples of valid aliases:
+<ul><li>iter-baseline-scenario</ul></li>
+<ul><li>100001/1 (pulse_number/run_number)</ul></li>
+
+## IMAS URI schema
 
 IMAS URIs specified in the manifest can either be in the form of remote data URIs or local data URIs.
 
@@ -127,6 +141,26 @@ Without port (uses default):
 `imas://uda.iter.org/uda?path=/work/imas/shared/imasdb/ITER/3/131024/51&backend=hdf5`
 
 **Note:** Ensure that the specified port is accessible through your network firewall. Contact your system administrator if you experience connectivity issues.
+
+## AL4 MDSplus data migration
+SimDB uses [imas-python](https://pypi.org/project/imas-python/) to read IMAS data. `imas-python` requires Access Layer 5 (AL5) or later and **does not support the older Access Layer 4 (AL4).**
+
+If you have existing IMAS data stored in an AL4 MDSplus, you must migrate it to the AL5 directory layout before referencing it in a SimDB manifest. This can be done using the `mdsplusIMASDB4to5` tool provided by IMAS-Core, which creates the new AL5 directory layout with links to the original data files (the original data is not removed).
+```mdsplusIMASDB4to5 [-h] [--dry-run] [-p PATH] [-d DATABASE] [-f]```
+
+| Options                              | Description                                                |
+|--------------------------------------|------------------------------------------------------------|
+| `--dry-run`                          | Print actions but do not perform them                      |
+| `-p PATH`, `--path PATH`             | Specify path where imasdb to map (by default $HOME/public) |
+| `-d DATABASE`, `--database DATABASE` | Specify a database to be map (by default all)              |
+| `-f`, `--force`                      | Force the creation of symlink even if the file exists      |
+
+Once the migration is complete, reference the new AL5 path in your manifest using the mdsplus backend:
+```
+outputs:
+- uri: imas:mdsplus?path=<destination_path>
+```
+For further details on the `mdsplusIMASDB4to5` tool, refer to the IMAS-Core documentation.
 
 ## Remote SimDB servers
 

@@ -144,7 +144,7 @@ class SimulationList(Resource):
     def get(self, user: User):
         from ....query import QueryType, parse_query_arg
 
-        limit = int(request.headers.get(SimulationList.LIMIT_HEADER, 100))
+        limit = int(request.headers.get(APIConstants.LIMIT_HEADER, 100))
         page = 1
         names = []
         constraints = []

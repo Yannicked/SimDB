@@ -159,12 +159,11 @@ class SimulationList(Resource):
     def get(self, user: User):
         from ....query import QueryType, parse_query_arg
 
-        limit = int(request.headers.get(SimulationList.LIMIT_HEADER, 100))
-        page = int(request.headers.get(SimulationList.PAGE_HEADER, 1))
-        sort_by = request.headers.get(SimulationList.SORT_BY_HEADER, "")
+        limit = int(request.headers.get(APIConstants.LIMIT_HEADER, 100))
+        page = int(request.headers.get(APIConstants.PAGE_HEADER, 1))
+        sort_by = request.headers.get(APIConstants.SORT_BY_HEADER, "")
         sort_asc = (
-            request.headers.get(SimulationList.SORT_ASC_HEADER, "false").lower()
-            == "true"
+            request.headers.get(APIConstants.SORT_ASC_HEADER, "false").lower() == "true"
         )
         names = []
         constraints = []

@@ -24,14 +24,9 @@ class File(Base):
     __tablename__ = "files"
     id = Column(sql_types.Integer, primary_key=True)
     uuid = Column(UUID, nullable=False, unique=True, index=True)
-    usage = Column(sql_types.String(250), nullable=True)
     uri: urilib.URI = Column(URI(1024), nullable=True)
     checksum = Column(sql_types.String(64), nullable=True)
     type: DataObject.Type = Column(sql_types.Enum(DataObject.Type), nullable=True)
-    purpose = Column(sql_types.String(250), nullable=True)
-    sensitivity = Column(sql_types.String(20), nullable=True)
-    access = Column(sql_types.String(20), nullable=True)
-    embargo = Column(sql_types.String(20), nullable=True)
     datetime = Column(sql_types.DateTime, nullable=False)
 
     def __init__(
@@ -54,14 +49,9 @@ class File(Base):
         result = ""
         for name in (
             "uuid",
-            "usage",
             "uri",
             "checksum",
             "type",
-            "purpose",
-            "sensitivity",
-            "access",
-            "embargo",
             "datetime",
         ):
             result += "  %s:%s%s\n" % (
@@ -114,26 +104,16 @@ class File(Base):
             DataObject.Type[data_type], urilib.URI(uri), perform_integrity_check=False
         )
         file.uuid = checked_get(data, "uuid", uuid.UUID)
-        file.usage = checked_get(data, "usage", str, optional=True)
         file.checksum = checked_get(data, "checksum", str)
-        file.purpose = checked_get(data, "purpose", str, optional=True)
-        file.sensitivity = checked_get(data, "sensitivity", str, optional=True)
-        file.access = checked_get(data, "access", str, optional=True)
-        file.embargo = checked_get(data, "embargo", str, optional=True)
         file.datetime = date_parser.parse(checked_get(data, "datetime", str))
         return file
 
     def data(self, recurse: bool = False) -> Dict[str, str]:
         data = dict(
             uuid=self.uuid,
-            usage=self.usage,
             uri=str(self.uri),
             checksum=self.checksum,
             type=self.type.name,
-            purpose=self.purpose,
-            sensitivity=self.sensitivity,
-            access=self.access,
-            embargo=self.embargo,
             datetime=self.datetime.isoformat(),
         )
         return data
