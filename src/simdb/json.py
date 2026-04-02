@@ -1,6 +1,9 @@
+import base64
 import enum
 import uuid
 from typing import TYPE_CHECKING, Any, Dict
+
+import numpy as np
 
 from simdb.remote.models import RangeValue
 
@@ -17,6 +20,9 @@ def _custom_hook(obj: Dict[str, str]) -> Any:
     if "_type" in obj:
         if obj["_type"] == "uuid.UUID":
             return uuid.UUID(obj["hex"])
+        elif obj["_type"] == "numpy.ndarray":
+            np_bytes = base64.decodebytes(obj["bytes"].encode())
+            return np.frombuffer(np_bytes, dtype=obj["dtype"])
         else:
             obj_type = obj["_type"]
             raise ValueError(f"Unknown type to deserialise {obj_type}.")
