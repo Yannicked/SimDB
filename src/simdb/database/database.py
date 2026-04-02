@@ -429,15 +429,13 @@ class Database:
             if dialect == "postgresql":
                 return sql_and(
                     func.jsonb_typeof(json_obj) == "number",
-                    json_max.is_(None),
-                    sql_cast(json_access, Float) > cmp_float,
+                    cmp_op(),
                 )
             return sql_and(
                 func.json_type(func.json_extract(column, f'$."{key}"')).in_(
                     ["integer", "real"]
                 ),
-                json_max.is_(None),
-                func.cast(json_access, Float) > cmp_float,
+                cmp_op(),
             )
 
         def _num_with_op(cmp_op):

@@ -1,5 +1,6 @@
 """Pydantic models for the SimDB remote API."""
 
+import base64
 from datetime import datetime as dt
 from datetime import timezone
 from pathlib import Path
@@ -73,8 +74,17 @@ def _array_to_range(value: Any) -> Any:
     if value is None:
         return None
 
+    if (
+        isinstance(value, dict)
+        and "dtype" in value
+        and "shape" in value
+        and "bytes" in value
+    ):
+        np_bytes = base64.decodebytes(value["bytes"].encode())
+        return _array_to_range(np.frombuffer(np_bytes, dtype=value["dtype"]))
+
     if isinstance(value, np.ndarray):
-        value = value.tolist()
+        value = _array_to_range(value.tolist())
 
     if isinstance(value, (list, tuple)):
         if len(value) == 0:
