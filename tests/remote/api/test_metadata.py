@@ -62,9 +62,8 @@ def test_get_metadata_range_value(client):
     rv = client.get("/v1.2/metadata", headers=HEADERS)
     assert rv.status_code == 200
     mkeys = MetadataKeyInfoList.model_validate_json(rv.data)
-    for k in mkeys.root:
-        if k.name == "range_machine":
-            mkey = k
+    mkey = next((k for k in mkeys.root if k.name == "range_machine"), None)
+    assert mkey is not None, "range_machine key not found in metadata keys"
     assert mkey.type == "Range"
 
     rv = client.get("/v1.2/metadata/range_machine", headers=HEADERS)

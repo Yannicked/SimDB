@@ -152,6 +152,7 @@ def test_simulation_package_endpoint(client):
             if member.isfile():
                 assert Path(member.name).name == "test_file.txt"
                 data = tar.extractfile(member)
+                assert data is not None
                 assert data.read() == test_content
 
 

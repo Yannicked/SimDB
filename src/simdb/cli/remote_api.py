@@ -95,10 +95,12 @@ This might indicate an invalid SimDB URL or the existence of a firewall.
 
 def read_bytes(path: Path, compressed: bool = True) -> bytes:
     if compressed:
-        with io.BytesIO() as buffer, gzip.GzipFile(
-            fileobj=buffer, mode="wb"
-        ) as gz_file, path.open("rb") as file_in:
-            gz_file.write(file_in.read())
+        with io.BytesIO() as buffer:
+            with gzip.GzipFile(fileobj=buffer, mode="wb") as gz_file, path.open(
+                "rb"
+            ) as file_in:
+                gz_file.write(file_in.read())
+            # gz_file is now closed (gzip footer written); buffer is still open
             buffer.seek(0)
             return buffer.read()
     else:

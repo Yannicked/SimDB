@@ -55,9 +55,9 @@ class File(Base):
 
         if perform_integrity_check:
             self.datetime = self.get_creation_date()
-            if ids_list is None:
+            if type == DataObject.Type.IMAS and ids_list is None:
                 raise ValueError("IDS list is not set")
-            self.checksum = self.generate_checksum(config, ids_list)
+            self.checksum = self.generate_checksum(config, ids_list or [])
 
     def __str__(self):
         result = ""

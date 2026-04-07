@@ -246,13 +246,10 @@ class Database:
         :return: Query with ORDER BY applied
         """
         dialect = self.engine.dialect.name
-        order_func = sql_or if sort_asc else sql_and
 
         if sort_by == "alias":
             return query.order_by(
-                order_func(Simulation.alias.is_(None), Simulation.alias is not None)
-                if not sort_asc
-                else Simulation.alias
+                Simulation.alias if sort_asc else Simulation.alias.desc()
             )
         elif sort_by == "uuid":
             return query.order_by(
@@ -526,9 +523,14 @@ class Database:
                     query = query.filter(filter_expr)
             else:
                 if query_type == QueryType.EXIST:
-                    query = query.filter(
-                        Simulation._metadata.op("->>")(name).isnot(None)
-                    )
+                    dialect = self.engine.dialect.name
+                    if dialect == "sqlite":
+                        exist_filter = func.json_extract(
+                            Simulation._metadata, f'$."{name}"'
+                        ).isnot(None)
+                    else:
+                        exist_filter = Simulation._metadata.op("->>")(name).isnot(None)
+                    query = query.filter(exist_filter)
                 else:
                     meta_filter = self._build_json_filter(
                         Simulation._metadata,
