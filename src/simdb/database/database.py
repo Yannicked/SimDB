@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Tuple, cast
 
 import appdirs
 import sqlalchemy.orm
-from sqlalchemy import Float, String, Text, create_engine, func
+from sqlalchemy import Float, String, Text, create_engine, func, text
 from sqlalchemy import and_ as sql_and
 from sqlalchemy import cast as sql_cast
 from sqlalchemy import or_ as sql_or
@@ -60,6 +60,9 @@ if TYPING:
             pass
 
         def rollback(self):
+            pass
+
+        def execute(self, query: Any, *args, **kwargs) -> Any:
             pass
 
 
@@ -276,7 +279,6 @@ class Database:
         sort_exprs = {
             "postgresql": Simulation._metadata.op("->>")(key),
             "sqlite": func.json_extract(Simulation._metadata, f'$."{key}"'),
-            "mssql": Simulation._metadata.op("JSON_VALUE")(f"$.{key}"),
         }
         return sort_exprs.get(dialect)
 
@@ -404,11 +406,6 @@ class Database:
             json_access = func.json_extract(column, f'$."{key}"')
             json_min = func.json_extract(column, f'$."{key}".min')
             json_max = func.json_extract(column, f'$."{key}".max')
-        elif dialect == "mssql":
-            json_obj = None
-            json_access = column.op("JSON_VALUE")(f"$.{key}")
-            json_min = column.op("JSON_VALUE")(f"$.{key}.min")
-            json_max = column.op("JSON_VALUE")(f"$.{key}.max")
         else:
             return None
 
@@ -701,21 +698,42 @@ class Database:
         return self._find_simulation(sim_ref).watchers
 
     def list_metadata_keys(self) -> List[dict]:
-        simulations = self.session.query(Simulation._metadata).all()
-
-        keys_dict = {}
-        for (meta_dict,) in simulations:
-            if meta_dict:
-                for key, value in meta_dict.items():
-                    if key not in keys_dict:
-                        keys_dict[key] = value
-
-        def get_type_name(v: Any) -> str:
-            if isinstance(v, dict) and "min" in v and "max" in v:
-                return "Range"
-            return type(v).__name__
-
-        return [{"name": k, "type": get_type_name(v)} for k, v in keys_dict.items()]
+        dialect = self.engine.dialect.name
+        if dialect == "postgresql":
+            result = self.session.execute(
+                text("""
+                    SELECT DISTINCT j.key,
+                           CASE
+                             WHEN j.value ? 'min' AND j.value ? 'max' THEN 'Range'
+                             ELSE jsonb_typeof(j.value)::text
+                           END as value_type
+                    FROM simulations, jsonb_each(metadata) AS j
+                """)
+            ).fetchall()
+            return [{"name": row[0], "type": row[1]} for row in result]
+        else:
+            result = self.session.execute(
+                text("""
+                    SELECT DISTINCT j.key, j.value
+                    FROM simulations, json_each(simulations.metadata) AS j
+                """)
+            ).fetchall()
+            type_map = {}
+            for row in result:
+                key, value = row
+                if value in ("null", None):
+                    continue
+                try:
+                    parsed = json.loads(value) if isinstance(value, str) else value
+                    if isinstance(parsed, dict) and "min" in parsed and "max" in parsed:
+                        type_map[key] = "Range"
+                    elif isinstance(parsed, dict):
+                        type_map[key] = "Object"
+                    else:
+                        type_map[key] = type(parsed).__name__
+                except (json.JSONDecodeError, TypeError):
+                    type_map[key] = "String"
+            return [{"name": k, "type": v} for k, v in type_map.items()]
 
     def list_metadata_values(self, name: str) -> List[str]:
         if name == "alias":
@@ -724,22 +742,35 @@ class Database:
             )
             data = [row[0] for row in query.all()]
         else:
-            simulations = self.session.query(Simulation._metadata).all()
-            seen: set = set()
-            data_list = []
-
-            for (meta_dict,) in simulations:
-                if meta_dict and name in meta_dict:
-                    val = meta_dict[name]
+            dialect = self.engine.dialect.name
+            if dialect == "postgresql":
+                result = self.session.execute(
+                    text("""
+                        SELECT DISTINCT j.value
+                        FROM simulations, jsonb_each_text(metadata) AS j
+                        WHERE j.key = :key AND j.value IS NOT NULL
+                    """),
+                    {"key": name},
+                ).fetchall()
+                data = [row[0] for row in result]
+            else:
+                result = self.session.execute(
+                    text("""
+                        SELECT DISTINCT j.value
+                        FROM simulations, json_each(simulations.metadata) AS j
+                        WHERE j.key = :key AND j.value IS NOT NULL
+                    """),
+                    {"key": name},
+                ).fetchall()
+                data = []
+                for row in result:
                     try:
-                        if val not in seen:
-                            seen.add(val)
-                            data_list.append(val)
-                    except TypeError:
-                        # unhashable types (e.g. numpy arrays) — include without dedup
-                        data_list.append(val)
-
-            data = data_list
+                        parsed = (
+                            json.loads(row[0]) if isinstance(row[0], str) else row[0]
+                        )
+                        data.append(parsed)
+                    except (json.JSONDecodeError, TypeError):
+                        data.append(row[0])
 
         try:
             return sorted(data)
