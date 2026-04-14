@@ -1,4 +1,5 @@
 import contextlib
+import shutil
 import sys
 import uuid
 from datetime import datetime
@@ -806,7 +807,24 @@ def get_local_db(config: Config) -> Database:
             raise e
     except DatabaseOutdatedError as e:
         if Confirm.ask("Local database schema is out of date. Run migrations now?"):
+            backup_local_db(config)
             run_migrations(database.engine)
         else:
             raise e
     return database
+
+
+def backup_local_db(config: Config):
+    db_file = Path(
+        config.get_string_option("db.file", default=None)
+        or f"{appdirs.user_data_dir('simdb')}/sim.db"
+    )
+    if not db_file.exists():
+        print("[warning]: No current database found, skipping backup.")
+    
+    db_backups = db_file.parent / "backups"
+    db_backups.mkdir(parents=True, exist_ok=True)
+
+    db_backup_file = db_backups / f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.db"
+    shutil.copyfile(db_file, db_backup_file)
+    print(f"Stored database backup in: {db_backup_file}")
