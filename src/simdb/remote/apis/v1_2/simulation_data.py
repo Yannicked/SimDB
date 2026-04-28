@@ -14,7 +14,12 @@ from imas.ids_primitive import IDSPrimitive
 
 from simdb.cli.manifest import DataObject
 from simdb.database import DatabaseError
-from simdb.imas.utils import FLOAT_MISSING_VALUE, INT_MISSING_VALUE, ImasError, open_imas
+from simdb.imas.utils import (
+    FLOAT_MISSING_VALUE,
+    INT_MISSING_VALUE,
+    ImasError,
+    open_imas,
+)
 from simdb.remote.core.auth import User, requires_auth
 from simdb.remote.core.cache import cache
 from simdb.remote.core.typing import current_app
@@ -34,7 +39,10 @@ def _to_python(value: Any) -> Any:
 
         def _clean(v):
             if isinstance(v, float) and (
-                v != v or v == float("inf") or v == float("-inf") or v == FLOAT_MISSING_VALUE
+                v != v
+                or v == float("inf")
+                or v == float("-inf")
+                or v == FLOAT_MISSING_VALUE
             ):
                 return None
             if isinstance(v, list):
@@ -54,6 +62,7 @@ def _to_python(value: Any) -> Any:
         return bool(value)
     return value
 
+
 # TODO Replace this logic with slicing when supported by imas-python.
 # TODO Add support for [:], [:-1], and [2:4:2] python slicing syntax.
 def _traverse_path(entry, ids_name: str, field_segments: list, occurrence: int):
@@ -64,8 +73,11 @@ def _traverse_path(entry, ids_name: str, field_segments: list, occurrence: int):
     - a plain name → attribute access (IDSStructure child node)
     """
     ids_obj = entry.get(
-        ids_name, occurrence,
-        lazy=True, autoconvert=False, ignore_unknown_dd_version=True,
+        ids_name,
+        occurrence,
+        lazy=True,
+        autoconvert=False,
+        ignore_unknown_dd_version=True,
     )
     node = ids_obj
     for segment in field_segments:
@@ -88,6 +100,7 @@ def _traverse_path(entry, ids_name: str, field_segments: list, occurrence: int):
 
     coordinate_path = None
     try:
+
         def _replace_placeholder(m, _segs=field_segments):
             idx = next((s for s in _segs if s.isdigit()), "0")
             return "/" + idx + "/"
@@ -102,7 +115,9 @@ def _traverse_path(entry, ids_name: str, field_segments: list, occurrence: int):
     return _to_python(node.value), node_shape, coordinate_path
 
 
-def _fetch_field(uri_str: str, ids_name: str, field_segments: tuple, occurrence: int) -> tuple:
+def _fetch_field(
+    uri_str: str, ids_name: str, field_segments: tuple, occurrence: int
+) -> tuple:
     """Open the IMAS entry, traverse the path, and return (value, shape, coordinate_path).
 
     Scalar results (``shape is None``) are written into the response cache so
@@ -110,12 +125,13 @@ def _fetch_field(uri_str: str, ids_name: str, field_segments: tuple, occurrence:
     *not* cached: caching large numpy-derived lists would create persistent
     memory pressure and could fill the cache backend with multi-MB payloads.
     """
-    if ids_name and not field_segments:  # bare IDS name only – no leaf, skip cache probe
+    if (
+        ids_name and not field_segments
+    ):  # bare IDS name only – no leaf, skip cache probe
         pass
     else:
         cache_key = (
-            f"simdb:field:{uri_str}:{ids_name}:"
-            f"{'/' .join(field_segments)}:{occurrence}"
+            f"simdb:field:{uri_str}:{ids_name}:{'/'.join(field_segments)}:{occurrence}"
         )
         cached = cache.get(cache_key)
         if cached is not None:
@@ -139,8 +155,10 @@ def _get_simulation_and_imas_file(sim_id: str, file_uuid_str: str | None):
 
     imas_outputs = [f for f in simulation.outputs if f.type == DataObject.Type.IMAS]
     if not imas_outputs:
-        return None, None, (
-            {"error": f"Simulation {sim_id} has no IMAS output files"}, 404
+        return (
+            None,
+            None,
+            ({"error": f"Simulation {sim_id} has no IMAS output files"}, 404),
         )
 
     if not file_uuid_str:
@@ -159,6 +177,7 @@ def _get_simulation_and_imas_file(sim_id: str, file_uuid_str: str | None):
 
 
 # Endpoints
+
 
 @api.route("/simulation/<path:sim_id>/data")
 class SimulationImasData(Resource):
