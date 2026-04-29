@@ -5,7 +5,7 @@ TODO: Temporal solution to retrive data (Use IBEX backend)
 
 import re
 import uuid as _uuid
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 from flask import request
@@ -66,11 +66,11 @@ def _to_python(value: Any) -> Any:
 # TODO Replace this logic with slicing when supported by imas-python.
 # TODO Add support for [:], [:-1], and [2:4:2] python slicing syntax.
 def _traverse_path(entry, ids_name: str, field_segments: list, occurrence: int):
-    """Walk *field_segments* inside *ids_name* and return (value, shape, coordinate_path).
+    """Walk inside *ids_name* and return (value, shape, coordinate_path).
 
     Each segment is either:
-    - a non-negative integer string → array-of-structures index
-    - a plain name → attribute access (IDSStructure child node)
+    - a non-negative integer string: array-of-structures index
+    - a plain name: attribute access (IDSStructure child node)
     """
     ids_obj = entry.get(
         ids_name,
@@ -86,15 +86,15 @@ def _traverse_path(entry, ids_name: str, field_segments: list, occurrence: int):
         else:
             try:
                 node = getattr(node, segment)
-            except AttributeError:
-                raise ValueError(f"segment '{segment}' not found in IDS path")
+            except AttributeError as err:
+                raise ValueError(f"segment '{segment}' not found in IDS path") from err
     if not isinstance(node, IDSPrimitive):
         raise ValueError(
             f"path does not point to a scalar/array leaf "
             f"(reached {type(node).__name__}); add more path segments"
         )
     if not node.has_value:
-        raise ValueError(f"field is not populated (no data written)")
+        raise ValueError("field is not populated (no data written)")
 
     node_shape = list(node.shape) if node.metadata.ndim > 0 else None
 
@@ -118,7 +118,7 @@ def _traverse_path(entry, ids_name: str, field_segments: list, occurrence: int):
 def _fetch_field(
     uri_str: str, ids_name: str, field_segments: tuple, occurrence: int
 ) -> tuple:
-    """Open the IMAS entry, traverse the path, and return (value, shape, coordinate_path).
+    """Open the IMAS entry and return (value, shape, coordinate_path).
 
     Scalar results (``shape is None``) are written into the response cache so
     that repeated requests skip the IMAS open.  Array values are intentionally
@@ -127,7 +127,7 @@ def _fetch_field(
     """
     if (
         ids_name and not field_segments
-    ):  # bare IDS name only – no leaf, skip cache probe
+    ):  # bare IDS name only - no leaf, skip cache probe
         pass
     else:
         cache_key = (
@@ -142,12 +142,12 @@ def _fetch_field(
         result = _traverse_path(entry, ids_name, list(field_segments), occurrence)
 
     _value, shape, _coord = result
-    if shape is None:  # scalar leaf – safe to persist in cache
+    if shape is None:  # scalar leaf - safe to persist in cache
         cache.set(cache_key, result)  # type: ignore[possibly-undefined]
     return result
 
 
-def _get_simulation_and_imas_file(sim_id: str, file_uuid_str: str | None):
+def _get_simulation_and_imas_file(sim_id: str, file_uuid_str: Optional[str]):
     try:
         simulation = current_app.db.get_simulation(sim_id)
     except DatabaseError as exc:
@@ -187,7 +187,8 @@ class SimulationImasData(Resource):
 
         Query parameters
         ----------------
-        path       (required) IDS path, e.g. ``core_profiles/profiles_1d/0/electrons/density``
+        path       (required) IDS path, e.g.
+                   ``core_profiles/profiles_1d/0/electrons/density``
         file_uuid  (optional) UUID of an IMAS output file
         occurrence (optional) IDS occurrence index (default 0)
         """
@@ -234,7 +235,7 @@ class SimulationImasData(Resource):
             )
         except (ValueError, AttributeError, IndexError, KeyError) as exc:
             return {"error": f"Invalid IDS path '{path}': {exc}"}, 400
-        except (ImasError,) as exc:
+        except ImasError as exc:
             return {"error": f"Failed to open IMAS data: {exc}"}, 500
         except Exception as exc:
             msg = str(exc)
