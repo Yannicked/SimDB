@@ -821,7 +821,7 @@ def backup_local_db(config: Config):
     )
     if not db_file.exists():
         print("[warning]: No current database found, skipping backup.")
-    
+
     db_backups = db_file.parent / "backups"
     db_backups.mkdir(parents=True, exist_ok=True)
 
