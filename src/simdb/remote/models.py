@@ -28,6 +28,7 @@ from pydantic import (
     Field,
     InstanceOf,
     PlainSerializer,
+    field_validator,
     model_validator,
 )
 from pydantic import (
@@ -551,6 +552,52 @@ class StagingDirectoryResponse(BaseModel):
 
     staging_dir: Path
     """Path to the staging dir."""
+
+
+class ImasDataQueryParams(BaseModel):
+    """Query parameters for the IMAS field-data endpoint."""
+
+    path: str
+    """IDS path, e.g. ``core_profiles/profiles_1d/0/electrons/density``."""
+    file_uuid: Optional[UUID] = None
+    """UUID of a specific IMAS output file (optional)."""
+    occurrence: int = Field(0, ge=0)
+    """IDS occurrence index (default 0)."""
+
+    @field_validator("path", mode="before")
+    @classmethod
+    def _strip_path(cls, v: Any) -> str:
+        v = str(v).strip()
+        if not v:
+            raise ValueError("must not be empty")
+        return v
+
+    @field_validator("file_uuid", mode="before")
+    @classmethod
+    def _strip_file_uuid(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        stripped = str(v).strip()
+        return stripped if stripped else None
+
+
+class ImasDataResponse(BaseModel):
+    """Response from the IMAS field-data endpoint."""
+
+    simulation: str
+    """UUID of the simulation."""
+    file_uuid: str
+    """UUID of the IMAS output file."""
+    path: str
+    """Requested IDS path."""
+    occurrence: int
+    """IDS occurrence index."""
+    value: Any
+    """Value at the requested IDS path."""
+    shape: Optional[List[int]] = None
+    """Shape of the returned array, or ``None`` for scalars."""
+    coordinate: Optional[str] = None
+    """Coordinate path for the first dimension, if available."""
 
 
 class ErrorResponse(BaseModel):

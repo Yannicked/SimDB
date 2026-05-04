@@ -4,11 +4,10 @@ TODO: Temporary solution to retrieve data (for IBEX backend)
 """
 
 import re
-import uuid as _uuid
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
+from uuid import UUID
 
 import numpy as np
-from flask import request
 from flask_restx import Namespace, Resource
 from imas.ids_primitive import IDSPrimitive
 
@@ -22,7 +21,14 @@ from simdb.imas.utils import (
 )
 from simdb.remote.core.auth import User, requires_auth
 from simdb.remote.core.cache import cache
+from simdb.remote.core.pydantic_utils import (
+    Query,
+    ResponseException,
+    ServerException,
+    pydantic_validate,
+)
 from simdb.remote.core.typing import current_app
+from simdb.remote.models import ImasDataQueryParams, ImasDataResponse
 from simdb.uri import URI
 
 api = Namespace("data", path="/")
@@ -147,33 +153,29 @@ def _fetch_field(
     return result
 
 
-def _get_simulation_and_imas_file(sim_id: str, file_uuid_str: Optional[str]):
+def _get_simulation_and_imas_file(sim_id: str, file_uuid: Optional[UUID]):
     try:
         simulation = current_app.db.get_simulation(sim_id)
     except DatabaseError as exc:
-        return None, None, ({"error": str(exc)}, 404)
+        raise ResponseException(str(exc), 404) from exc
 
     imas_outputs = [f for f in simulation.outputs if f.type == DataObject.Type.IMAS]
     if not imas_outputs:
-        return (
-            None,
-            None,
-            ({"error": f"Simulation {sim_id} has no IMAS output files"}, 404),
+        raise ResponseException(
+            f"Simulation {sim_id} has no IMAS output files", 404
         )
 
-    if not file_uuid_str:
-        return simulation, imas_outputs[0], None
+    if file_uuid is None:
+        return simulation, imas_outputs[0]
 
-    try:
-        target_uuid = _uuid.UUID(file_uuid_str)
-    except ValueError:
-        return None, None, ({"error": f"Invalid file_uuid: {file_uuid_str!r}"}, 400)
-
-    imas_file = next((f for f in imas_outputs if f.uuid == target_uuid), None)
+    imas_file = next((f for f in imas_outputs if f.uuid == file_uuid), None)
     if imas_file is None:
-        return None, None, ({"error": f"File {file_uuid_str} not found"}, 404)
+        raise ResponseException(
+            f"File {file_uuid} not found or is not an IMAS output for this simulation",
+            404,
+        )
 
-    return simulation, imas_file, None
+    return simulation, imas_file
 
 
 # Endpoints
@@ -182,72 +184,42 @@ def _get_simulation_and_imas_file(sim_id: str, file_uuid_str: Optional[str]):
 @api.route("/simulation/<path:sim_id>/data")
 class SimulationImasData(Resource):
     @requires_auth()
-    def get(self, sim_id: str, user: User):
-        """Return the value at a given IDS path for a simulation's IMAS output.
-
-        Query parameters
-        ----------------
-        path       (required) IDS path, e.g.
-                   ``core_profiles/profiles_1d/0/electrons/density``
-        file_uuid  (optional) UUID of an IMAS output file
-        occurrence (optional) IDS occurrence index (default 0)
-        """
-        path = request.args.get("path", "").strip()
-        if not path:
-            return {"error": "Query parameter 'path' is required"}, 400
-
-        file_uuid_str = request.args.get("file_uuid", "").strip() or None
-
-        try:
-            occurrence = int(request.args.get("occurrence", "0"))
-        except ValueError:
-            return {"error": "'occurrence' must be a non-negative integer"}, 400
-        if occurrence < 0:
-            return {"error": "'occurrence' must be a non-negative integer"}, 400
-
-        simulation, imas_file, error = _get_simulation_and_imas_file(
-            sim_id, file_uuid_str
+    @pydantic_validate(api)
+    def get(
+        self,
+        sim_id: str,
+        user: User,
+        params: Annotated[ImasDataQueryParams, Query()],
+    ) -> ImasDataResponse:
+        """Return the value at a given IDS path for a simulation's IMAS output."""
+        simulation, imas_file = _get_simulation_and_imas_file(
+            sim_id, params.file_uuid
         )
-        if error:
-            payload, status = error
-            if file_uuid_str and status == 404 and "File " in payload["error"]:
-                return (
-                    {
-                        "error": (
-                            f"File {file_uuid_str} not found or is not an IMAS "
-                            "output for this simulation"
-                        )
-                    },
-                    404,
-                )
-            return payload, status
 
-        segments = [s for s in path.split("/") if s]
-        if not segments:
-            return {"error": "'path' must not be empty"}, 400
-
+        segments = [s for s in params.path.split("/") if s]
         ids_name = segments[0]
         field_segments = segments[1:]
 
         try:
             value, shape, coordinate_path = _fetch_field(
-                str(imas_file.uri), ids_name, tuple(field_segments), occurrence
+                str(imas_file.uri), ids_name, tuple(field_segments), params.occurrence
             )
         except (ValueError, AttributeError, IndexError, KeyError) as exc:
-            return {"error": f"Invalid IDS path '{path}': {exc}"}, 400
+            raise ResponseException(f"Invalid IDS path '{params.path}': {exc}")
         except ImasError as exc:
-            return {"error": f"Failed to open IMAS data: {exc}"}, 500
+            raise ServerException(f"Failed to open IMAS data: {exc}")
         except Exception as exc:
             msg = str(exc)
-            status = 404 if "is empty" in msg or "not found" in msg.lower() else 500
-            return {"error": msg}, status
+            if "is empty" in msg or "not found" in msg.lower():
+                raise ResponseException(msg, 404)
+            raise ServerException(msg)
 
-        return {
-            "simulation": str(simulation.uuid),
-            "file_uuid": str(imas_file.uuid),
-            "path": path,
-            "occurrence": occurrence,
-            "value": value,
-            "shape": shape,
-            "coordinate": coordinate_path,
-        }
+        return ImasDataResponse(
+            simulation=str(simulation.uuid),
+            file_uuid=str(imas_file.uuid),
+            path=params.path,
+            occurrence=params.occurrence,
+            value=value,
+            shape=shape,
+            coordinate=coordinate_path,
+        )
