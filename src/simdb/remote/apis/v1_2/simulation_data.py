@@ -1,6 +1,6 @@
-"""Simulation IMAS data endpoint: /data.
+"""IMAS simulation data endpoint: /data.
 
-TODO: Temporal solution to retrive data (Use IBEX backend)
+TODO: Temporary solution to retrieve data (for IBEX backend)
 """
 
 import re
@@ -63,7 +63,7 @@ def _to_python(value: Any) -> Any:
     return value
 
 
-# TODO Replace this logic with slicing when supported by imas-python.
+# TODO Replace this logic with slicing when supported by IMAS-Python.
 # TODO Add support for [:], [:-1], and [2:4:2] python slicing syntax.
 def _traverse_path(entry, ids_name: str, field_segments: list, occurrence: int):
     """Walk inside *ids_name* and return (value, shape, coordinate_path).
