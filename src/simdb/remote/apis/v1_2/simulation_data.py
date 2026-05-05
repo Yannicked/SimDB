@@ -8,7 +8,7 @@ from uuid import UUID
 
 import numpy as np
 from flask_restx import Namespace, Resource
-from imas.ids_defs import EMPTY_COMPLEX, EMPTY_FLOAT, EMPTY_INT
+from imas.ids_defs import EMPTY_FLOAT
 from imas.ids_primitive import IDSPrimitive
 
 from simdb.cli.manifest import DataObject
@@ -37,6 +37,7 @@ api = Namespace("data", path="/")
 def _to_python(value: Any) -> Any:
     """Convert a value returned by IDSPrimitive.value to a JSON-serialisable
     Python object."""
+    print(type(value))
     if isinstance(value, np.ndarray):
         flat = value.tolist()
 
@@ -50,17 +51,6 @@ def _to_python(value: Any) -> Any:
             return v
 
         return _clean(flat)
-    if isinstance(value, np.integer):
-        v = int(value)
-        return None if v == EMPTY_INT else v
-    if isinstance(value, np.floating):
-        v = float(value)
-        return None if (np.isnan(v) or np.isinf(v) or v == EMPTY_FLOAT) else v
-    if isinstance(value, np.complexfloating):
-        r, i = float(value.real), float(value.imag)
-        if r == EMPTY_COMPLEX.real and i == EMPTY_COMPLEX.imag:
-            return None
-        return {"real": r, "imag": i}
     return value
 
 
