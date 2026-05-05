@@ -3,7 +3,7 @@
 TODO: Temporary solution to retrieve data (for IBEX backend)
 """
 
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, NamedTuple, Optional
 from uuid import UUID
 
 import numpy as np
@@ -130,7 +130,14 @@ def _get_ids_node(entry, ids_name: str, occurrence: int, ids_path: str) -> IDSPr
     return node
 
 
-def _get_simulation_and_imas_file(sim_id: str, file_uuid: Optional[UUID]):
+class _SimulationImasFile(NamedTuple):
+    simulation: Any
+    imas_file: Any
+
+
+def _get_simulation_and_imas_file(
+    sim_id: str, file_uuid: Optional[UUID]
+) -> _SimulationImasFile:
     try:
         simulation = current_app.db.get_simulation(sim_id)
     except DatabaseError as exc:
@@ -141,7 +148,7 @@ def _get_simulation_and_imas_file(sim_id: str, file_uuid: Optional[UUID]):
         raise ResponseException(f"Simulation {sim_id} has no IMAS output files", 404)
 
     if file_uuid is None:
-        return simulation, imas_outputs[0]
+        return _SimulationImasFile(simulation, imas_outputs[0])
 
     imas_file = next((f for f in imas_outputs if f.uuid == file_uuid), None)
     if imas_file is None:
@@ -150,7 +157,7 @@ def _get_simulation_and_imas_file(sim_id: str, file_uuid: Optional[UUID]):
             404,
         )
 
-    return simulation, imas_file
+    return _SimulationImasFile(simulation, imas_file)
 
 
 # Endpoints
@@ -167,7 +174,7 @@ class SimulationImasData(Resource):
         params: Annotated[ImasDataQueryParams, Query()],
     ) -> ImasDataResponse:
         """Return the value at a given IDS path for a simulation's IMAS output."""
-        simulation, imas_file = _get_simulation_and_imas_file(sim_id, params.file_uuid)
+        result = _get_simulation_and_imas_file(sim_id, params.file_uuid)
 
         try:
             ids_name, occurrence, ids_path = _parse_ids_path(params.path)
@@ -175,7 +182,7 @@ class SimulationImasData(Resource):
             raise ResponseException(str(exc)) from exc
 
         try:
-            entry = open_imas(URI(str(imas_file.uri)))
+            entry = open_imas(URI(str(result.imas_file.uri)))
             with entry:
                 node = _get_ids_node(entry, ids_name, occurrence, ids_path)
                 coordinates = _get_coordinates(node, ids_name)
@@ -195,8 +202,8 @@ class SimulationImasData(Resource):
             raise ServerException(msg) from exc
 
         return ImasDataResponse(
-            simulation=str(simulation.uuid),
-            file_uuid=str(imas_file.uuid),
+            simulation=str(result.simulation.uuid),
+            file_uuid=str(result.imas_file.uuid),
             path=params.path,
             occurrence=occurrence,
             field=field,
