@@ -37,7 +37,6 @@ api = Namespace("data", path="/")
 def _to_python(value: Any) -> Any:
     """Convert a value returned by IDSPrimitive.value to a JSON-serialisable
     Python object."""
-    print(type(value))
     if isinstance(value, np.ndarray):
         flat = value.tolist()
 
