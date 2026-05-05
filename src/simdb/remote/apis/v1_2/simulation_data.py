@@ -61,8 +61,6 @@ def _to_python(value: Any) -> Any:
         if r == EMPTY_COMPLEX.real and i == EMPTY_COMPLEX.imag:
             return None
         return {"real": r, "imag": i}
-    if isinstance(value, np.bool_):
-        return bool(value)
     return value
 
 
