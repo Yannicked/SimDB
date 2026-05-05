@@ -3,24 +3,21 @@
 TODO: Temporary solution to retrieve data (for IBEX backend)
 """
 
-import re
 from typing import Annotated, Any, Optional
 from uuid import UUID
 
 import numpy as np
 from flask_restx import Namespace, Resource
+from imas.ids_defs import EMPTY_COMPLEX, EMPTY_FLOAT, EMPTY_INT
 from imas.ids_primitive import IDSPrimitive
 
 from simdb.cli.manifest import DataObject
 from simdb.database import DatabaseError
 from simdb.imas.utils import (
-    FLOAT_MISSING_VALUE,
-    INT_MISSING_VALUE,
     ImasError,
     open_imas,
 )
 from simdb.remote.core.auth import User, requires_auth
-from simdb.remote.core.cache import cache
 from simdb.remote.core.pydantic_utils import (
     Query,
     ResponseException,
@@ -28,7 +25,7 @@ from simdb.remote.core.pydantic_utils import (
     pydantic_validate,
 )
 from simdb.remote.core.typing import current_app
-from simdb.remote.models import ImasDataQueryParams, ImasDataResponse
+from simdb.remote.models import ImasDataQueryParams, ImasDataResponse, QuantityData
 from simdb.uri import URI
 
 api = Namespace("data", path="/")
@@ -45,10 +42,7 @@ def _to_python(value: Any) -> Any:
 
         def _clean(v):
             if isinstance(v, float) and (
-                v != v
-                or v == float("inf")
-                or v == float("-inf")
-                or v == FLOAT_MISSING_VALUE
+                v != v or v == float("inf") or v == float("-inf") or v == EMPTY_FLOAT
             ):
                 return None
             if isinstance(v, list):
@@ -58,26 +52,68 @@ def _to_python(value: Any) -> Any:
         return _clean(flat)
     if isinstance(value, np.integer):
         v = int(value)
-        return None if v == INT_MISSING_VALUE else v
+        return None if v == EMPTY_INT else v
     if isinstance(value, np.floating):
         v = float(value)
-        return None if (np.isnan(v) or np.isinf(v) or v == FLOAT_MISSING_VALUE) else v
+        return None if (np.isnan(v) or np.isinf(v) or v == EMPTY_FLOAT) else v
     if isinstance(value, np.complexfloating):
-        return {"real": float(value.real), "imag": float(value.imag)}
+        r, i = float(value.real), float(value.imag)
+        if r == EMPTY_COMPLEX.real and i == EMPTY_COMPLEX.imag:
+            return None
+        return {"real": r, "imag": i}
     if isinstance(value, np.bool_):
         return bool(value)
     return value
 
 
-# TODO Replace this logic with slicing when supported by IMAS-Python.
-# TODO Add support for [:], [:-1], and [2:4:2] python slicing syntax.
-def _traverse_path(entry, ids_name: str, field_segments: list, occurrence: int):
-    """Walk inside *ids_name* and return (value, shape, coordinate_path).
+def _parse_ids_path(path: str) -> tuple:
+    """Parse ``ids_name[:occurrence][/ids_path]`` into a 3-tuple"""
+    head, _, ids_path = path.partition("/")
+    if ":" in head:
+        ids_name, occ_str = head.split(":", 1)
+        try:
+            occurrence = int(occ_str)
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid occurrence in path '{path}': '{occ_str}'"
+            ) from exc
+    else:
+        ids_name, occurrence = head, 0
+    return ids_name, occurrence, ids_path
 
-    Each segment is either:
-    - a non-negative integer string: array-of-structures index
-    - a plain name: attribute access (IDSStructure child node)
-    """
+
+def _get_coordinates(node: IDSPrimitive, ids_name: str) -> list:
+    """Return a :class:`QuantityData` for each coordinate dimension of *node*."""
+    coords = []
+    for i in range(node.metadata.ndim):
+        coord = node.coordinates[i]
+        if isinstance(coord, IDSPrimitive):
+            data = (
+                _to_python(coord.value)
+                if coord.has_value
+                else list(range(node.shape[i]))
+            )
+            coords.append(
+                QuantityData(
+                    name=f"{ids_name}/{coord._path}",
+                    units=coord.metadata.units or "",
+                    data=data,
+                )
+            )
+        else:
+            # Index-based coordinate: coord is already a numpy arange
+            coords.append(
+                QuantityData(
+                    name=f"dim_{i + 1}",
+                    units="",
+                    data=coord.tolist(),
+                )
+            )
+    return coords
+
+
+def _get_ids_node(entry, ids_name: str, occurrence: int, ids_path: str) -> IDSPrimitive:
+    """Return the :class:`IDSPrimitive` leaf node at *ids_path* inside *ids_name*."""
     ids_obj = entry.get(
         ids_name,
         occurrence,
@@ -85,15 +121,7 @@ def _traverse_path(entry, ids_name: str, field_segments: list, occurrence: int):
         autoconvert=False,
         ignore_unknown_dd_version=True,
     )
-    node = ids_obj
-    for segment in field_segments:
-        if segment.isdigit():
-            node = node[int(segment)]
-        else:
-            try:
-                node = getattr(node, segment)
-            except AttributeError as err:
-                raise ValueError(f"segment '{segment}' not found in IDS path") from err
+    node = ids_obj[ids_path] if ids_path else ids_obj
     if not isinstance(node, IDSPrimitive):
         raise ValueError(
             f"path does not point to a scalar/array leaf "
@@ -101,56 +129,7 @@ def _traverse_path(entry, ids_name: str, field_segments: list, occurrence: int):
         )
     if not node.has_value:
         raise ValueError("field is not populated (no data written)")
-
-    node_shape = list(node.shape) if node.metadata.ndim > 0 else None
-
-    coordinate_path = None
-    try:
-
-        def _replace_placeholder(m, _segs=field_segments):
-            idx = next((s for s in _segs if s.isdigit()), "0")
-            return "/" + idx + "/"
-
-        for coord in node.metadata.coordinates:
-            clean = re.sub(r"\([^)]+\)/", _replace_placeholder, str(coord))
-            coordinate_path = ids_name + "/" + clean
-            break
-    except Exception:
-        pass
-
-    return _to_python(node.value), node_shape, coordinate_path
-
-
-def _fetch_field(
-    uri_str: str, ids_name: str, field_segments: tuple, occurrence: int
-) -> tuple:
-    """Open the IMAS entry and return (value, shape, coordinate_path).
-
-    Scalar results (``shape is None``) are written into the response cache so
-    that repeated requests skip the IMAS open.  Array values are intentionally
-    *not* cached: caching large numpy-derived lists would create persistent
-    memory pressure and could fill the cache backend with multi-MB payloads.
-    """
-    if (
-        ids_name and not field_segments
-    ):  # bare IDS name only - no leaf, skip cache probe
-        pass
-    else:
-        cache_key = (
-            f"simdb:field:{uri_str}:{ids_name}:{'/'.join(field_segments)}:{occurrence}"
-        )
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-    entry = open_imas(URI(uri_str))
-    with entry:
-        result = _traverse_path(entry, ids_name, list(field_segments), occurrence)
-
-    _value, shape, _coord = result
-    if shape is None:  # scalar leaf - safe to persist in cache
-        cache.set(cache_key, result)  # type: ignore[possibly-undefined]
-    return result
+    return node
 
 
 def _get_simulation_and_imas_file(sim_id: str, file_uuid: Optional[UUID]):
@@ -161,9 +140,7 @@ def _get_simulation_and_imas_file(sim_id: str, file_uuid: Optional[UUID]):
 
     imas_outputs = [f for f in simulation.outputs if f.type == DataObject.Type.IMAS]
     if not imas_outputs:
-        raise ResponseException(
-            f"Simulation {sim_id} has no IMAS output files", 404
-        )
+        raise ResponseException(f"Simulation {sim_id} has no IMAS output files", 404)
 
     if file_uuid is None:
         return simulation, imas_outputs[0]
@@ -192,34 +169,38 @@ class SimulationImasData(Resource):
         params: Annotated[ImasDataQueryParams, Query()],
     ) -> ImasDataResponse:
         """Return the value at a given IDS path for a simulation's IMAS output."""
-        simulation, imas_file = _get_simulation_and_imas_file(
-            sim_id, params.file_uuid
-        )
-
-        segments = [s for s in params.path.split("/") if s]
-        ids_name = segments[0]
-        field_segments = segments[1:]
+        simulation, imas_file = _get_simulation_and_imas_file(sim_id, params.file_uuid)
 
         try:
-            value, shape, coordinate_path = _fetch_field(
-                str(imas_file.uri), ids_name, tuple(field_segments), params.occurrence
-            )
+            ids_name, occurrence, ids_path = _parse_ids_path(params.path)
+        except ValueError as exc:
+            raise ResponseException(str(exc)) from exc
+
+        try:
+            entry = open_imas(URI(str(imas_file.uri)))
+            with entry:
+                node = _get_ids_node(entry, ids_name, occurrence, ids_path)
+                coordinates = _get_coordinates(node, ids_name)
+                field = QuantityData(
+                    name=f"{ids_name}/{node._path}",
+                    units=node.metadata.units or "",
+                    data=_to_python(node.value),
+                )
         except (ValueError, AttributeError, IndexError, KeyError) as exc:
-            raise ResponseException(f"Invalid IDS path '{params.path}': {exc}")
+            raise ResponseException(f"Invalid IDS path '{params.path}': {exc}") from exc
         except ImasError as exc:
-            raise ServerException(f"Failed to open IMAS data: {exc}")
+            raise ServerException(f"Failed to open IMAS data: {exc}") from exc
         except Exception as exc:
             msg = str(exc)
             if "is empty" in msg or "not found" in msg.lower():
-                raise ResponseException(msg, 404)
-            raise ServerException(msg)
+                raise ResponseException(msg, 404) from exc
+            raise ServerException(msg) from exc
 
         return ImasDataResponse(
             simulation=str(simulation.uuid),
             file_uuid=str(imas_file.uuid),
             path=params.path,
-            occurrence=params.occurrence,
-            value=value,
-            shape=shape,
-            coordinate=coordinate_path,
+            occurrence=occurrence,
+            field=field,
+            coordinates=coordinates,
         )

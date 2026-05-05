@@ -558,11 +558,9 @@ class ImasDataQueryParams(BaseModel):
     """Query parameters for the IMAS field-data endpoint."""
 
     path: str
-    """IDS path, e.g. ``core_profiles/profiles_1d/0/electrons/density``."""
+    """Full IDS path including IDS name and optional occurrence."""
     file_uuid: Optional[UUID] = None
     """UUID of a specific IMAS output file (optional)."""
-    occurrence: int = Field(0, ge=0)
-    """IDS occurrence index (default 0)."""
 
     @field_validator("path", mode="before")
     @classmethod
@@ -578,7 +576,19 @@ class ImasDataQueryParams(BaseModel):
         if v is None:
             return None
         stripped = str(v).strip()
-        return stripped if stripped else None
+        return stripped or None
+
+
+class QuantityData(BaseModel):
+    """A named, unit-bearing data quantity (field value or coordinate)."""
+
+    name: str
+    """IDS path of this quantity relative to the IDS root"""
+    units: str
+    """Physical units of the quantity"""
+    data: Any
+    """Data value: a Python scalar for 0-D quantities, or a nested list for
+    arrays. """
 
 
 class ImasDataResponse(BaseModel):
@@ -592,12 +602,10 @@ class ImasDataResponse(BaseModel):
     """Requested IDS path."""
     occurrence: int
     """IDS occurrence index."""
-    value: Any
-    """Value at the requested IDS path."""
-    shape: Optional[List[int]] = None
-    """Shape of the returned array, or ``None`` for scalars."""
-    coordinate: Optional[str] = None
-    """Coordinate path for the first dimension, if available."""
+    field: QuantityData
+    """The requested quantity"""
+    coordinates: List[QuantityData]
+    """Coordinates for each dimension of *field*, in dimension order."""
 
 
 class ErrorResponse(BaseModel):
