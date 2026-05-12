@@ -120,6 +120,17 @@ class Simulation(Base):
         "Watcher", secondary=simulation_watchers, lazy="dynamic"
     )
 
+    class IngestionStatus(str, Enum):
+        QUEUED = "queued"
+        COPYING = "copying"
+        VALIDATING = "validating"
+        COMPLETED = "completed"
+
+    ingestion_status = Column(
+        sql_types.Enum(IngestionStatus), nullable=False, default="completed"
+    )
+    ingestion_version = Column(sql_types.Integer, nullable=False, default=0)
+
     def __init__(
         self, manifest: Union[Manifest, None], config: Optional[Config] = None
     ) -> None:

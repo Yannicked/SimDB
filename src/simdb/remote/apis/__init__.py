@@ -18,6 +18,8 @@ from .v1_1 import api as api_v1_1
 from .v1_1 import namespaces as namespaces_v1_1
 from .v1_2 import api as api_v1_2
 from .v1_2 import namespaces as namespaces_v1_2
+from .v1_3 import api as api_v1_3
+from .v1_3 import namespaces as namespaces_v1_3
 
 
 def error(message: str) -> Response:
@@ -144,3 +146,4 @@ def register(api, version, namespaces):
 register(api_v1, "v1", namespaces_v1)
 register(api_v1_1, "v1.1", namespaces_v1_1)
 register(api_v1_2, "v1.2", namespaces_v1_2)
+register(api_v1_3, "v1.3", namespaces_v1_3)
