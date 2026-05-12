@@ -106,12 +106,6 @@ class Database:
             self.engine: sqlalchemy.engine.Engine = create_engine(
                 "sqlite:///{file}".format(**kwargs)
             )
-            with contextlib.closing(self.engine.connect()) as con:
-                res: sqlalchemy.engine.ResultProxy = con.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT "
-                    "LIKE 'sqlite_%';"
-                )
-                new_db = res.rowcount == -1
 
         elif db_type == Database.DBMS.POSTGRESQL:
             if "host" not in kwargs:
@@ -131,12 +125,6 @@ class Database:
                 pool_pre_ping=True,
                 pool_recycle=3600,
             )
-            with contextlib.closing(self.engine.connect()) as con:
-                res: sqlalchemy.engine.ResultProxy = con.execute(
-                    "SELECT * FROM pg_catalog.pg_tables WHERE schemaname = 'public';"
-                )
-                new_db = res.rowcount == 0
-
         elif db_type == Database.DBMS.MSSQL:
             if "user" not in kwargs:
                 raise ValueError("Missing user parameter for MSSQL database")
@@ -147,12 +135,8 @@ class Database:
             self.engine: sqlalchemy.engine.Engine = create_engine(
                 "mssql+pyodbc://{user}:{password}@{dsnname}".format(**kwargs)
             )
-            new_db = False
-
         else:
             raise ValueError("Unknown database type: " + db_type.name)
-        if new_db:
-            Base.metadata.create_all(self.engine)
         Base.metadata.bind = self.engine
         if scopefunc is None:
 
