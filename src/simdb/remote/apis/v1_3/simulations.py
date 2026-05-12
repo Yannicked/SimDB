@@ -75,7 +75,7 @@ class SimulationList(Resource):
 
         # Start ingestion job with files, return job_id
         job_id = uuid.uuid4()
-        simulation.ingestion_version = 1 # should be result of job
+        simulation.ingestion_version = 1  # should be result of job
 
         result = SimulationPostResponse3(job_id=job_id)
 
