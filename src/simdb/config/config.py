@@ -302,6 +302,23 @@ class Config:
             )
         return value
 
+    def get_int_option(
+        self, name: str, default: Union[int, None, _NothingSentinel] = NOTHING
+    ) -> int:
+        """
+        Returns the value for the option with the given name from the configuration but
+        also ensures the resulting value is an integer.
+
+        @see get_option
+        @raise TypeError if the found value was not an integer
+        """
+        value = self.get_option(name, default)
+        if value is not None and not isinstance(value, int):
+            raise TypeError(
+                f"Invalid type of option {name}: expected int, got {type(value)}"
+            )
+        return value
+
     def delete_option(self, name: str) -> None:
         """
         Delete the option with the given name from the configuration.

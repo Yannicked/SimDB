@@ -729,3 +729,22 @@ def get_local_db(config: Config) -> Database:
     db_file.parent.mkdir(parents=True, exist_ok=True)
     database = Database(Database.DBMS.SQLITE, file=db_file)
     return database
+
+
+def get_db(config: Config) -> Database:
+    db_type = config.get_option("database.type")
+    if db_type == "postgres":
+        args = config.get_section("database")
+        return Database(
+            Database.DBMS.POSTGRESQL,
+            **args,
+        )
+    elif db_type == "sqlite":
+        db_dir = appdirs.user_data_dir("simdb")
+        file = Path(config.get_string_option("database.file", default=None)) or Path(
+            db_dir, "remote.db"
+        )
+        file.parent.mkdir(parents=True, exist_ok=True)
+        return Database(Database.DBMS.SQLITE, file=file)
+    else:
+        raise RuntimeError(f"Unknown database type in configuration: {db_type}.")
