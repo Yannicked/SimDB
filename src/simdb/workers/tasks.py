@@ -1,16 +1,17 @@
-import hashlib
 from ty_extensions import Unknown
-from simdb.database.database import get_db
-import shutil
-from uuid import UUID
-from pathlib import Path
-from simdb.uri import URI
-from simdb.remote.models import FileData, FileDataList
+import os
+import hashlib
 import logging
-from typing import List, Optional
+import shutil
+from pathlib import Path
+from typing import List
+from uuid import UUID
 
 from simdb.config import Config
+from simdb.database.database import get_db
 from simdb.email.server import EmailServer
+from simdb.remote.models import FileData
+from simdb.uri import URI
 
 from .celery import celery_app
 
@@ -37,7 +38,7 @@ def send_email_task(
 
 
 @celery_app.task
-def copy_files_task(simulation_uuid: UUID, files_to_copy: FileDataList):
+def copy_files_task(simulation_uuid: UUID, files_to_copy: list[FileData]):
     """
     1. verify files
     2. copy files
@@ -45,12 +46,13 @@ def copy_files_task(simulation_uuid: UUID, files_to_copy: FileDataList):
     """
     config = Config()
     config.load()
+    database = get_db(config)
 
     # Check this before task start
     # Should map: sdcc:///my_path to /sdcc/mount/my_path
     # and:        http:///uuid to /http/staging/area/uuid
-    uris = (URI(file.uri) for file in files_to_copy.root)
-    file_uuids = (file.uuid for file in files_to_copy.root)
+    uris = (URI(file.uri) for file in files_to_copy)
+    file_uuids = (file.uuid for file in files_to_copy)
     paths: list[Path] = []
     for uri in uris:
         partition = uri.scheme
@@ -69,26 +71,41 @@ def copy_files_task(simulation_uuid: UUID, files_to_copy: FileDataList):
 
         paths.append(partition_path / path)
 
+    # Calculate checksums
     hash_algo = "sha256"
     chunk_size = 8129
-    for (path, file_obj) in zip(paths, files_to_copy.root):
+    for path, file_obj in zip(paths, files_to_copy):
         hash_obj = hashlib.new(hash_algo)
         with path.open("rb") as f:
-            for chunk in iter(lambda: f.read(chunk_size), b''):
+            for chunk in iter(lambda: f.read(chunk_size), b""):
                 hash_obj.update(chunk)
         hash = hash_obj.hexdigest()
         if file_obj.checksum != hash:
             raise ValueError("Hash of file does not match provided checksum")
-
+    
+    common_root = os.path.commonpath(paths)
     dst_basepath = (
         Path(config.get_string_option("server.upload_folder")) / simulation_uuid.hex
     )
-    dst_paths = []
-    for uuid in file_uuids:
-        dst_paths.append(dst_basepath / uuid.hex)
+    dst_paths: list[Path] = []
+    for path in paths:
+        dst_paths.append(dst_basepath / path.relative_to(common_root))
+
+    simulation = database.get_simulation(simulation_uuid.hex)
+    simulation.ingestion_status = simulation.IngestionStatus.COPYING
+    database.session.commit()
 
     for source, destination in zip(paths, dst_paths):
+        destination.parent.mkdir(exist_ok=True, parents=True)
         shutil.copy2(source, destination)
 
-    database = get_db(config)
+    for destination, file_obj in zip(dst_paths, files_to_copy):
+        if file_obj.type != "IMAS":
+            continue
+        
+        
+    
     simulation = database.get_simulation(simulation_uuid.hex)
+    simulation.ingestion_status = simulation.IngestionStatus.COPIED
+    database.session.commit()
+    database.close()

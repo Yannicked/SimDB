@@ -1,8 +1,8 @@
 import datetime
 import itertools
-import uuid
 from typing import Annotated
 
+from celery.result import AsyncResult
 from flask_restx import Namespace, Resource
 
 from simdb.database.models import metadata as models_meta
@@ -18,6 +18,7 @@ from simdb.remote.models import (
     SimulationPostData,
     SimulationPostResponse3,
 )
+from simdb.workers.tasks import copy_files_task
 
 api = Namespace("simulations", path="/")
 
@@ -68,18 +69,20 @@ class SimulationList(Resource):
         else:
             simulation.alias = simulation.uuid.hex
 
-        files = list(itertools.chain(simulation.inputs, simulation.outputs))
-        print(files)
+        files = list(
+            itertools.chain(body.simulation.inputs.root, body.simulation.outputs.root)
+        )
 
         simulation.ingestion_status = simulation.IngestionStatus.QUEUED
+        current_app.db.insert_simulation(simulation)
 
         # Start ingestion job with files, return job_id
-        job_id = uuid.uuid4()
-        simulation.ingestion_version = 1  # should be result of job
+        job: AsyncResult = copy_files_task.delay(simulation.uuid, files)
+        job_id = job.id
 
         result = SimulationPostResponse3(job_id=job_id)
 
-        current_app.db.insert_simulation(simulation)
+        
         clear_cache()
 
         return result

@@ -123,7 +123,9 @@ class Simulation(Base):
     class IngestionStatus(str, Enum):
         QUEUED = "queued"
         COPYING = "copying"
+        COPIED = "copied"
         VALIDATING = "validating"
+        VALIDATED = "validated"
         COMPLETED = "completed"
 
     ingestion_status = Column(
