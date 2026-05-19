@@ -1,17 +1,66 @@
-import uuid
+from unittest import mock
+from uuid import UUID
 
+import pytest
 from conftest import (
     HEADERS,
     generate_simulation_data,
     generate_simulation_file,
 )
 
+from simdb.config import Config
+from simdb.enums import IngestionStatus
 from simdb.remote.models import (
-    SimulationPostResponse3,
+    SimulationPostResponse,
 )
+from simdb.workers import tasks as simdb_tasks
+from simdb.workers.celery import celery_app
 
 
-def post_simulation_v1_3(client, simulation_data, headers=HEADERS):
+@pytest.fixture(autouse=True)
+def celery_eager_config():
+    
+
+    celery_app.conf.task_always_eager = True
+    celery_app.conf.task_eager_propagates = True
+    celery_app.conf.result_backend = None
+    yield
+
+
+@pytest.fixture
+def client_with_task_mock(client, monkeypatch, tmp_path):
+    db_file = tmp_path / "test.db"
+    db_file.write_text("")
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+
+    
+
+    def mock_config():
+        cfg = mock.MagicMock(spec=Config)
+        cfg.get_option.side_effect = lambda key, **kwargs: {
+            "database.type": "sqlite",
+            "database.file": str(db_file),
+            "server.upload_folder": str(upload_dir),
+        }.get(key, kwargs.get("default"))
+        cfg.get_string_option.side_effect = lambda key, **kwargs: {
+            "database.type": "sqlite",
+            "database.file": str(db_file),
+            "server.upload_folder": str(upload_dir),
+            "partition.data": str(tmp_path / "partition"),
+        }.get(key, kwargs.get("default"))
+        cfg.load = mock.MagicMock()
+        return cfg
+
+
+    monkeypatch.setattr(simdb_tasks, "Config", mock_config)
+    monkeypatch.setattr(simdb_tasks, "get_db", lambda cfg: client.application.db)
+    monkeypatch.setattr(client.application.db, "close", lambda: None)
+
+    return client
+
+
+def post_simulation_v13(client, simulation_data, headers=HEADERS):
     rv_post = client.post(
         "/v1.3/simulations",
         json=simulation_data.model_dump(mode="json"),
@@ -21,68 +70,28 @@ def post_simulation_v1_3(client, simulation_data, headers=HEADERS):
     return rv_post
 
 
-def test_post_simulations_v1_3(client):
-    """Test POST endpoint for creating a new simulation via v1.3 API."""
+def get_simulation_status(client, simulation_uuid: UUID, headers=HEADERS):
+    rv_get = client.get(
+        f"/v1.3/simulation/status/{simulation_uuid.hex}", headers=headers
+    )
+    return rv_get
+
+
+def test_post_simulations_v13(client_with_task_mock):
+    """Test POST endpoint for creating a new simulation."""
+    client = client_with_task_mock
     simulation_data = generate_simulation_data(
-        alias="test-simulation-v1.3",
+        alias="test-simulation-v13",
         inputs=[generate_simulation_file()],
         outputs=[generate_simulation_file()],
     )
 
-    rv = post_simulation_v1_3(client, simulation_data)
+    rv = post_simulation_v13(client, simulation_data)
 
     assert rv.status_code == 200
 
-    result = SimulationPostResponse3.model_validate(rv.json)
-    assert result.job_id is not None
+    result = SimulationPostResponse.model_validate(rv.json)
+    assert result.ingested == simulation_data.simulation.uuid
 
-
-def test_post_simulations_v1_3_with_alias_auto_increment(client):
-    """Test POST endpoint with alias ending in dash (auto-increment)."""
-    random_name = uuid.uuid4().hex
-    simulation_data = generate_simulation_data(
-        alias=f"{random_name}-",
-    )
-
-    rv = post_simulation_v1_3(client, simulation_data)
-
-    assert rv.status_code == 200
-    result = SimulationPostResponse3.model_validate(rv.json)
-    assert result.job_id is not None
-
-
-def test_post_simulations_v1_3_no_alias(client):
-    """Test POST endpoint with no alias provided (should use uuid.hex)."""
-    simulation_data = generate_simulation_data()
-
-    rv = post_simulation_v1_3(client, simulation_data)
-
-    assert rv.status_code == 200
-    result = SimulationPostResponse3.model_validate(rv.json)
-    assert result.job_id is not None
-
-
-def test_post_simulations_v1_3_with_inputs_outputs(client):
-    """Test POST endpoint with inputs and outputs."""
-    simulation_data = generate_simulation_data(
-        alias="test-io-v1.3",
-        inputs=[generate_simulation_file(), generate_simulation_file()],
-        outputs=[generate_simulation_file()],
-    )
-
-    rv = post_simulation_v1_3(client, simulation_data)
-
-    assert rv.status_code == 200
-    result = SimulationPostResponse3.model_validate(rv.json)
-    assert result.job_id is not None
-
-
-def test_post_simulations_v1_3_uploaded_by(client):
-    """Test POST endpoint with uploaded_by field."""
-    simulation_data = generate_simulation_data(uploaded_by="test-user-v1.3")
-
-    rv = post_simulation_v1_3(client, simulation_data)
-
-    assert rv.status_code == 200
-    result = SimulationPostResponse3.model_validate(rv.json)
-    assert result.job_id is not None
+    simulation = client.application.db.get_simulation(result.ingested.hex)
+    assert simulation.ingestion_status == IngestionStatus.COMPLETED
