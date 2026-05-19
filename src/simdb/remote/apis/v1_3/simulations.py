@@ -1,12 +1,11 @@
 import datetime
-import itertools
 from typing import Annotated
 
-from celery.result import AsyncResult
 from flask_restx import Namespace, Resource
 
 from simdb.database.models import metadata as models_meta
 from simdb.database.models import simulation as models_sim
+from simdb.enums import IngestionStatus
 from simdb.remote.core.auth import User, requires_auth
 from simdb.remote.core.cache import clear_cache
 from simdb.remote.core.pydantic_utils import (
@@ -15,10 +14,16 @@ from simdb.remote.core.pydantic_utils import (
 )
 from simdb.remote.core.typing import current_app
 from simdb.remote.models import (
+    FileDataList,
     SimulationPostData,
-    SimulationPostResponse3,
+    SimulationPostResponse,
+    SimulationStatusResponse,
 )
-from simdb.workers.tasks import copy_files_task
+from simdb.workers.tasks import (
+    complete_ingestion_task,
+    copy_files_task,
+    validate_imas_task,
+)
 
 api = Namespace("simulations", path="/")
 
@@ -51,8 +56,11 @@ class SimulationList(Resource):
         self,
         user: User,
         body: Annotated[SimulationPostData, Body()],
-    ) -> SimulationPostResponse3:
-        simulation = models_sim.Simulation.from_data_model(body.simulation)
+    ) -> SimulationPostResponse:
+        simulation_data = body.model_copy()
+        simulation_data.simulation.outputs = FileDataList()
+        simulation_data.simulation.inputs = FileDataList()
+        simulation = models_sim.Simulation.from_data_model(simulation_data.simulation)
 
         # Simulation Upload (Push) Date
         simulation.datetime = datetime.datetime.now()
@@ -69,20 +77,34 @@ class SimulationList(Resource):
         else:
             simulation.alias = simulation.uuid.hex
 
-        files = list(
-            itertools.chain(body.simulation.inputs.root, body.simulation.outputs.root)
-        )
-
-        simulation.ingestion_status = simulation.IngestionStatus.QUEUED
+        simulation.ingestion_status = IngestionStatus.QUEUED
         current_app.db.insert_simulation(simulation)
 
         # Start ingestion job with files, return job_id
-        job: AsyncResult = copy_files_task.delay(simulation.uuid, files)
-        job_id = job.id
+        copy_files = copy_files_task.si(
+            simulation.uuid, body.simulation.inputs.root, body.simulation.outputs.root
+        )
+        validate_imas = validate_imas_task.si(simulation.uuid)
 
-        result = SimulationPostResponse3(job_id=job_id)
+        complete = complete_ingestion_task.si(simulation.uuid)
 
-        
+        _ = (copy_files | validate_imas | complete).apply_async()
+
+        result = SimulationPostResponse(ingested=simulation.uuid)
+
         clear_cache()
 
         return result
+
+
+@api.route("/simulation/status/<path:sim_id>")
+class Job(Resource):
+    @requires_auth()
+    @pydantic_validate(api)
+    def get(
+        self,
+        sim_id: str,
+        user: User,
+    ) -> SimulationStatusResponse:
+        simulation = current_app.db.get_simulation(sim_id)
+        return SimulationStatusResponse(status=simulation.ingestion_status)

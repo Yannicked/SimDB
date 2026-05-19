@@ -280,6 +280,11 @@ def imas_files(uri: URI) -> List[Path]:
     @return: a list of files which contains the IDS data for the backend specified in
              the URI
     """
+
+    # Early exit for NetCDF files
+    if uri.scheme == "file" and uri.path and uri.path.suffix == "nc":
+        return [uri.path]
+
     backend = str(uri.path)
     if backend.startswith("/"):
         backend = backend[1:]

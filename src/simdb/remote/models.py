@@ -35,6 +35,7 @@ from pydantic import (
 )
 
 from simdb.cli.manifest import DataObject
+from simdb.enums import IngestionStatus
 
 HexUUID = Annotated[UUID, PlainSerializer(lambda x: x.hex, return_type=str)]
 """UUID serialized as a hex string."""
@@ -564,3 +565,9 @@ class ErrorResponse(BaseModel):
 
     error: str
     """Error description."""
+
+
+class SimulationStatusResponse(BaseModel):
+    """Response from te get simulation status endpoint."""
+
+    status: IngestionStatus

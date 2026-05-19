@@ -9,6 +9,7 @@ from getpass import getuser
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
 
+from simdb.enums import IngestionStatus
 from simdb.remote.models import (
     FileDataList,
     MetadataDataList,
@@ -119,14 +120,6 @@ class Simulation(Base):
     watchers: List["Watcher"] = relationship(
         "Watcher", secondary=simulation_watchers, lazy="dynamic"
     )
-
-    class IngestionStatus(str, Enum):
-        QUEUED = "queued"
-        COPYING = "copying"
-        COPIED = "copied"
-        VALIDATING = "validating"
-        VALIDATED = "validated"
-        COMPLETED = "completed"
 
     ingestion_status = Column(
         sql_types.Enum(IngestionStatus), nullable=False, default="completed"
