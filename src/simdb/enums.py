@@ -8,3 +8,6 @@ class IngestionStatus(str, Enum):
     VALIDATING = "validating"
     VALIDATED = "validated"
     COMPLETED = "completed"
+
+    COPY_FAILED = "copy_failed"
+    VALIDATION_FAILED = "validation_failed"

@@ -22,7 +22,6 @@ from simdb.remote.models import (
 from simdb.workers.tasks import (
     complete_ingestion_task,
     copy_files_task,
-    validate_imas_task,
 )
 
 api = Namespace("simulations", path="/")
@@ -84,11 +83,10 @@ class SimulationList(Resource):
         copy_files = copy_files_task.si(
             simulation.uuid, body.simulation.inputs.root, body.simulation.outputs.root
         )
-        validate_imas = validate_imas_task.si(simulation.uuid)
 
         complete = complete_ingestion_task.si(simulation.uuid)
 
-        _ = (copy_files | validate_imas | complete).apply_async()
+        _ = (copy_files | complete).apply_async()
 
         result = SimulationPostResponse(ingested=simulation.uuid)
 
@@ -98,7 +96,7 @@ class SimulationList(Resource):
 
 
 @api.route("/simulation/status/<path:sim_id>")
-class Job(Resource):
+class SimulationIngestionStatus(Resource):
     @requires_auth()
     @pydantic_validate(api)
     def get(

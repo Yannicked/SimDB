@@ -122,7 +122,9 @@ class Simulation(Base):
     )
 
     ingestion_status = Column(
-        sql_types.Enum(IngestionStatus), nullable=False, default="completed"
+        sql_types.Enum(IngestionStatus),
+        nullable=False,
+        default=IngestionStatus.COMPLETED,
     )
     ingestion_version = Column(sql_types.Integer, nullable=False, default=0)
 

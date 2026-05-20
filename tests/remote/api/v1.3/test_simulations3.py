@@ -19,7 +19,6 @@ from simdb.workers.celery import celery_app
 
 @pytest.fixture(autouse=True)
 def celery_eager_config():
-    
 
     celery_app.conf.task_always_eager = True
     celery_app.conf.task_eager_propagates = True
@@ -33,8 +32,6 @@ def client_with_task_mock(client, monkeypatch, tmp_path):
     db_file.write_text("")
     upload_dir = tmp_path / "uploads"
     upload_dir.mkdir()
-
-    
 
     def mock_config():
         cfg = mock.MagicMock(spec=Config)
@@ -51,7 +48,6 @@ def client_with_task_mock(client, monkeypatch, tmp_path):
         }.get(key, kwargs.get("default"))
         cfg.load = mock.MagicMock()
         return cfg
-
 
     monkeypatch.setattr(simdb_tasks, "Config", mock_config)
     monkeypatch.setattr(simdb_tasks, "get_db", lambda cfg: client.application.db)

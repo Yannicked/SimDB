@@ -74,7 +74,6 @@ def _resolve_uri_to_path(uri: URI, config: Config) -> Path:
     partition_path_str = config.get_string_option(
         f"partition.{partition}", default=None
     )
-    print(partition_path_str)
     if not partition_path_str:
         raise ValueError(f"Partition '{partition}' not found in config")
     partition_path = Path(partition_path_str)
@@ -165,37 +164,43 @@ def copy_files_task(
     config.load()
     database = get_db(config)
 
-    input_paths = _resolve_paths(input_files, config)
-    output_paths = _resolve_paths(output_files, config)
-    paths = input_paths + output_paths
-    if len(paths) == 0:
-        common_root = Path()
-    elif len(paths) == 1:
-        common_root = paths[0].parent
-    else:
-        common_root = Path(os.path.commonpath(paths))
-    dst_basepath = (
-        Path(config.get_string_option("server.upload_folder")) / simulation_uuid.hex
-    )
-
     simulation = database.get_simulation(simulation_uuid.hex)
     simulation.ingestion_status = IngestionStatus.COPYING
     database.session.commit()
 
-    _copy_files(input_paths, common_root, dst_basepath)
-    _copy_files(output_paths, common_root, dst_basepath)
+    try:
+        input_paths = _resolve_paths(input_files, config)
+        output_paths = _resolve_paths(output_files, config)
+        paths = input_paths + output_paths
+        if len(paths) == 0:
+            common_root = Path()
+        elif len(paths) == 1:
+            common_root = paths[0].parent
+        else:
+            common_root = Path(os.path.commonpath(paths))
+        dst_basepath = (
+            Path(config.get_string_option("server.upload_folder")) / simulation_uuid.hex
+        )
 
-    inputs = _create_files_from_data_list(input_files, config)
-    outputs = _create_files_from_data_list(output_files, config)
+        _copy_files(input_paths, common_root, dst_basepath)
+        _copy_files(output_paths, common_root, dst_basepath)
 
-    for f in [*inputs, *outputs]:
-        database.session.add(f)
+        inputs = _create_files_from_data_list(input_files, config)
+        outputs = _create_files_from_data_list(output_files, config)
 
-    simulation.inputs = inputs
-    simulation.outputs = outputs
-    simulation.ingestion_status = IngestionStatus.COPIED
-    database.session.commit()
-    database.close()
+        for f in [*inputs, *outputs]:
+            database.session.add(f)
+
+        simulation.inputs = inputs
+        simulation.outputs = outputs
+        simulation.ingestion_status = IngestionStatus.COPIED
+        database.session.commit()
+    except Exception:
+        simulation.ingestion_status = IngestionStatus.COPY_FAILED
+        database.session.commit()
+        raise
+    finally:
+        database.close()
 
 
 @shared_task
