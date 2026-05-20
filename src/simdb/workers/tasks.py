@@ -81,7 +81,10 @@ def _resolve_uri_to_path(uri: URI, config: Config) -> Path:
     if not path:
         raise ValueError("Path not given")
     path = path.relative_to(path.anchor)
-    return partition_path / path
+    target = (partition_path / path).resolve()
+    if not target.is_relative_to(partition_path):
+        raise ValueError("Access denied.")
+    return target
 
 
 def _resolve_paths(files_data: list[FileData], config: Config) -> list[Path]:
@@ -94,7 +97,7 @@ def _copy_files(
     dst_basepath: Path,
 ) -> None:
     for source in paths:
-        destination = dst_basepath / source.relative_to(common_root)
+        destination: Path = dst_basepath / source.relative_to(common_root)
         destination.parent.mkdir(exist_ok=True, parents=True)
         shutil.copy2(source, destination)
 
