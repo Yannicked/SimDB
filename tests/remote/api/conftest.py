@@ -31,7 +31,7 @@ for _ in range(100):
     SIMULATIONS.append(Simulation(Manifest()))
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def client():
     if not has_flask:
         pytest.skip("Flask not installed")
@@ -49,14 +49,13 @@ def client():
     app = create_app(config=config, testing=True, debug=True)
     app.testing = True
 
-    with app.test_client() as client:
-        # with app.app_context():
-        for sim in SIMULATIONS:
+    test_sims = [Simulation(Manifest()) for _ in range(100)]
+
+    with app.app_context():
+        for sim in test_sims:
             app.db.insert_simulation(sim)
 
-        app.db.session.commit()
-        app.db.session.close()
-
+    with app.test_client() as client:
         yield client
 
     os.close(db_fd)
@@ -64,7 +63,7 @@ def client():
     shutil.rmtree(upload_dir)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def client_copy_files():
     if not has_flask:
         pytest.skip("Flask not installed")
@@ -82,14 +81,11 @@ def client_copy_files():
     app = create_app(config=config, testing=True, debug=True)
     app.testing = True
 
-    with app.test_client() as client:
-        # with app.app_context():
+    with app.app_context():
         for sim in SIMULATIONS:
             app.db.insert_simulation(sim)
 
-        app.db.session.commit()
-        app.db.session.close()
-
+    with app.test_client() as client:
         yield client
 
     os.close(db_fd)
