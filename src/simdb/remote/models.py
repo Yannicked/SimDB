@@ -559,8 +559,6 @@ class ImasDataQueryParams(BaseModel):
 
     path: str
     """Full IDS path including IDS name and optional occurrence."""
-    file_uuid: Optional[UUID] = None
-    """UUID of a specific IMAS output file (optional)."""
 
     @field_validator("path", mode="before")
     @classmethod
@@ -569,14 +567,6 @@ class ImasDataQueryParams(BaseModel):
         if not v:
             raise ValueError("must not be empty")
         return v
-
-    @field_validator("file_uuid", mode="before")
-    @classmethod
-    def _strip_file_uuid(cls, v: Any) -> Any:
-        if v is None:
-            return None
-        stripped = str(v).strip()
-        return stripped or None
 
 
 class QuantityData(BaseModel):
@@ -596,8 +586,6 @@ class ImasDataResponse(BaseModel):
 
     simulation: str
     """UUID of the simulation."""
-    file_uuid: str
-    """UUID of the IMAS output file."""
     path: str
     """Requested IDS path."""
     occurrence: int
