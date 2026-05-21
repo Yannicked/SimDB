@@ -68,18 +68,21 @@ def try_request(func: Callable) -> Callable:
         try:
             return func(*args, **kwargs)
         except requests.ConnectionError as ex:
+            url = ex.request.url if ex.request is not None else "undefined"
             raise FailedConnection(
                 f"""\
-Connection failed to {ex.request.url}
+Connection failed to {url}
 
 Please check that the URL is valid and that SIMDB_REQUESTS_CA_BUNDLE is set if required.
                 """
             ) from None
         except requests.HTTPError as ex:
+            response_code = (
+                ex.response.status_code if ex.response is not None else "undefined"
+            )
+            url = ex.request.url if ex.request is not None else "undefined"
             raise FailedConnection(
-                f"""\
-HTTP error {ex.response.status_code} returned from endpoint {ex.request.url}
-                """
+                f"HTTP error {response_code} returned from endpoint {url}."
             ) from None
         except requests.JSONDecodeError:
             raise FailedConnection(

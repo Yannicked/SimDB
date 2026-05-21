@@ -1,9 +1,8 @@
 import logging
 import os
-from typing import Optional, Type, cast
+from typing import Optional, cast
 
 from flask import Flask, jsonify, request
-from flask.json import JSONDecoder, JSONEncoder
 from flask_compress import Compress
 from flask_cors import CORS
 
@@ -34,8 +33,8 @@ def create_app(
     app.config["DEBUG"] = debug
     app.config["RESTX_INCLUDE_ALL_MODELS"] = True
     app.config["PROFILE"] = profile
-    app.json_encoder = cast(Type[JSONEncoder], CustomEncoder)
-    app.json_decoder = cast(Type[JSONDecoder], CustomDecoder)
+    app.json_encoder = CustomEncoder  # ty: ignore[invalid-assignment]
+    app.json_decoder = CustomDecoder  # ty: ignore[invalid-assignment]
     app.config.from_mapping(flask_options)
     app.simdb_config = config
     cache.init_app(app)
