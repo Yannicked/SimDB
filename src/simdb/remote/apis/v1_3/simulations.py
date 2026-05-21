@@ -1,5 +1,5 @@
 import datetime
-from typing import Annotated
+from typing import Annotated, Optional
 
 from flask_restx import Namespace, Resource
 
@@ -27,7 +27,7 @@ from simdb.workers.tasks import (
 api = Namespace("simulations", path="/")
 
 
-def _set_alias(simulation: models_sim.Simulation, alias: str | None):
+def _set_alias(simulation: models_sim.Simulation, alias: Optional[str]):
     if alias is None:
         simulation.alias = simulation.uuid.hex
         return
