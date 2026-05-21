@@ -28,8 +28,12 @@ def upgrade() -> None:
                 sa.Enum(
                     "QUEUED",
                     "COPYING",
+                    "COPIED",
                     "VALIDATING",
+                    "VALIDATED",
                     "COMPLETED",
+                    "COPY_FAILED",
+                    "VALIDATION_FAILED",
                     name="ingestionstatus",
                 ),
                 nullable=False,
