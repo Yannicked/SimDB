@@ -332,6 +332,12 @@ service nginx restart
 
 You should now be able to check the simdb server is running by going to the http address defined in your nginx site (localhost:80 in the example above).
 
+## Celery background workers
+
+SimDB uses Celery to run asynchronous background tasks such as copying simulation
+files. See the [Celery documentation](celery.md) for details on configuration and
+running workers.
+
 #### Nginx Request Entity Size
 
 You may need to increase the size of uploaded files that Nginx will accept. For SimDB this should be at least 100MB.

@@ -45,6 +45,23 @@ simdb_server
 
 This will start a server on port 5000. You can test this server is running by opening http://localhost:5000 in a browser.
 
+## Running Celery workers
+
+For development, you typically want to run Celery tasks synchronously. This is
+enabled by setting `task_always_eager = True` in tests (see `tests/remote/api/v1.3/test_simulations3.py`).
+
+To run actual background workers during development:
+
+```bash
+# Worker
+simdb_celery worker
+
+# Beat scheduler (if needed)
+simdb_celery beat
+```
+
+See the [Celery documentation](celery.md) for full details.
+
 ## Linting and formatting
 
 SimDB uses [Ruff](https://docs.astral.sh/ruff/) for both linting and code
