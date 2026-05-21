@@ -27,7 +27,11 @@ from simdb.workers.tasks import (
 api = Namespace("simulations", path="/")
 
 
-def _set_alias(alias: str):
+def _set_alias(simulation: models_sim.Simulation, alias: str | None):
+    if alias is None:
+        simulation.alias = simulation.uuid.hex
+        return
+
     character = None
     if alias.endswith("-"):
         character = "-"
@@ -35,16 +39,17 @@ def _set_alias(alias: str):
         character = "#"
 
     if not character:
-        return None, -1
+        simulation.alias = alias
+        return
 
     aliases = current_app.db.get_aliases(alias)
     last_id = max(
         (int(existing_alias.split(character)[-1]) for existing_alias in aliases),
         default=0,
     )
-    alias = f"{alias}{last_id + 1}"
-
-    return alias, last_id + 1
+    next_id = last_id + 1
+    simulation.alias = f"{alias}{next_id}"
+    simulation.meta.append(models_meta.MetaData("seqid", next_id))
 
 
 @api.route("/simulations")
@@ -57,6 +62,9 @@ class SimulationList(Resource):
         body: Annotated[SimulationPostData, Body()],
     ) -> SimulationPostResponse:
         simulation_data = body.model_copy()
+
+        # Clear the file inputs and outputs.
+        # The files will be added by the job.
         simulation_data.simulation.outputs = FileDataList()
         simulation_data.simulation.inputs = FileDataList()
         simulation = models_sim.Simulation.from_data_model(simulation_data.simulation)
@@ -68,22 +76,17 @@ class SimulationList(Resource):
 
         simulation.set_meta("uploaded_by", uploaded_by)
 
-        alias = body.simulation.alias
-        if alias is not None:
-            (simulation.alias, next_id) = _set_alias(alias)
-            if next_id > -1:
-                simulation.meta.append(models_meta.MetaData("seqid", next_id))
-        else:
-            simulation.alias = simulation.uuid.hex
+        _set_alias(simulation, body.simulation.alias)
 
         simulation.ingestion_status = IngestionStatus.QUEUED
         current_app.db.insert_simulation(simulation)
 
-        # Start ingestion job with files, return job_id
+        # This job will copy and add the files to the simulation
         copy_files = copy_files_task.si(
             simulation.uuid, body.simulation.inputs.root, body.simulation.outputs.root
         )
 
+        # The complete job will set simulation.ingestion_status = Completed
         complete = complete_ingestion_task.si(simulation.uuid)
 
         _ = (copy_files | complete).apply_async()
