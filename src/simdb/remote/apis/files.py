@@ -161,9 +161,7 @@ def _handle_file_upload() -> Response:
     sim_file_paths = simulation.file_paths()
     common_root = find_common_root(sim_file_paths)
 
-    sim_files = (
-        simulation.inputs if body.file_type == "input" else simulation.outputs
-    )
+    sim_files = simulation.inputs if body.file_type == "input" else simulation.outputs
     _stage_file_from_chunks(
         files, body.chunk_info or {}, simulation.uuid, sim_files, common_root
     )

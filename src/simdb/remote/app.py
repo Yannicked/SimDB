@@ -13,7 +13,6 @@ from flask_cors import CORS
 
 from simdb.config import Config
 from simdb.database.models import Base
-from simdb.json import CustomDecoder, CustomEncoder
 
 from .apis import blueprints
 from .core.auth._authenticator import Authenticator
