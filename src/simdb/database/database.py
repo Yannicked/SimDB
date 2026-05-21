@@ -1,4 +1,5 @@
 import contextlib
+import shutil
 import sys
 import uuid
 from datetime import datetime
@@ -8,6 +9,11 @@ from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Tuple, cast
 
 import appdirs
 import sqlalchemy.orm
+from alembic.config import Config as AlembicConfig
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from alembic.script import ScriptDirectory
+from rich.prompt import Confirm
 from sqlalchemy import String, Text, asc, create_engine, desc, func, or_
 from sqlalchemy import cast as sql_cast
 from sqlalchemy import or_ as sql_or
@@ -23,9 +29,70 @@ from .models.file import File
 from .models.metadata import MetaData
 from .models.simulation import Simulation
 
+_ALEMBIC_INI = Path("alembic.ini")
+
 
 class DatabaseError(RuntimeError):
     pass
+
+
+class DatabaseUninitializedError(DatabaseError):
+    pass
+
+
+class DatabaseOutdatedError(DatabaseError):
+    pass
+
+
+def check_migrations(engine) -> str:
+    """Check that the database is up-to-date with the latest Alembic migration.
+
+    Raises :class:`DatabaseUninitializedError` if the database has not been
+    initialised at all (i.e. the ``alembic_version`` table is absent), or
+    :class:`DatabaseOutdatedError` if the database schema is behind the head
+    revision.
+    """
+    alembic_cfg = AlembicConfig(str(_ALEMBIC_INI))
+    script = ScriptDirectory.from_config(alembic_cfg)
+    head_revision = script.get_current_head()
+
+    with engine.connect() as conn:
+        context = MigrationContext.configure(conn)
+        current_revision = context.get_current_revision()
+
+    if current_revision is None:
+        raise DatabaseUninitializedError(
+            "The database has not been initialised. "
+            f"Run 'DATABASE_URL={engine.url} alembic upgrade head' before starting the "
+            "server. "
+        )
+
+    if current_revision != head_revision:
+        raise DatabaseOutdatedError(
+            f"Database schema is out of date: current revision is {current_revision}, "
+            f"but the latest revision is {head_revision}. "
+            f"Run 'DATABASE_URL={engine.url} alembic upgrade head' to apply pending "
+            "migrations. "
+        )
+    return current_revision
+
+
+def run_migrations(engine) -> None:
+    """Run the database migrations."""
+    config = AlembicConfig(_ALEMBIC_INI)
+    config.set_main_option("script_location", "alembic")
+    script = ScriptDirectory.from_config(config)
+
+    def upgrade(rev, context):
+        return script._upgrade_revs("head", rev)
+
+    with engine.connect() as conn:
+        context = MigrationContext.configure(
+            conn, opts={"target_metadata": Base.metadata, "fn": upgrade}
+        )
+
+        with context.begin_transaction(), Operations.context(context):
+            context.run_migrations()
 
 
 TYPING = TYPE_CHECKING or "sphinx" in sys.modules
@@ -106,12 +173,6 @@ class Database:
             self.engine: sqlalchemy.engine.Engine = create_engine(
                 "sqlite:///{file}".format(**kwargs)
             )
-            with contextlib.closing(self.engine.connect()) as con:
-                res: sqlalchemy.engine.ResultProxy = con.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT "
-                    "LIKE 'sqlite_%';"
-                )
-                new_db = res.rowcount == -1
 
         elif db_type == Database.DBMS.POSTGRESQL:
             if "host" not in kwargs:
@@ -131,11 +192,6 @@ class Database:
                 pool_pre_ping=True,
                 pool_recycle=3600,
             )
-            with contextlib.closing(self.engine.connect()) as con:
-                res: sqlalchemy.engine.ResultProxy = con.execute(
-                    "SELECT * FROM pg_catalog.pg_tables WHERE schemaname = 'public';"
-                )
-                new_db = res.rowcount == 0
 
         elif db_type == Database.DBMS.MSSQL:
             if "user" not in kwargs:
@@ -147,12 +203,10 @@ class Database:
             self.engine: sqlalchemy.engine.Engine = create_engine(
                 "mssql+pyodbc://{user}:{password}@{dsnname}".format(**kwargs)
             )
-            new_db = False
 
         else:
             raise ValueError("Unknown database type: " + db_type.name)
-        if new_db:
-            Base.metadata.create_all(self.engine)
+
         Base.metadata.bind = self.engine
         if scopefunc is None:
 
@@ -744,4 +798,33 @@ def get_local_db(config: Config) -> Database:
     )
     db_file.parent.mkdir(parents=True, exist_ok=True)
     database = Database(Database.DBMS.SQLITE, file=db_file)
+    try:
+        check_migrations(database.engine)
+    except DatabaseUninitializedError as e:
+        if Confirm.ask("Local database has not been initialized. Initialize now?"):
+            run_migrations(database.engine)
+        else:
+            raise e
+    except DatabaseOutdatedError as e:
+        if Confirm.ask("Local database schema is out of date. Run migrations now?"):
+            backup_local_db(config)
+            run_migrations(database.engine)
+        else:
+            raise e
     return database
+
+
+def backup_local_db(config: Config):
+    db_file = Path(
+        config.get_string_option("db.file", default=None)
+        or f"{appdirs.user_data_dir('simdb')}/sim.db"
+    )
+    if not db_file.exists():
+        print("[warning]: No current database found, skipping backup.")
+
+    db_backups = db_file.parent / "backups"
+    db_backups.mkdir(parents=True, exist_ok=True)
+
+    db_backup_file = db_backups / f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.db"
+    shutil.copyfile(db_file, db_backup_file)
+    print(f"Stored database backup in: {db_backup_file}")
