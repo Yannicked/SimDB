@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import Enum
 from getpass import getuser
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Union, cast
+from typing import Any, Dict, List, Optional, Set, Union
 
 from simdb.remote.models import (
     FileDataList,

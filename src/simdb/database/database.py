@@ -15,7 +15,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from alembic.script import ScriptDirectory
 from rich.prompt import Confirm
-from sqlalchemy import Float, String, Text, asc, create_engine, desc, func, or_, text
+from sqlalchemy import Float, String, Text, create_engine, func, text
 from sqlalchemy import and_ as sql_and
 from sqlalchemy import cast as sql_cast
 from sqlalchemy import or_ as sql_or
