@@ -339,15 +339,11 @@ class Simulation(Base):
                 )
             return None
 
-        file_paths = cast(
-            Set[Path],
-            set(
-                filter(
-                    lambda el: el is not None,
-                    (_get_path(f) for f in itertools.chain(self.inputs, self.outputs)),
-                )
-            ),
-        )
+        file_paths = set()
+        for f in itertools.chain(self.inputs, self.outputs):
+            path = _get_path(f)
+            if path is not None:
+                file_paths.add(path)
         return file_paths
 
     @classmethod
