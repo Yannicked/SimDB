@@ -134,7 +134,10 @@ def _deserialize_numpy(v: Any) -> Any:
         return v
     if isinstance(v, dict) and v.get("_type") == "numpy.ndarray":
         np_bytes = base64.b64decode(v["bytes"].encode())
-        return np.frombuffer(np_bytes, dtype=v["dtype"]).reshape(v["shape"])
+        arr = np.frombuffer(np_bytes, dtype=v["dtype"])
+        if "shape" in v:
+            arr = arr.reshape(v["shape"])
+        return arr
     raise ValueError(f"Cannot deserialize {v} to np.ndarray")
 
 

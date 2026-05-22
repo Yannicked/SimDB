@@ -158,7 +158,10 @@ class SimulationImasData(Resource):
             raise ResponseException(str(exc)) from exc
 
         try:
-            entry = open_imas(URI(str(result.imas_file.uri)))
+            imas_uri = URI(str(result.imas_file.uri))
+            if imas_uri.authority.host and "cache_mode" not in imas_uri.query:
+                imas_uri.query.set("cache_mode", "none")
+            entry = open_imas(imas_uri)
             with entry:
                 node = _get_ids_node(entry, ids_name, occurrence, ids_path)
                 coordinates = _get_coordinates(node, ids_name)
