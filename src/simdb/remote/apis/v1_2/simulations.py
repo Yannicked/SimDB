@@ -11,7 +11,6 @@ from flask import request, send_file
 from flask_restx import Namespace, Resource
 
 from simdb.database import DatabaseError
-from simdb.database.models import metadata as models_meta
 from simdb.database.models import simulation as models_sim
 from simdb.database.models import watcher as models_watcher
 from simdb.email.server import EmailServer
@@ -142,7 +141,7 @@ def _build_trace(sim_id: str) -> SimulationTraceData:
 
     def get_meta_val(key, default=None):
         meta = simulation.find_meta(key)
-        return meta[0].value if meta else default
+        return meta[0] if meta else default
 
     status_val = get_meta_val("status")
     if status_val:
@@ -183,7 +182,7 @@ class SimulationList(Resource):
                 values = request.args.getlist(name)
                 for value in values:
                     constraint = parse_query_arg(value)
-                    if constraint[0]:
+                    if constraint[0] or constraint[1] == QueryType.EXIST:
                         constraints.append((name, *constraint))
 
         if constraints:
@@ -240,7 +239,7 @@ class SimulationList(Resource):
         if alias is not None:
             (updated_alias, next_id) = _set_alias(alias)
             if updated_alias:
-                simulation.meta.append(models_meta.MetaData("seqid", next_id))
+                simulation.set_meta("seqid", next_id)
                 simulation.alias = updated_alias
             else:
                 simulation.alias = alias
@@ -314,8 +313,8 @@ class SimulationList(Resource):
         )
         replaces = simulation.find_meta("replaces")
 
-        if not disable_replaces and replaces and replaces[0].value:
-            sim_id = replaces[0].value
+        if not disable_replaces and replaces and replaces[0]:
+            sim_id = replaces[0]
             try:
                 replaces_sim = current_app.db.get_simulation(sim_id)
             except DatabaseError:
@@ -325,7 +324,7 @@ class SimulationList(Resource):
                 _update_simulation_status(
                     replaces_sim, models_sim.Simulation.Status.DEPRECATED, user
                 )
-                replaces_sim.set_meta("replaced_by", simulation.uuid)
+                replaces_sim.set_meta("replaced_by", simulation.uuid.hex)
                 current_app.db.insert_simulation(replaces_sim)
 
         current_app.db.insert_simulation(simulation)
@@ -426,7 +425,7 @@ class SimulationMeta(Resource):
         if simulation is None:
             raise ResponseException(f"Simulation {sim_id} not found.")
         old_values = MetadataDataList.model_validate(
-            [meta.data() for meta in simulation.find_meta(key)]
+            [{"element": key, "value": v} for v in simulation.find_meta(key)]
         )
         if key.lower() != "status":
             simulation.set_meta(key, value)

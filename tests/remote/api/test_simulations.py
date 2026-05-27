@@ -170,7 +170,7 @@ def test_post_simulations_with_replaces(client):
     assert metadata["status"].lower() == "deprecated"
 
     # Check replaced_by metadata was added
-    assert metadata["replaced_by"] == new_simulation_data.simulation.uuid
+    assert metadata["replaced_by"] == new_simulation_data.simulation.uuid.hex
 
     # Verify the new simulation has replaces metadata
     rv_new_get = client.get(

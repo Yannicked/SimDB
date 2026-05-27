@@ -98,10 +98,12 @@ This might indicate an invalid SimDB URL or the existence of a firewall.
 
 def read_bytes(path: Path, compressed: bool = True) -> bytes:
     if compressed:
-        with io.BytesIO() as buffer, gzip.GzipFile(
-            fileobj=buffer, mode="wb"
-        ) as gz_file, path.open("rb") as file_in:
-            gz_file.write(file_in.read())
+        with io.BytesIO() as buffer:
+            with gzip.GzipFile(fileobj=buffer, mode="wb") as gz_file, path.open(
+                "rb"
+            ) as file_in:
+                gz_file.write(file_in.read())
+            # gz_file is now closed (gzip footer written); buffer is still open
             buffer.seek(0)
             return buffer.read()
     else:
@@ -800,11 +802,9 @@ class RemoteAPI:
                         ):
                             continue
                         sim_file = next(
-                            f
-                            for f in sim_data["inputs"]
-                            if f.get("uuid") == file.uuid  # type: ignore[union-attr]
+                            f for f in sim_data["inputs"] if f.get("uuid") == file.uuid
                         )
-                        sim_file["uri"] = f"file:{path}"  # type: ignore[invalid-assignment]
+                        sim_file["uri"] = f"file:{path}"
                         self._push_file(
                             path,
                             file.uuid,
@@ -862,12 +862,12 @@ class RemoteAPI:
                             (
                                 f
                                 for f in sim_data["outputs"]
-                                if f.get("uuid") == file.uuid  # type: ignore[union-attr]
+                                if f.get("uuid") == file.uuid
                             ),
                             None,
                         )
                         if sim_file:
-                            sim_file["uri"] = f"file:{path}"  # type: ignore[invalid-assignment]
+                            sim_file["uri"] = f"file:{path}"
                         self._push_file(
                             path,
                             file.uuid,
