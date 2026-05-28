@@ -123,7 +123,7 @@ def validateUUID(uuid):
 
 def ingestFile(fileClass, fileName):
     fd = open(fileName, "r")
-    x = yaml.load(fd)  # x is a dictionary
+    x = yaml.load(fd, Loader=yaml.SafeLoader)  # x is a dictionary
 
     print(yaml.dump(x))
 

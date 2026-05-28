@@ -26,7 +26,6 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
-    InstanceOf,
     PlainSerializer,
     field_validator,
     model_validator,
@@ -69,6 +68,60 @@ StatusLiteral = Literal[
     "not validated", "accepted", "failed", "passed", "deprecated", "deleted"
 ]
 """String representation of a simulation status"""
+
+
+def _array_to_range(value: Any) -> Any:
+    """Convert a numpy array or list to a RangeValue if it contains numeric data."""
+    if value is None:
+        return None
+
+    if (
+        isinstance(value, dict)
+        and "dtype" in value
+        and "shape" in value
+        and "bytes" in value
+    ):
+        np_bytes = base64.decodebytes(value["bytes"].encode())
+        return _array_to_range(np.frombuffer(np_bytes, dtype=value["dtype"]))
+
+    if isinstance(value, np.ndarray):
+        value = _array_to_range(value.tolist())
+
+    if isinstance(value, (list, tuple)):
+        if len(value) == 0:
+            return value
+
+        try:
+            float_values = [float(v) for v in value]
+            return RangeValue(min=min(float_values), max=max(float_values))
+        except (TypeError, ValueError):
+            return value
+
+    return value
+
+
+class RangeValue(BaseModel):
+    """A numeric range with min and max bounds."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    min: float
+    max: float
+
+
+MetadataValue = Union[
+    CustomUUID,
+    str,
+    int,
+    float,
+    bool,
+    list,
+    RangeValue,
+    dict[str, Any],
+    None,
+]
+"""Supported types for simulation metadata values. Numpy arrays and regular arrays
+containing numeric data are automatically converted to RangeValue."""
 
 
 class StatusPatchData(BaseModel):
@@ -181,6 +234,14 @@ class MetadataData(BaseModel):
     """Metadata key/name."""
     value: MetadataValue
     """Metadata value."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def convert_array_to_range(cls, data: Any) -> Any:
+        """Convert numpy arrays and lists containing numeric data to RangeValue."""
+        if isinstance(data, dict) and "value" in data:
+            data["value"] = _array_to_range(data["value"])
+        return data
 
     def as_dict(self) -> dict:
         """Convert to dictionary."""
