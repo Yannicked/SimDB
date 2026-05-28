@@ -12,7 +12,6 @@ from typing import (
     List,
     Literal,
     Optional,
-    TypeAlias,
     TypeVar,
     Union,
 )
@@ -111,7 +110,7 @@ class RangeValue(BaseModel):
     max: float
 
 
-MetadataValue: TypeAlias = Union[
+MetadataValue = Union[
     CustomUUID,
     str,
     int,
@@ -214,7 +213,7 @@ NumpyArray = Annotated[
 ]
 
 
-MetadataValue: TypeAlias = Union[
+MetadataValue = Union[
     CustomUUID,
     str,
     int,
