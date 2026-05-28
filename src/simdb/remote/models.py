@@ -219,13 +219,15 @@ MetadataValue = Union[
     int,
     float,
     bool,
+    RangeValue,
     list,
     dict,
     NumpyArray,
     None,
 ]
-"""Supported types for simulation metadata values. Numpy arrays and scalars are
-automatically converted to their plain Python equivalents before validation."""
+"""Supported types for simulation metadata values. RangeValue, numpy arrays and
+scalars are automatically converted to their plain Python equivalents before
+validation."""
 
 
 class MetadataData(BaseModel):

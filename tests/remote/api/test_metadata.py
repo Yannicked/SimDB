@@ -51,6 +51,30 @@ def test_get_metadata_values(client):
     assert "machine-a" in rv.json or "machine-b" in rv.json
 
 
+def test_get_metadata_list_value(client):
+    """Test that float lists are auto-converted to Range (new behavior)."""
+    list_data = [1.0, 2.5, 3.7]
+    simulation_data_1 = generate_simulation_data(metadata={"ip": list_data})
+    rv_post_1 = post_simulation(client, simulation_data_1)
+    assert rv_post_1.status_code == 200
+
+    rv = client.get("/v1.2/metadata", headers=HEADERS)
+    assert rv.status_code == 200
+    mkeys = MetadataKeyInfoList.model_validate_json(rv.data)
+    mkey = next((k for k in mkeys.root if k.name == "ip"), None)
+    assert mkey is not None, "ip key not found in metadata keys"
+    assert mkey.type == "Range"
+
+    rv = client.get("/v1.2/metadata/ip", headers=HEADERS)
+    assert rv.status_code == 200
+    mdata = MetadataValueList.model_validate_json(rv.data)
+    assert len(mdata.root) == 1
+    a = mdata.root[0]
+    assert isinstance(a, RangeValue)
+    assert a.min == 1.0
+    assert a.max == 3.7
+
+
 def test_get_metadata_range_value(client):
     """Test metadata Range storage"""
     # Create a simulation with a range metadata value
