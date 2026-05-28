@@ -29,6 +29,14 @@ class CustomValidator(ValidatorBase):
     types_mapping["numpy"] = cerberus.TypeDefinition("numpy", (np.ndarray,), ())
 
     @staticmethod
+    def _range_value(value) -> Optional[np.ndarray]:
+        if isinstance(value, dict) and {"min", "max"} <= value.keys():
+            return np.array([value["min"], value["max"]])
+        if hasattr(value, "min") and hasattr(value, "max"):
+            return np.array([value.min, value.max])
+        return None
+
+    @staticmethod
     def _value_preview(value, max_length: int = 200) -> str:
         preview = repr(value)
         if len(preview) > max_length:
@@ -138,6 +146,9 @@ class CustomValidator(ValidatorBase):
     def _normalize_coerce_numpy(cls, value):
         if isinstance(value, np.ndarray):
             return value
+        range_value = cls._range_value(value)
+        if range_value is not None:
+            return range_value
         elif isinstance(value, str):
             return np.fromstring(value[1:-1], sep=" ")
         else:
