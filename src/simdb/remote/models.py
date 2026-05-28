@@ -12,6 +12,7 @@ from typing import (
     List,
     Literal,
     Optional,
+    TypeAlias,
     TypeVar,
     Union,
 )
@@ -26,6 +27,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    InstanceOf,
     PlainSerializer,
     field_validator,
     model_validator,
@@ -109,7 +111,7 @@ class RangeValue(BaseModel):
     max: float
 
 
-MetadataValue = Union[
+MetadataValue: TypeAlias = Union[
     CustomUUID,
     str,
     int,
@@ -212,7 +214,7 @@ NumpyArray = Annotated[
 ]
 
 
-MetadataValue = Union[
+MetadataValue: TypeAlias = Union[
     CustomUUID,
     str,
     int,
