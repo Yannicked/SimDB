@@ -110,21 +110,6 @@ class RangeValue(BaseModel):
     max: float
 
 
-MetadataValue = Union[
-    CustomUUID,
-    str,
-    int,
-    float,
-    bool,
-    list,
-    RangeValue,
-    dict[str, Any],
-    None,
-]
-"""Supported types for simulation metadata values. Numpy arrays and regular arrays
-containing numeric data are automatically converted to RangeValue."""
-
-
 class StatusPatchData(BaseModel):
     """Post data for updating simulation status."""
 
