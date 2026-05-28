@@ -28,6 +28,22 @@ class CustomValidator(ValidatorBase):
     types_mapping = cast(Any, cerberus.Validator).types_mapping.copy()
     types_mapping["numpy"] = cerberus.TypeDefinition("numpy", (np.ndarray,), ())
 
+    def _numeric_array(self, field, value) -> Optional[np.ndarray]:
+        if not isinstance(value, np.ndarray):
+            self._error(field, "Value is not a numpy array")
+            return None
+        try:
+            value = value.astype(float, copy=False)
+        except (TypeError, ValueError):
+            self._error(field, "Values in numpy array must be numeric")
+            return None
+
+        value = value[~np.isnan(value)]
+        if value.size == 0:
+            self._error(field, "Values in numpy array are NaN or empty")
+            return None
+        return value
+
     def _validate_exists(self, check_exists, field, value):
         """The rule's arguments are validated against this schema:
         {'type': ['string'],
@@ -40,11 +56,9 @@ class CustomValidator(ValidatorBase):
         {'type': 'float'}
         """
 
-        if not isinstance(value, np.ndarray):
-            value = value[~np.isnan(value)]
-            if value.size == 0:
-                self._error(field, "Values in numpy array are NaN or empty")
-            self._error(field, "Value is not a numpy array")
+        value = self._numeric_array(field, value)
+        if value is None:
+            return
         if min_value is not None and value.min() < min_value:
             self._error(field, f"Minimum {value.min()} less than {min_value}")
 
@@ -53,11 +67,9 @@ class CustomValidator(ValidatorBase):
         {'type': 'float'}
         """
 
-        if not isinstance(value, np.ndarray):
-            value = value[~np.isnan(value)]
-            if value.size == 0:
-                self._error(field, "Values in numpy array are NaN or empty")
-            self._error(field, "Value is not a numpy array")
+        value = self._numeric_array(field, value)
+        if value is None:
+            return
         if max_value is not None and value.max() > max_value:
             self._error(field, f"Maximum {value.max()} greater than {max_value}")
 
@@ -65,9 +77,9 @@ class CustomValidator(ValidatorBase):
         if comparison is None:
             return
         if isinstance(value, np.ndarray):
-            value = value[~np.isnan(value)]
-            if value.size == 0:
-                self._error(field, "Values in numpy array are NaN or empty")
+            value = self._numeric_array(field, value)
+            if value is None:
+                return
             if not getattr(value, comparator)(comparison).all():
                 self._error(field, f"Values are not {message} {comparison}")
         elif isinstance(value, float):
