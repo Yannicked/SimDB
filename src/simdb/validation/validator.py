@@ -28,14 +28,28 @@ class CustomValidator(ValidatorBase):
     types_mapping = cast(Any, cerberus.Validator).types_mapping.copy()
     types_mapping["numpy"] = cerberus.TypeDefinition("numpy", (np.ndarray,), ())
 
+    @staticmethod
+    def _value_preview(value, max_length: int = 200) -> str:
+        preview = repr(value)
+        if len(preview) > max_length:
+            preview = f"{preview[:max_length]}..."
+        return f"{type(value).__name__} {preview}"
+
     def _numeric_array(self, field, value) -> Optional[np.ndarray]:
         if not isinstance(value, np.ndarray):
-            self._error(field, "Value is not a numpy array")
+            self._error(
+                field,
+                f"Value is not a numpy array: {self._value_preview(value)}",
+            )
             return None
         try:
             value = value.astype(float, copy=False)
         except (TypeError, ValueError):
-            self._error(field, "Values in numpy array must be numeric")
+            self._error(
+                field,
+                "Values in numpy array must be numeric: "
+                f"{self._value_preview(value)}",
+            )
             return None
 
         value = value[~np.isnan(value)]
