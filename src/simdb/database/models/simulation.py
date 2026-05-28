@@ -366,7 +366,9 @@ class Simulation(Base):
                 meta_dict = {}
                 for el in metadata:
                     if not isinstance(el, dict):
-                        raise Exception("corrupted metadata element - expected dictionary")
+                        raise Exception(
+                            "corrupted metadata element - expected dictionary"
+                        )
                     if "element" in el and "value" in el:
                         meta_dict[el["element"]] = el["value"]
                 simulation._set_metadata_dict(meta_dict)
