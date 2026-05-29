@@ -16,7 +16,12 @@ from simdb.query import QueryType, parse_query_arg
 from simdb.validation import ValidationError, Validator
 
 from . import check_meta_args, pass_config
-from .utils import print_simulations
+from .utils import (
+    is_numeric_1d,
+    print_quantity,
+    print_simulations,
+    show_quantity_textual_plot,
+)
 from .validators import validate_non_negative
 
 
@@ -351,6 +356,69 @@ def simulation_query(
     print_simulations(
         simulations, verbose=config.verbose, metadata_names=names, show_uuid=show_uuid
     )
+
+
+@simulation.command("data", cls=n_required_args_adaptor(2))
+@pass_config
+@click.argument("remote", required=False)
+@click.argument("sim_id")
+@click.argument("ids_path")
+@click.option("--username", help="Username used to authenticate with the remote.")
+@click.option("--password", help="Password used to authenticate with the remote.")
+def simulation_data(
+    config: Config,
+    remote: Optional[str],
+    sim_id: str,
+    ids_path: str,
+    username: Optional[str],
+    password: Optional[str],
+):
+    """Fetch IDS field data for simulation SIM_ID (UUID or alias) from REMOTE.
+
+    \b
+    IDS_PATH format:
+        ids_name[:<occurrence>]/path/to/field
+
+    \b
+    Examples:
+        simdb sim data iter 4dd781b... profiles_1d[0]/grid/rho_tor_norm
+        simdb sim data 4dd781b... equilibrium:0/time_slice[0]/profiles_1d/psi
+    """
+    api = RemoteAPI(remote, username, password, config)
+
+    try:
+        result = api.get_simulation_data(sim_id, ids_path)
+    except Exception as err:
+        raise click.ClickException(str(err)) from err
+
+    click.echo(f"simulation : {result['simulation']}")
+    click.echo(f"path       : {result['path']}  (occurrence {result['occurrence']})")
+
+    coordinates = result.get("coordinates") or []
+    plot_coordinate = next(
+        (
+            coord
+            for coord in coordinates
+            if isinstance(coord.get("data"), list)
+            and isinstance(result["field"].get("data"), list)
+            and len(coord["data"]) == len(result["field"]["data"])
+        ),
+        None,
+    )
+    field_is_1d = is_numeric_1d(result["field"].get("data"))
+    if field_is_1d:
+        show_quantity_textual_plot(
+            result["field"], label="field", x_quantity=plot_coordinate
+        )
+    else:
+        print_quantity(result["field"], label="field")
+
+    if config.verbose and coordinates:
+        for coord in coordinates:
+            if field_is_1d and is_numeric_1d(coord.get("data")):
+                continue
+            if isinstance(coord.get("data"), list):
+                print_quantity(coord, label=f"coord  {coord['name']}", show_stats=False)
 
 
 @simulation.command("validate", cls=n_required_args_adaptor(1))

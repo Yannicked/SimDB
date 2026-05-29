@@ -55,8 +55,7 @@ class CustomValidator(ValidatorBase):
         except (TypeError, ValueError):
             self._error(
                 field,
-                "Values in numpy array must be numeric: "
-                f"{self._value_preview(value)}",
+                f"Values in numpy array must be numeric: {self._value_preview(value)}",
             )
             return None
 

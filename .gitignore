@@ -32,3 +32,9 @@ src/simdb/_version.py
 *.egg-info
 *.egg
 *.whl
+myenv/*
+qdrant/*
+imaspulse/*
+simdb-local/*
+imaspluse/*
+ASTRA/*

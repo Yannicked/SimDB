@@ -664,6 +664,11 @@ class RemoteAPI:
         return [data["value"] for data in res.json()]
 
     @try_request
+    def get_simulation_data(self, sim_id: str, path: str) -> Dict[str, Any]:
+        res = self.get(f"simulation/{sim_id}/data", params={"path": path})
+        return res.json()
+
+    @try_request
     def get_directory(self) -> str:
         res = self.get("staging_dir")
         return res.json()["staging_dir"]
