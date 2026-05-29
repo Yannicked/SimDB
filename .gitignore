@@ -21,9 +21,7 @@ test_manifest.yml
 /htmlcov
 /test-reports/
 /tests/cli/test.cfg
-/tests/cli/*.yaml
-/tests/remote/api/test_data_files/
-.eggs
+/tests/cli/*.yaml.eggs
 .coverage
 *.xml
 simdb-coverage-report
@@ -32,9 +30,3 @@ src/simdb/_version.py
 *.egg-info
 *.egg
 *.whl
-myenv/*
-qdrant/*
-imaspulse/*
-simdb-local/*
-imaspluse/*
-ASTRA/*
