@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from unittest import mock
 from uuid import UUID
 
@@ -5,16 +6,17 @@ import pytest
 from conftest import (
     HEADERS,
     generate_simulation_data,
-    generate_simulation_file,
 )
 
 from simdb.config import Config
 from simdb.enums import IngestionStatus
 from simdb.remote.models import (
+    FileData,
     SimulationPostResponse,
 )
 from simdb.workers import tasks as simdb_tasks
 from simdb.workers.celery import celery_app
+from simdb.workers.tasks import _calculate_checksum
 
 
 @pytest.fixture(autouse=True)
@@ -73,13 +75,26 @@ def get_simulation_status(client, simulation_uuid: UUID, headers=HEADERS):
     return rv_get
 
 
-def test_post_simulations_v13(client_with_task_mock):
+def generate_simulation_file(path) -> FileData:
+    file_path = path / "partition/file.txt"
+    file_path.parent.mkdir(exist_ok=True)
+    file_path.write_text("test data")
+    checksum = _calculate_checksum(file_path)
+    return FileData(
+        type="FILE",
+        uri="data:///file.txt",
+        checksum=checksum,
+        datetime=datetime.now(timezone.utc),
+    )
+
+
+def test_post_simulations_v13(client_with_task_mock, tmp_path):
     """Test POST endpoint for creating a new simulation."""
     client = client_with_task_mock
     simulation_data = generate_simulation_data(
         alias="test-simulation-v13",
-        inputs=[generate_simulation_file()],
-        outputs=[generate_simulation_file()],
+        inputs=[generate_simulation_file(tmp_path)],
+        outputs=[generate_simulation_file(tmp_path)],
     )
 
     rv = post_simulation_v13(client, simulation_data)
@@ -91,3 +106,7 @@ def test_post_simulations_v13(client_with_task_mock):
 
     simulation = client.application.db.get_simulation(result.ingested.hex)
     assert simulation.ingestion_status == IngestionStatus.COMPLETED
+    assert (
+        simulation.inputs[0].uri.path
+        == tmp_path / "uploads" / result.ingested.hex / "file.txt"
+    )
