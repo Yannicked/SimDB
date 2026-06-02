@@ -4,7 +4,7 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import List
+from typing import Iterable, List
 from uuid import UUID
 
 from simdb.config import Config
@@ -90,13 +90,17 @@ def _resolve_paths(files_data: list[FileData], config: Config) -> list[Path]:
     return [_resolve_uri_to_path(URI(f.uri), config) for f in files_data]
 
 
+def _resolve_destination_path(source: Path, common_root: Path, dst_basepath: Path):
+    return dst_basepath / source.relative_to(common_root)
+
+
 def _copy_files(
-    paths: list[Path],
+    paths: Iterable[Path],
     common_root: Path,
     dst_basepath: Path,
-) -> None:
+):
     for source in paths:
-        destination: Path = dst_basepath / source.relative_to(common_root)
+        destination = _resolve_destination_path(source, common_root, dst_basepath)
         destination.parent.mkdir(exist_ok=True, parents=True)
         shutil.copy2(source, destination)
 
@@ -132,15 +136,16 @@ def _create_file_from_data(
 
 
 def _create_files_from_data_list(
-    files_data: list[FileData],
-    config: Config,
+    files_data: list[FileData], config: Config, common_root: Path, dst_basepath: Path
 ) -> list[File]:
     seen_imas_paths: set[Path] = set()
     files: list[File] = []
 
     for file_data in files_data:
         uri = URI(file_data.uri)
-        path = _resolve_uri_to_path(uri, config)
+        path = _resolve_destination_path(
+            _resolve_uri_to_path(uri, config), common_root, dst_basepath
+        )
 
         if file_data.type == "IMAS":
             imas_path = _get_imas_identifier_path(path)
@@ -153,6 +158,7 @@ def _create_files_from_data_list(
             if file_data.checksum != checksum:
                 raise ValueError("Hash of file does not match provided checksum")
             file = File.from_data_model(file_data)
+            file.uri = URI(scheme="file", path=path)
 
         files.append(file)
 
@@ -174,32 +180,29 @@ def copy_files_task(
     simulation = database.get_simulation(simulation_uuid.hex)
     simulation.ingestion_status = IngestionStatus.COPYING
     database.session.commit()
-    print(input_files)
-    print(output_files)
 
     try:
         input_paths = _resolve_paths(input_files, config)
         output_paths = _resolve_paths(output_files, config)
-        print(input_paths)
-        print(output_paths)
-        paths = input_paths + output_paths
+        paths = set(input_paths + output_paths)
         if len(paths) == 0:
             common_root = Path()
         elif len(paths) == 1:
-            common_root = paths[0].parent
+            common_root = next(iter(paths)).parent
         else:
             common_root = Path(os.path.commonpath(paths))
-        dst_basepath = (
+        dst_basepath: Path = (
             Path(config.get_string_option("server.upload_folder")) / simulation_uuid.hex
         )
 
-        _copy_files(input_paths, common_root, dst_basepath)
-        _copy_files(output_paths, common_root, dst_basepath)
+        _copy_files(paths, common_root, dst_basepath)
 
-        inputs = _create_files_from_data_list(input_files, config)
-        outputs = _create_files_from_data_list(output_files, config)
-        print(inputs)
-        print(outputs)
+        inputs = _create_files_from_data_list(
+            input_files, config, common_root, dst_basepath
+        )
+        outputs = _create_files_from_data_list(
+            output_files, config, common_root, dst_basepath
+        )
 
         for f in [*inputs, *outputs]:
             database.session.add(f)
