@@ -61,7 +61,7 @@ class SimulationList(Resource):
         user: User,
         body: Annotated[SimulationPostData, Body()],
     ) -> SimulationPostResponse:
-        simulation_data = body.model_copy()
+        simulation_data = body.model_copy(deep=True)
 
         # Clear the file inputs and outputs.
         # The files will be added by the job.
@@ -83,7 +83,9 @@ class SimulationList(Resource):
 
         # This job will copy and add the files to the simulation
         copy_files = copy_files_task.si(
-            simulation.uuid, body.simulation.inputs.root, body.simulation.outputs.root
+            simulation.uuid,
+            body.simulation.inputs.model_dump(),
+            body.simulation.outputs.model_dump(),
         )
 
         # The complete job will set simulation.ingestion_status = Completed

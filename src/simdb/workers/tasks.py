@@ -7,20 +7,19 @@ from pathlib import Path
 from typing import List
 from uuid import UUID
 
-from celery import shared_task
-
 from simdb.config import Config
 from simdb.database.database import get_db
 from simdb.database.models import File
 from simdb.email.server import EmailServer
 from simdb.enums import IngestionStatus
-from simdb.remote.models import FileData
+from simdb.remote.models import FileData, FileDataList
 from simdb.uri import URI
+from simdb.workers.celery import celery_app
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task
+@celery_app.task
 def send_email_task(
     subject: str,
     body: str,
@@ -150,6 +149,9 @@ def _create_files_from_data_list(
             seen_imas_paths.add(imas_path)
             file = _create_file_from_data(file_data, config, imas_path)
         else:
+            checksum = _calculate_checksum(path)
+            if file_data.checksum != checksum:
+                raise ValueError("Hash of file does not match provided checksum")
             file = File.from_data_model(file_data)
 
         files.append(file)
@@ -157,12 +159,14 @@ def _create_files_from_data_list(
     return files
 
 
-@shared_task
+@celery_app.task
 def copy_files_task(
     simulation_uuid: UUID,
-    input_files: list[FileData],
-    output_files: list[FileData],
+    input_files_d: list[FileData],
+    output_files_d: list[FileData],
 ):
+    input_files = FileDataList.model_validate(input_files_d).root
+    output_files = FileDataList.model_validate(output_files_d).root
     config = Config()
     config.load()
     database = get_db(config)
@@ -170,10 +174,14 @@ def copy_files_task(
     simulation = database.get_simulation(simulation_uuid.hex)
     simulation.ingestion_status = IngestionStatus.COPYING
     database.session.commit()
+    print(input_files)
+    print(output_files)
 
     try:
         input_paths = _resolve_paths(input_files, config)
         output_paths = _resolve_paths(output_files, config)
+        print(input_paths)
+        print(output_paths)
         paths = input_paths + output_paths
         if len(paths) == 0:
             common_root = Path()
@@ -190,6 +198,8 @@ def copy_files_task(
 
         inputs = _create_files_from_data_list(input_files, config)
         outputs = _create_files_from_data_list(output_files, config)
+        print(inputs)
+        print(outputs)
 
         for f in [*inputs, *outputs]:
             database.session.add(f)
@@ -206,7 +216,7 @@ def copy_files_task(
         database.close()
 
 
-@shared_task
+@celery_app.task
 def validate_imas_task(simulation_uuid: UUID):
     config = Config()
     config.load()
@@ -225,7 +235,7 @@ def validate_imas_task(simulation_uuid: UUID):
     database.close()
 
 
-@shared_task
+@celery_app.task
 def complete_ingestion_task(simulation_uuid: UUID):
     config = Config()
     config.load()
