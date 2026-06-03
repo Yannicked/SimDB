@@ -229,9 +229,11 @@ class Config:
         the users configuration directory.
         """
         self._user_config_dir.mkdir(parents=True, exist_ok=True)
-        with self._user_config_path.open("w") as file:
+        fd = os.open(
+            self._user_config_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600
+        )
+        with os.fdopen(fd, "w") as file:
             self._parser.write(file)
-        self._user_config_path.chmod(0o600)
 
     def sections(self) -> List[str]:
         """

@@ -1,11 +1,10 @@
-import numpy as np
 from conftest import (
     HEADERS,
     generate_simulation_data,
     post_simulation,
 )
 
-from simdb.remote.models import MetadataKeyInfoList, MetadataValueList
+from simdb.remote.models import MetadataKeyInfoList, MetadataValueList, RangeValue
 
 
 def test_get_metadata_keys(client):
@@ -52,29 +51,30 @@ def test_get_metadata_values(client):
     assert "machine-a" in rv.json or "machine-b" in rv.json
 
 
-def test_get_metadata_array_value(client):
-    """Test metadata ndarray storage"""
-    # Create a simulation with array metadata
-    array_data = np.array([1, 2, 3])
-    simulation_data_1 = generate_simulation_data(metadata={"array_machine": array_data})
+def test_get_metadata_range_value(client):
+    """Test metadata Range storage"""
+    # Create a simulation with a range metadata value
+    range_data = RangeValue(min=1.0, max=3.0)
+    simulation_data_1 = generate_simulation_data(metadata={"range_machine": range_data})
     rv_post_1 = post_simulation(client, simulation_data_1)
     assert rv_post_1.status_code == 200
 
     rv = client.get("/v1.2/metadata", headers=HEADERS)
     assert rv.status_code == 200
     mkeys = MetadataKeyInfoList.model_validate_json(rv.data)
-    for k in mkeys.root:
-        if k.name == "array_machine":
-            mkey = k
-    assert mkey.type == "ndarray"
+    mkey = next((k for k in mkeys.root if k.name == "range_machine"), None)
+    assert mkey is not None, "range_machine key not found in metadata keys"
+    assert mkey.type == "Range"
 
-    rv = client.get("/v1.2/metadata/array_machine", headers=HEADERS)
+    rv = client.get("/v1.2/metadata/range_machine", headers=HEADERS)
 
     assert rv.status_code == 200
     mdata = MetadataValueList.model_validate_json(rv.data)
     assert len(mdata.root) == 1
     a = mdata.root[0]
-    assert isinstance(a, np.ndarray)
+    assert isinstance(a, RangeValue)
+    assert a.min == 1.0
+    assert a.max == 3.0
 
 
 def test_get_metadata_values_nonexistent_key(client):
