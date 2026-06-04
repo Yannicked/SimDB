@@ -32,12 +32,13 @@ import logging
 import sys
 
 try:
-    import imaspy as imas
+    import imaspy as imas  # type: ignore
 except ImportError:
     import imas
 import argparse
 import os
 from datetime import datetime
+from typing import Optional
 
 import numpy as np
 import yaml
@@ -675,8 +676,8 @@ def get_dataset_description(
             start = end = legacy_yaml_data["idslist"]["summary"]["time"][0]
             step = 0.0
         if step == "varying":
-            times = ids_summary.time
-            homogeneous_time = ids_summary.ids_properties.homogeneous_time
+            times = ids_summary.time  # ty: ignore[unresolved-attribute]
+            homogeneous_time = ids_summary.ids_properties.homogeneous_time  # ty: ignore[unresolved-attribute]
             if homogeneous_time == 1:
                 if times is not None:
                     if len(times) > 1:
@@ -823,7 +824,7 @@ def get_dataset_description(
                     f"\t>  (yaml,ids):[{simulation_time_begin_yaml}],[{simulation_time_begin_ids}]"
                 )
             dataset_description["simulation"]["time_begin"] = (
-                simulation_time_begin_ids.value
+                simulation_time_begin_ids.value  # ty: ignore[unresolved-attribute]
             )
         else:
             validation_logger.info(
@@ -842,7 +843,7 @@ def get_dataset_description(
                     f"\t>  (yaml,ids):[{simulation_time_end_yaml}],[{simulation_time_end_ids}]"
                 )
             dataset_description["simulation"]["time_end"] = (
-                simulation_time_end_ids.value
+                simulation_time_end_ids.value  # ty: ignore[unresolved-attribute]
             )
         else:
             validation_logger.info(
@@ -1335,7 +1336,9 @@ def get_global_quantities(
     return global_quantities
 
 
-def write_manifest_file(legacy_yaml_file: str, output_directory: str = None):
+def write_manifest_file(legacy_yaml_file: str, output_directory: Optional[str] = None):
+    if output_directory is None:
+        raise ValueError("output_directory must be provided")
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
     legacy_yaml_data = load_yaml_file(legacy_yaml_file)

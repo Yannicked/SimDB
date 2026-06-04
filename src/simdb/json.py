@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Any, Dict
 
 import numpy as np
 
+from simdb.remote.models import RangeValue
+
 if TYPE_CHECKING:
     import json
 else:
@@ -16,11 +18,11 @@ else:
 
 def _custom_hook(obj: Dict[str, str]) -> Any:
     if "_type" in obj:
-        if obj["_type"] == "numpy.ndarray":
+        if obj["_type"] == "uuid.UUID":
+            return uuid.UUID(obj["hex"])
+        elif obj["_type"] == "numpy.ndarray":
             np_bytes = base64.decodebytes(obj["bytes"].encode())
             return np.frombuffer(np_bytes, dtype=obj["dtype"])
-        elif obj["_type"] == "uuid.UUID":
-            return uuid.UUID(obj["hex"])
         else:
             obj_type = obj["_type"]
             raise ValueError(f"Unknown type to deserialise {obj_type}.")
@@ -41,13 +43,8 @@ class CustomEncoder(json.JSONEncoder):
         super().__init__(*args, **kwargs)
 
     def default(self, o: Any) -> Any:
-        if isinstance(o, np.ndarray):
-            encoded_bytes = base64.b64encode(o.data).decode()
-            return {
-                "_type": "numpy.ndarray",
-                "dtype": o.dtype.name,
-                "bytes": encoded_bytes,
-            }
+        if isinstance(o, RangeValue):
+            return {"min": o.min, "max": o.max}
         elif isinstance(o, uuid.UUID):
             return {"_type": "uuid.UUID", "hex": o.hex}
         elif isinstance(o, enum.Enum):

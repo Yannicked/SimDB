@@ -10,7 +10,6 @@ from flask import jsonify, request
 from flask_restx import Namespace, Resource
 
 from simdb.database import DatabaseError
-from simdb.database.models import metadata as models_meta
 from simdb.database.models import simulation as models_sim
 from simdb.email.server import EmailServer
 from simdb.query import QueryType, parse_query_arg
@@ -206,13 +205,13 @@ class SimulationList(Resource):
                 return error("Simulation data not provided")
 
             simulation = models_sim.Simulation.from_data(data["simulation"])
-            simulation.meta.append(models_meta.MetaData("uploaded_by", user.name))
+            simulation.set_meta("uploaded_by", user.name)
 
             if "alias" in data["simulation"]:
                 alias = data["simulation"]["alias"]
                 (updated_alias, next_id) = _set_alias(alias)
                 if updated_alias:
-                    simulation.meta.append(models_meta.MetaData("seqid", next_id))
+                    simulation.set_meta("seqid", next_id)
                     simulation.alias = updated_alias
                 else:
                     simulation.alias = alias

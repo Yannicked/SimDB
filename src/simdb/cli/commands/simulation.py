@@ -284,7 +284,7 @@ def simulation_pull(
     try:
         simulation = api.pull_simulation(sim_id, directory, out_stream=sys.stdout)
     except RemoteError as err:
-        raise click.ClickException() from err
+        raise click.ClickException(str(err)) from err
 
     db.insert_simulation(simulation)
 

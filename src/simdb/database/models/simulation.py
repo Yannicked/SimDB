@@ -1,8 +1,6 @@
 import itertools
 import sys
 import uuid
-from collections import defaultdict
-from collections.abc import Iterable
 from datetime import datetime
 from enum import Enum
 from getpass import getuser
@@ -11,6 +9,7 @@ from typing import Any, Dict, List, Optional, Set, Union
 
 from simdb.remote.models import (
     FileDataList,
+    MetadataData,
     MetadataDataList,
     SimulationData,
     SimulationDataResponse,
@@ -20,8 +19,11 @@ from simdb.remote.models import (
 if sys.version_info < (3, 11):
     from backports.datetime_fromisoformat import MonkeyPatch
 
-from sqlalchemy import Column, ForeignKey, Table
+from dateutil import parser as date_parser
+from sqlalchemy import JSON, Column, ForeignKey, Table
 from sqlalchemy import types as sql_types
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import relationship
 
 if "sphinx" in sys.modules:
@@ -31,8 +33,6 @@ if "sphinx" in sys.modules:
     ClauseElement.__bool__ = lambda self: True  # type: ignore
 
 import re
-
-import numpy as np
 
 from simdb.cli.manifest import DataObject, Manifest
 from simdb.config.config import Config
@@ -49,7 +49,6 @@ from simdb.uri import URI
 
 from .base import Base
 from .file import File
-from .metadata import MetaData
 from .types import UUID
 from .utils import checked_get, flatten_dict, unflatten_dict
 from .watcher import Watcher
@@ -88,6 +87,20 @@ def _update_legacy_uri(data_object: DataObject):
     return URI(f"imas:{backend}?path={path}")
 
 
+class MetaDataWrapper:
+    """Temporary wrapper to provide backwards compatibility with MetaData interface."""
+
+    def __init__(self, element: str, value: Any):
+        self.element = element
+        self.value = value
+
+    def data(self, recurse: bool = False) -> Dict[str, Any]:
+        return {"element": self.element, "value": self.value}
+
+    def to_model(self) -> "MetadataData":
+        return MetadataData(element=self.element, value=self.value)
+
+
 @inherit_docstrings
 class Simulation(Base):
     """
@@ -107,18 +120,42 @@ class Simulation(Base):
     uuid = Column(UUID, nullable=False, unique=True, index=True)
     alias = Column(sql_types.String(250), nullable=True, unique=True, index=True)
     datetime = Column(sql_types.DateTime, nullable=False)
+    _metadata = Column(
+        "metadata",
+        MutableDict.as_mutable(
+            postgresql.JSONB(astext_type=sql_types.Text()).with_variant(
+                JSON(), "sqlite"
+            )
+        ),
+        nullable=True,
+        default=dict,
+    )
     inputs: List["File"] = relationship(
         "File", secondary=simulation_input_files, backref="input_for"
     )
     outputs: List["File"] = relationship(
         "File", secondary=simulation_output_files, backref="output_of"
     )
-    meta: List["MetaData"] = relationship(
-        "MetaData", lazy="raise", cascade="all, delete-orphan"
-    )
     watchers: List["Watcher"] = relationship(
         "Watcher", secondary=simulation_watchers, lazy="dynamic"
     )
+
+    @property
+    def meta(self) -> List[MetaDataWrapper]:
+        """
+        Property to provide backwards compatibility.
+        Returns a list of MetaDataWrapper objects from the JSON metadata.
+        """
+        meta_dict = self._get_metadata_dict()
+        return [MetaDataWrapper(k, v) for k, v in meta_dict.items()]
+
+    def _get_metadata_dict(self) -> Dict[str, Any]:
+        if self._metadata is None:
+            return {}
+        return self._metadata
+
+    def _set_metadata_dict(self, meta_dict: Dict[str, Any]) -> None:
+        self._metadata = meta_dict
 
     def __init__(
         self, manifest: Union[Manifest, None], config: Optional[Config] = None
@@ -131,14 +168,16 @@ class Simulation(Base):
         """
 
         if manifest is None:
+            self._metadata = {}
             return
         self.uuid = uuid.uuid1()
         self.datetime = datetime.now()
+        self._metadata = {}
 
         # For legacy simulation import responsible_name is from manifest else it will be
         # the user.email
         if manifest.responsible_name:
-            self.meta.append(MetaData("uploaded_by", manifest.responsible_name))
+            self.set_meta("uploaded_by", manifest.responsible_name)
 
         self.user = getuser()
 
@@ -168,9 +207,7 @@ class Simulation(Base):
             self.inputs.append(file)
 
         if all_input_idss:
-            self.meta.append(
-                MetaData("input_ids", "[{}]".format(", ".join(all_input_idss)))
-            )
+            self.set_meta("input_ids", "[{}]".format(", ".join(all_input_idss)))
 
         all_output_idss = []
 
@@ -192,7 +229,7 @@ class Simulation(Base):
                 flatten_dict(flattened_meta, meta)
 
                 for key, value in flattened_meta.items():
-                    self.meta.append(MetaData(key, value))
+                    self.set_meta(key, value)
 
             file = File(output.type, output.uri, all_output_idss, config=config)
             if output.type == DataObject.Type.IMAS and "path" not in output.uri.query:
@@ -201,7 +238,7 @@ class Simulation(Base):
             self.outputs.append(file)
 
         if all_output_idss:
-            self.meta.append(MetaData("ids", "[{}]".format(", ".join(all_output_idss))))
+            self.set_meta("ids", "[{}]".format(", ".join(all_output_idss)))
 
         flattened_dict: Dict[str, str] = {}
         flatten_dict(flattened_dict, manifest.metadata)
@@ -218,9 +255,7 @@ class Simulation(Base):
     def status(self) -> Optional["Simulation.Status"]:
         result = self.find_meta("status")
         if result:
-            value = (
-                result[0].value if result[0].value != "invalidated" else "not validated"
-            )
+            value = result[0] if result[0] != "invalidated" else "not validated"
             return Simulation.Status(value)
         return None
 
@@ -237,25 +272,21 @@ class Simulation(Base):
                 getattr(self, name),
             )
         result += "metadata:\n"
-        for meta in self.meta:
-            if (
-                isinstance(meta.value, Iterable)
-                and not isinstance(meta.value, np.ndarray)
-                and "\n" in meta.value
-            ):
+        meta_dict = self._get_metadata_dict()
+        for element, value in meta_dict.items():
+            if isinstance(value, str) and "\n" in value:
                 first_line = True
-                for line in meta.value.split("\n"):
+                for line in value.split("\n"):
                     if first_line:
-                        result += f"  {meta.element}: {line}\n"
+                        result += f"  {element}: {line}\n"
                     elif line:
-                        indent = " " * (len(meta.element) + 2)
+                        indent = " " * (len(element) + 2)
                         result += f"  {indent}{line}"
                     first_line = False
-            elif isinstance(meta.value, np.ndarray):
-                string = np.array2string(meta.value, threshold=10)
-                result += f"  {meta.element}: {string}\n"
+            elif isinstance(value, dict) and "min" in value and "max" in value:
+                result += f"  {element}: [{value['min']}, {value['max']}]\n"
             else:
-                result += f"  {meta.element}: {meta.value}\n"
+                result += f"  {element}: {value}\n"
         result += "inputs:\n"
         for file in self.inputs:
             result += f"{file}\n"
@@ -264,38 +295,32 @@ class Simulation(Base):
             result += f"{file}\n"
         return result
 
-    def find_meta(self, name: str) -> List["MetaData"]:
-        return [m for m in self.meta if m.element == name]
+    def find_meta(self, name: str) -> List[Any]:
+        meta_dict = self._get_metadata_dict()
+        if name in meta_dict:
+            return [meta_dict[name]]
+        return []
 
     def remove_meta(self, name: str) -> None:
-        self.meta = [m for m in self.meta if m.element != name]
+        if self._metadata is None:
+            return
+        if name in self._metadata:
+            del self._metadata[name]
 
-    def set_meta(self, name: str, value: str) -> None:
-        for m in self.meta:
-            if m.element == name:
-                m.value = value
-                break
-        else:
-            self.meta.append(MetaData(name, value))
+    def set_meta(self, name: str, value: Any) -> None:
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata[name] = value
 
     def validate_meta(self) -> None:
         """
-        Check the metadata elements for duplicates, throwing and exception if found.
+        Check the metadata elements for duplicates, throwing an exception if found.
 
-        Duplicates should not be possible but if there is an issue causing them to arise
-        then at least it will be caught early rather than causing an SQL constraint
-        failure later.
+        With JSON storage, duplicates are not possible by design (dict keys are unique),
+        but we keep this method for backwards compatibility.
         """
-        names = [m.element for m in self.meta]
-        counts = defaultdict(lambda: 0)
-        for name in names:
-            counts[name] += 1
-        duplicates = [k for (k, v) in counts.items() if v > 1]
-        if len(duplicates) > 0:
-            raise ValueError(
-                f"Duplicate metadata elements {duplicates} found for simulation "
-                f"{self.uuid}"
-            )
+        # With JSON/dict storage, duplicates are impossible
+        pass
 
     def file_paths(self) -> Set[Path]:
         def _get_path(file: File) -> Optional[Path]:
@@ -314,12 +339,11 @@ class Simulation(Base):
                 )
             return None
 
-        file_paths = set(
-            filter(
-                lambda el: el is not None,
-                (_get_path(f) for f in itertools.chain(self.inputs, self.outputs)),
-            )
-        )
+        file_paths = set()
+        for f in itertools.chain(self.inputs, self.outputs):
+            path = _get_path(f)
+            if path is not None:
+                file_paths.add(path)
         return file_paths
 
     @classmethod
@@ -329,7 +353,7 @@ class Simulation(Base):
         simulation.alias = checked_get(data, "alias", str)
         if "datetime" not in data:
             data["datetime"] = datetime.now().isoformat()
-        simulation.datetime = datetime.fromisoformat(checked_get(data, "datetime", str))
+        simulation.datetime = date_parser.parse(checked_get(data, "datetime", str))
         if "inputs" in data:
             inputs = checked_get(data, "inputs", list)
             simulation.inputs = [File.from_data(el) for el in inputs]
@@ -338,10 +362,13 @@ class Simulation(Base):
             simulation.outputs = [File.from_data(el) for el in outputs]
         if "metadata" in data:
             metadata = checked_get(data, "metadata", list)
+            meta_dict = {}
             for el in metadata:
                 if not isinstance(el, dict):
                     raise Exception("corrupted metadata element - expected dictionary")
-                simulation.meta.append(MetaData.from_data(el))
+                if "element" in el and "value" in el:
+                    meta_dict[el["element"]] = el["value"]
+            simulation._set_metadata_dict(meta_dict)
         return simulation
 
     @classmethod
@@ -352,7 +379,9 @@ class Simulation(Base):
         simulation.datetime = data.datetime
         simulation.inputs = [File.from_data_model(el) for el in data.inputs.root]
         simulation.outputs = [File.from_data_model(el) for el in data.outputs.root]
-        simulation.meta = [MetaData.from_data_model(el) for el in data.metadata.root]
+        simulation._set_metadata_dict(
+            {el.element: el.value for el in data.metadata.root}
+        )
         return simulation
 
     def data(
@@ -366,10 +395,16 @@ class Simulation(Base):
         if recurse:
             data["inputs"] = [f.data(recurse=True) for f in self.inputs]
             data["outputs"] = [f.data(recurse=True) for f in self.outputs]
-            data["metadata"] = [m.data(recurse=True) for m in self.meta]
-        elif meta_keys:
+            meta_dict = self._get_metadata_dict()
             data["metadata"] = [
-                m.data(recurse=True) for m in self.meta if m.element in meta_keys
+                {"element": k, "value": v} for k, v in meta_dict.items()
+            ]
+        elif meta_keys:
+            meta_dict = self._get_metadata_dict()
+            data["metadata"] = [
+                {"element": k, "value": v}
+                for k, v in meta_dict.items()
+                if k in meta_keys
             ]
         return data
 
@@ -445,5 +480,5 @@ class Simulation(Base):
         )
 
     def meta_dict(self) -> Dict[str, Union[Dict, Any]]:
-        meta = {m.element: m.value for m in self.meta}
+        meta = self._get_metadata_dict()
         return unflatten_dict(meta)
