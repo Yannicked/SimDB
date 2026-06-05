@@ -49,7 +49,7 @@ def _imas_path_to_uri(imas_path: Path) -> URI:
         u.query.set("path", str(imas_path))
         return u
 
-    if any(child.suffix == ".h5" for child in children):
+    if any(child.suffix == ".h5" for child in children) and "master.h5" in children:
         u = URI(scheme="imas", path="hdf5")
         u.query.set("path", str(imas_path))
         return u
