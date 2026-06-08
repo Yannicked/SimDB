@@ -27,35 +27,35 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
-  worker:
-    build: .
-    command: uv run simdb_worker
-    volumes:
-      - ./config:/app/config:ro
-      - ./tmp/partition_data:/data/simdb/partition:ro
-      - ./upload_folder:/data/simdb/simulations
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      migrations:
-        condition: service_completed_successfully
-    restart: unless-stopped
+  # worker:
+  #   build: .
+  #   command: uv run simdb_worker
+  #   volumes:
+  #     - ./config:/app/config:ro
+  #     - ./tmp/partition_data:/data/simdb/partition:ro
+  #     - ./upload_folder:/data/simdb/simulations
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     postgres:
+  #       condition: service_healthy
+  #     migrations:
+  #       condition: service_completed_successfully
+  #   restart: unless-stopped
 
-  beat:
-    build: .
-    command: uv run simdb_beat
-    volumes:
-      - ./config:/app/config:ro
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      migrations:
-        condition: service_completed_successfully
-    restart: unless-stopped
+  # beat:
+  #   build: .
+  #   command: uv run simdb_beat
+  #   volumes:
+  #     - ./config:/app/config:ro
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     postgres:
+  #       condition: service_healthy
+  #     migrations:
+  #       condition: service_completed_successfully
+  #   restart: unless-stopped
 
   redis:
     image: redis:8-alpine
