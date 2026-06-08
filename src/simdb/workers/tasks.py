@@ -42,14 +42,16 @@ def _imas_path_to_uri(imas_path: Path) -> URI:
     if imas_path.suffix == ".nc":
         return URI(scheme="file", path=imas_path)
 
-    children = list(imas_path.iterdir())
+    children = set(imas_path.iterdir())
 
     if any(child.suffix == ".ids" for child in children):
         u = URI(scheme="imas", path="ascii")
         u.query.set("path", str(imas_path))
         return u
 
-    if any(child.suffix == ".h5" for child in children) and "master.h5" in children:
+    if any(child.suffix == ".h5" for child in children) and any(
+        child.name == "master.h5" for child in children
+    ):
         u = URI(scheme="imas", path="hdf5")
         u.query.set("path", str(imas_path))
         return u
