@@ -11,9 +11,13 @@ if "sphinx" not in sys.modules:
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_prefix=1)
 
 
-def run(*, port=5000):
+def run():
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_prefix=1)
     config = app.simdb_config
+
+    port = config.get_option("server.port")
+    if not isinstance(port, int) or isinstance(port, bool):
+        raise TypeError(f"Invalid server.port value: expected int, got {type(port)}")
 
     if config.get_option("server.ssl_enabled"):
         context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
@@ -27,4 +31,4 @@ def run(*, port=5000):
 
 
 if __name__ == "__main__":
-    run(port=5000)
+    run()
