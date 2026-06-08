@@ -1,3 +1,4 @@
+from simdb.workers.tasks import _calculate_checksum
 import getpass
 import gzip
 import hashlib
@@ -24,11 +25,12 @@ from typing import (
     Tuple,
     Union,
 )
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 import appdirs
 import click
 import requests
+from netCDF4 import Dataset
 from requests.auth import AuthBase
 from semantic_version import Version
 
@@ -37,6 +39,7 @@ from simdb.database.models import Simulation
 from simdb.imas.utils import imas_files
 from simdb.json import CustomDecoder, CustomEncoder
 from simdb.remote import APIConstants
+from simdb.remote.models import SimulationPostData, FileData
 from simdb.uri import URI
 
 from .manifest import DataObject
@@ -153,6 +156,67 @@ def _get_paths(file: "File") -> Iterable[Path]:
         return imas_files(file.uri)
 
 
+def _check_file_is_imas(file: Path) -> bool:
+    # Check NetCDF
+    if file.suffix == ".nc":
+        with Dataset(file, "r") as ds:
+            if getattr(ds, "Conventions", None) == "IMAS":
+                return True
+
+    children = set(file.parent.iterdir())
+
+    # ASCII heuristic
+    if any(child.suffix == ".ids" for child in children):
+        return True
+
+    # HDF5 heuristic
+    if any(child.suffix == ".h5" for child in children) and any(
+        child.name == "master.h5" for child in children
+    ):
+        return True
+
+    # MDSplus heuristic
+    if {p.name for p in children} >= {  # noqa: SIM103
+        "ids_001.tree",
+        "ids_001.characteristics",
+        "ids_001.datafile",
+    }:
+        return True
+
+    # No IMAS data detected
+    return False
+
+
+def _expand_directories(files: Iterable[FileData]):
+    new_file_list = []
+    for file in files:
+        file_uri = URI(file.uri)
+        file_path = file_uri.path
+        if file_path is None:
+            raise ValueError("File has no associated path")
+
+        if file_path.is_dir():
+            for sub_file in file_path.iterdir():
+                if sub_file.is_dir():
+                    raise ValueError("Nested directory found")
+                file_uri.path = sub_file
+                new_file_list.append(
+                    FileData(
+                        type=file.type,
+                        uri=str(file_uri),
+                        checksum=_calculate_checksum(sub_file),
+                        datetime=file.datetime,
+                        usage=file.usage,
+                        purpose=file.purpose,
+                        sensitivity=file.sensitivity,
+                        access=file.access,
+                        embargo=file.embargo,
+                    )
+                )
+        else:
+            new_file_list.append(file.model_copy(deep=True))
+    return new_file_list
+
 class RemoteAPI:
     """
     Class to represent connection to remote API.
@@ -266,7 +330,7 @@ class RemoteAPI:
             headers = {"User-Agent": "it_script_basic"}
             cookies_file = f"{remote}-cookies.pkl"
             cookies_path = Path(appdirs.user_config_dir("simdb")) / cookies_file
-            parsed_url = urlparse(self._url)
+            parsed_url: ParseResult = urlparse(self._url)
             base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
             cookies = None
@@ -741,6 +805,43 @@ class RemoteAPI:
         self.post("files", data={}, files=files)
 
     @try_request
+    def push_local_simulation(self, simulation: Simulation):
+        sim_data = simulation.to_model(recurse=True)
+
+        sim_data.inputs.root = _expand_directories(sim_data.inputs.root)
+        sim_data.outputs.root = _expand_directories(sim_data.outputs.root)
+
+        for file in itertools.chain(sim_data.inputs.root, sim_data.outputs.root):
+            file_uri = URI(file.uri)
+            file_path = file_uri.path
+            if file_path is None:
+                raise ValueError("File has no associated path")
+
+            if _check_file_is_imas(file_path):
+                file.type = "IMAS"
+
+        uploaded_by = str(simulation.meta_dict().get("uploaded_by", None))
+
+        headers = {"Content-type": "application/json", "User-Agent": "it_script_basic"}
+        post_data = SimulationPostData(
+            simulation=sim_data, add_watcher=False, uploaded_by=uploaded_by
+        ).model_dump_json()
+        requests.post(
+            f"{self._url}/v1.3/",
+            data=post_data,
+            headers=headers,
+            auth=self._get_auth(),
+            cookies=self._cookies,
+        )
+        self.post(
+            "simulations",
+            data={
+                "simulation": sim_data,
+                "uploaded_by": uploaded_by,
+            },
+        )
+
+    @try_request
     def push_simulation(
         self,
         simulation: "Simulation",
@@ -762,7 +863,7 @@ class RemoteAPI:
         sim_data = simulation.data(recurse=True)
 
         try:
-            sim_json = json.dumps(
+            sim_json: bytes = json.dumps(
                 sim_data, cls=CustomEncoder, separators=(",", ":")
             ).encode("utf-8")
             sim_json_size = len(sim_json)
