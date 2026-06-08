@@ -46,8 +46,8 @@ def test_get_imas_identifier_path_returns_parent_for_directory(tmp_path):
 @pytest.mark.parametrize(
     "files,expected_backend",
     [
-        (["child.ids"], "ascii"),
-        (["file1.h5", "file2.h5"], "hdf5"),
+        (["summary.ids"], "ascii"),
+        (["master.h5", "summary.h5"], "hdf5"),
         (["ids_001.tree", "ids_001.characteristics", "ids_001.datafile"], "mdsplus"),
     ],
 )
