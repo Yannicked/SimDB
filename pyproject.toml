@@ -51,6 +51,7 @@ dependencies = [
     "alembic~=1.13",
     "urllib3>=1.26",
     "rich>=14.3.3",
+    "netcdf4>=1.7.2",
 ]
 
 [project.optional-dependencies]
