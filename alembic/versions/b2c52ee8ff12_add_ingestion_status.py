@@ -1,7 +1,7 @@
 """Add ingestion status
 
 Revision ID: b2c52ee8ff12
-Revises: 9e9a4a7cd639
+Revises: 28bee3aa2429
 Create Date: 2026-05-11 16:16:03.768893
 
 """
