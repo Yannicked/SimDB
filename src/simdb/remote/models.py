@@ -344,12 +344,6 @@ class SimulationPostResponse(BaseModel):
     """Validation result."""
 
 
-class SimulationPostResponse3(BaseModel):
-    """Response from creating a simulation."""
-
-    job_id: HexUUID
-
-
 class SimulationListItem(BaseModel):
     """Summary of a simulation for list views."""
 
