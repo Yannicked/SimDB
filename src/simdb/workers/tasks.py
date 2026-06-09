@@ -56,7 +56,7 @@ def _imas_path_to_uri(imas_path: Path) -> URI:
         u.query.set("path", str(imas_path))
         return u
 
-    if {p.name for p in children} == {
+    if {p.name for p in children} >= {
         "ids_001.tree",
         "ids_001.characteristics",
         "ids_001.datafile",
