@@ -1014,11 +1014,11 @@ class RemoteAPI:
                         file.uuid, index, checksum, path, rel_path, out_stream
                     )
 
+                qs = dict(file.uri.query_params())
                 to_path = (
-                    directory
-                    / Path(file.uri.query.get("path")).relative_to(common_root)
+                    directory / Path(qs.get("path", "")).relative_to(common_root)
                 ).absolute()
-                backend = file.uri.query.get("backend")
+                backend = qs.get("backend")
                 file.uri = AnyUrl.build(
                     scheme="imas", host="", path=backend, query=f"path={to_path}"
                 )

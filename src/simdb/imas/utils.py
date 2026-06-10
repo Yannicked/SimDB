@@ -270,7 +270,7 @@ def _get_path(uri: AnyUrl) -> Path:
     if path is None:
         raise ValueError("Invalid IMAS URI - path not found in query arguments")
 
-    path = Path(path[0])
+    path = Path(path)
     if not path.exists():
         raise ValueError(f"URI path {path} does not exist")
     return path

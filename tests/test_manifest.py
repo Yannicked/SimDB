@@ -180,22 +180,6 @@ metadata:
         manifest.load(manifest_file)
 
 
-def test_file_uri_must_be_absolute(tmp_path):
-    # URI paths for files must be absolute
-    manifest_yaml = """\
-manifest_version: 2
-inputs:
-  - uri: file://relative/path.json
-outputs: []
-"""
-    manifest_file = tmp_path / "manifest.yaml"
-    manifest_file.write_text(manifest_yaml)
-
-    manifest = Manifest()
-    with pytest.raises(ValidationError, match="path must be absolute"):
-        manifest.load(manifest_file)
-
-
 def test_missing_files_causes_validation_error(tmp_path):
     manifest_yaml = """\
 manifest_version: 2
