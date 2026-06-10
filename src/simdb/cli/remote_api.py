@@ -39,7 +39,7 @@ from simdb.imas.utils import imas_files
 from simdb.json import CustomDecoder, CustomEncoder
 from simdb.remote import APIConstants
 
-from .manifest import Type
+from .manifest import DataType
 
 if TYPE_CHECKING:
     from simdb.database.models import File, Simulation, Watcher
@@ -145,7 +145,7 @@ def check_return(res: "requests.Response") -> None:
 
 
 def _get_paths(file: "File") -> Iterable[Path]:
-    if file.type == Type.FILE:
+    if file.type == DataType.FILE:
         if file.uri and file.uri.path:
             return [Path(file.uri.path)]
         return []
@@ -676,7 +676,7 @@ class RemoteAPI:
         sim_data: Dict[str, Any],
         chunk_size: int,
         out_stream: IO,
-        type: Type,
+        type: DataType,
     ):
         msg = f"Uploading file {path} "
         print(msg, file=out_stream, end="")
@@ -690,12 +690,12 @@ class RemoteAPI:
         if num_chunks == 0:
             # empty file
             self._send_chunk(0, b"", chunk_size, uuid, file_type, sim_data)
-        if type == Type.FILE:
+        if type == DataType.FILE:
             self.post(
                 "files",
                 data={
                     "simulation": sim_data,
-                    "obj_type": Type.FILE,
+                    "obj_type": DataType.FILE,
                     "files": [
                         {
                             "chunks": num_chunks,
@@ -787,7 +787,7 @@ class RemoteAPI:
             copy_ids = options.get("copy_ids", True)
 
             for file in simulation.inputs:
-                if file.type == Type.IMAS:
+                if file.type == DataType.IMAS:
                     if not copy_ids:
                         print(f"Skipping IDS data {file}", file=out_stream, flush=True)
                         continue
@@ -843,7 +843,7 @@ class RemoteAPI:
                         )
 
             for file in simulation.outputs:
-                if file.type == Type.IMAS:
+                if file.type == DataType.IMAS:
                     if not copy_ids:
                         print(f"Skipping IDS data {file}", file=out_stream, flush=True)
                         continue
@@ -1000,14 +1000,14 @@ class RemoteAPI:
         for file in itertools.chain(simulation.inputs, simulation.outputs):
             info = self._get_file_info(file.uuid)
 
-            if file.type == Type.FILE:
+            if file.type == DataType.FILE:
                 (path, checksum) = info[0]
                 rel_path = directory / path.relative_to(common_root)
                 self._pull_file(file.uuid, 0, checksum, path, rel_path, out_stream)
                 file.uri = AnyUrl.build(
                     scheme="file", host="", path=rel_path.absolute().as_posix()
                 )
-            elif file.type == Type.IMAS:
+            elif file.type == DataType.IMAS:
                 for index, (path, checksum) in enumerate(info):
                     rel_path = directory / path.relative_to(common_root)
                     self._pull_file(

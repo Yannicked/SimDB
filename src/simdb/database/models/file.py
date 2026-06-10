@@ -9,7 +9,7 @@ from sqlalchemy import Column
 from sqlalchemy import types as sql_types
 
 from simdb.checksum import sha1_checksum
-from simdb.cli.manifest import Type
+from simdb.cli.manifest import DataType
 from simdb.config.config import Config
 from simdb.docstrings import inherit_docstrings
 from simdb.imas.checksum import checksum as imas_checksum
@@ -32,12 +32,12 @@ class File(Base):
     uuid = Column(UUID, nullable=False, unique=True, index=True)
     uri: AnyUrl = Column(URI(1024), nullable=True)
     checksum = Column(sql_types.String(64), nullable=True)
-    type = Column(sql_types.Enum(Type), nullable=True)
+    type = Column(sql_types.Enum(DataType), nullable=True)
     datetime = Column(sql_types.DateTime, nullable=False)
 
     def __init__(
         self,
-        type: Type,
+        type: DataType,
         uri: AnyUrl,
         ids_list: Optional[list] = None,
         perform_integrity_check: bool = True,
@@ -49,7 +49,7 @@ class File(Base):
 
         if perform_integrity_check:
             self.datetime = self.get_creation_date()
-            if type == Type.IMAS and ids_list is None:
+            if type == DataType.IMAS and ids_list is None:
                 raise ValueError("IDS list is not set")
             self.checksum = self.generate_checksum(config, ids_list or [])
 
@@ -76,18 +76,18 @@ class File(Base):
     def generate_checksum(self, config, ids_list: list):
         if config and config.get_option("development.disable_checksum", default=False):
             return ""
-        elif self.type == Type.IMAS:
+        elif self.type == DataType.IMAS:
             checksum = imas_checksum(self.uri, ids_list)
-        elif self.type == Type.FILE:
+        elif self.type == DataType.FILE:
             checksum = sha1_checksum(self.uri)
         else:
             raise NotImplementedError(f"Cannot generate checksum for type {self.type}.")
         return checksum
 
     def get_creation_date(self) -> datetime_:
-        if self.type == Type.IMAS:
+        if self.type == DataType.IMAS:
             return imas_timestamp(self.uri)
-        elif self.type == Type.FILE:
+        elif self.type == DataType.FILE:
             if self.uri.path is None:
                 raise ValueError("Data object uri path not set")
             return datetime_.fromtimestamp(Path(self.uri.path).stat().st_ctime)
@@ -98,7 +98,7 @@ class File(Base):
     def from_data(cls, data: Dict) -> "File":
         data_type = checked_get(data, "type", str)
         uri = checked_get(data, "uri", str)
-        file = File(Type[data_type], AnyUrl(uri), perform_integrity_check=False)
+        file = File(DataType[data_type], AnyUrl(uri), perform_integrity_check=False)
         file.uuid = checked_get(data, "uuid", uuid.UUID)
         file.checksum = checked_get(data, "checksum", str)
         file.datetime = date_parser.parse(checked_get(data, "datetime", str))
@@ -108,7 +108,7 @@ class File(Base):
     def from_data_model(cls, data: FileData) -> "File":
         data_type = data.type
         uri = data.uri
-        file = File(Type[data_type], AnyUrl(uri), perform_integrity_check=False)
+        file = File(DataType[data_type], AnyUrl(uri), perform_integrity_check=False)
         file.uuid = data.uuid
         file.checksum = data.checksum
         file.datetime = data.datetime

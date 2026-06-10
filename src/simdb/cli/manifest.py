@@ -38,7 +38,7 @@ ManifestUrl = Annotated[
 ]
 
 
-class Type(Enum):
+class DataType(Enum):
     UNKNOWN = auto()
     UUID = auto()
     FILE = auto()
@@ -49,17 +49,17 @@ def _get_data_object_type(data: dict):
     uri: AnyUrl = data["uri"]
 
     if uri.scheme == "imas":
-        return Type.IMAS
+        return DataType.IMAS
     elif uri.scheme == "file":
         if uri.path is None:
             raise ValueError("no path provided")
         if Path(uri.path).suffix == ".nc":
             with Dataset(uri.path, "r") as ds:
                 if getattr(ds, "Convention", None) == "IMAS":
-                    return Type.IMAS
-        return Type.FILE
+                    return DataType.IMAS
+        return DataType.FILE
     elif uri.scheme == "simdb":
-        return Type.UUID
+        return DataType.UUID
 
 
 class DataObject(BaseModel):
@@ -67,7 +67,7 @@ class DataObject(BaseModel):
 
     uri: ManifestUrl = Field()
 
-    type: Type = Field(default_factory=_get_data_object_type)
+    type: DataType = Field(default_factory=_get_data_object_type)
 
     @property
     def name(self) -> str:
@@ -177,7 +177,7 @@ class Manifest(BaseModel):
 
         inputs = []
         for i in self.inputs_raw:
-            if i.type == Type.FILE:
+            if i.type == DataType.FILE:
                 if i.uri.path:
                     source_path = Path(i.uri.path)
                     if not skip_glob_check:
@@ -201,7 +201,7 @@ class Manifest(BaseModel):
 
         outputs = []
         for i in self.outputs_raw:
-            if i.type == Type.FILE:
+            if i.type == DataType.FILE:
                 if i.uri.path:
                     sink_path = Path(i.uri.path)
                     names = [

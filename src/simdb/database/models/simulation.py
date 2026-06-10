@@ -36,7 +36,7 @@ if "sphinx" in sys.modules:
 
 import re
 
-from simdb.cli.manifest import DataObject, Manifest, Type
+from simdb.cli.manifest import DataObject, Manifest, DataType
 from simdb.config.config import Config
 from simdb.docstrings import inherit_docstrings
 from simdb.imas.metadata import load_metadata
@@ -191,7 +191,7 @@ class Simulation(Base):
         for input in manifest.inputs:
             if input.uri is None:
                 raise ValueError("Source uri is not set")
-            if input.type == Type.IMAS:
+            if input.type == DataType.IMAS:
                 entry = open_imas(input.uri)
                 idss = list_idss(entry)
 
@@ -204,7 +204,7 @@ class Simulation(Base):
                 entry.close()
 
             file = File(input.type, input.uri, all_input_idss, config=config)
-            if input.type == Type.IMAS and "path" not in {
+            if input.type == DataType.IMAS and "path" not in {
                 a[0] for a in input.uri.query_params()
             }:
                 file.uri = _update_legacy_uri(input)
@@ -218,7 +218,7 @@ class Simulation(Base):
         for output in manifest.outputs:
             if output.uri is None:
                 raise ValueError("Sink uri is not set")
-            if output.type == Type.IMAS:
+            if output.type == DataType.IMAS:
                 entry = open_imas(output.uri)
                 idss = list_idss(entry)
                 for ids in idss:
@@ -236,7 +236,7 @@ class Simulation(Base):
                     self.set_meta(key, value)
 
             file = File(output.type, output.uri, all_output_idss, config=config)
-            if output.type == Type.IMAS and "path" not in {
+            if output.type == DataType.IMAS and "path" not in {
                 a[0] for a in output.uri.query_params()
             }:
                 file.uri = _update_legacy_uri(output)
@@ -331,11 +331,11 @@ class Simulation(Base):
     def file_paths(self) -> Set[Path]:
         def _get_path(file: File) -> Optional[Path]:
             if file.uri.scheme == "file":
-                if file.type == Type.FILE:
+                if file.type == DataType.FILE:
                     if file.uri.path is None:
                         raise ValueError("Data object path is not set")
                     return Path(file.uri.path)
-                elif file.type == Type.IMAS:
+                elif file.type == DataType.IMAS:
                     if file.uri.path is None:
                         raise ValueError("Data object path is not set")
                     return Path(file.uri.path).parent

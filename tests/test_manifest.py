@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from simdb.cli.manifest import Manifest, Type
+from simdb.cli.manifest import Manifest, DataType
 
 
 def test_valid_manifest_loading_and_validation(tmp_path):
@@ -42,13 +42,13 @@ metadata:
 
     inputs = list(manifest.inputs)
     assert len(inputs) == 2
-    assert inputs[0].type == Type.FILE
-    assert inputs[1].type == Type.IMAS
+    assert inputs[0].type == DataType.FILE
+    assert inputs[1].type == DataType.IMAS
 
     outputs = list(manifest.outputs)
     assert len(outputs) == 2
-    assert outputs[0].type == Type.FILE
-    assert outputs[1].type == Type.IMAS
+    assert outputs[0].type == DataType.FILE
+    assert outputs[1].type == DataType.IMAS
 
 
 def test_manifest_path_expansion_with_manifest_dir(tmp_path):

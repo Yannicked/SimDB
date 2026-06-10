@@ -11,7 +11,7 @@ from pydantic import AnyUrl
 from werkzeug.datastructures import FileStorage
 
 from simdb.checksum import sha1_checksum
-from simdb.cli.manifest import Type
+from simdb.cli.manifest import DataType
 from simdb.database import DatabaseError, models
 from simdb.imas.checksum import checksum as imas_checksum
 from simdb.imas.utils import imas_files
@@ -40,7 +40,7 @@ def _verify_file(
         Path(current_app.simdb_config.get_string_option("server.upload_folder"))
         / sim_uuid.hex
     )
-    if sim_file.type == Type.FILE:
+    if sim_file.type == DataType.FILE:
         if sim_file.uri.path is None:
             raise ValueError("File does not have an associated path")
         path = secure_path(Path(sim_file.uri.path), common_root, staging_dir)
@@ -51,7 +51,7 @@ def _verify_file(
         )
         if sim_file.checksum != checksum:
             raise ValueError(f"checksum failed for file {sim_file!r}")
-    elif sim_file.type == Type.IMAS:
+    elif sim_file.type == DataType.IMAS:
         uri = sim_file.uri
         qs = dict(uri.query_params())
         path_value = qs.get("path")
@@ -131,13 +131,13 @@ def _process_simulation_data(data: dict) -> Response:
     simulation = models.Simulation.from_data(data["simulation"])
     sim_file_paths = simulation.file_paths()
     common_root = find_common_root(sim_file_paths)
-    if Type(data["obj_type"]) == Type.FILE:
+    if DataType(data["obj_type"]) == DataType.FILE:
         for file in data["files"]:
             sim_file = _check_file_is_in_simulation(
                 simulation, uuid.UUID(file["file_uuid"]), file["file_type"]
             )
             _verify_file(simulation.uuid, sim_file, common_root)
-    elif Type(data["obj_type"]) == Type.IMAS:
+    elif DataType(data["obj_type"]) == DataType.IMAS:
         file = data["files"][0]
         sim_files = (
             simulation.inputs if file["file_type"] == "input" else simulation.outputs
@@ -209,7 +209,7 @@ class NonIMASFileDownload(Resource):
     def get(self, file_uuid: str, user: Optional[User] = None):
         try:
             file: models.File = current_app.db.get_file(file_uuid)
-            if file.type != Type.FILE:
+            if file.type != DataType.FILE:
                 return error("Invalid file type for download")
             if file.uri.path is None:
                 return error("File path is not set")
@@ -229,7 +229,7 @@ class FileDownload(Resource):
     def get(self, file_uuid: str, file_index: int, user: Optional[User] = None):
         try:
             file: models.File = current_app.db.get_file(file_uuid)
-            if file.type == Type.FILE:
+            if file.type == DataType.FILE:
                 if file_index != 0:
                     return error(f"invalid file_index for file {file.uri}")
                 if file.uri.path is None:
