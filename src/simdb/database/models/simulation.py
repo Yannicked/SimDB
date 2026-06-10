@@ -36,7 +36,7 @@ if "sphinx" in sys.modules:
 
 import re
 
-from simdb.cli.manifest import DataObject, Manifest, DataType
+from simdb.cli.manifest import DataObject, DataType, Manifest
 from simdb.config.config import Config
 from simdb.docstrings import inherit_docstrings
 from simdb.imas.metadata import load_metadata

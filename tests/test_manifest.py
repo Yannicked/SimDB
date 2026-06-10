@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from simdb.cli.manifest import Manifest, DataType
+from simdb.cli.manifest import DataType, Manifest
 
 
 def test_valid_manifest_loading_and_validation(tmp_path):
