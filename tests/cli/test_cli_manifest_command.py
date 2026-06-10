@@ -16,8 +16,8 @@ def test_manifest_check_command(manifest):
     )
     assert result.exception is None
     assert "ok" in result.output
-    assert manifest.return_value.load.called
-    (args, kwargs) = manifest.return_value.load.call_args
+    assert manifest.load_from_file.called
+    (args, kwargs) = manifest.load_from_file.call_args
     assert str(args[0]) == str(file_name)
     assert kwargs == {}
 

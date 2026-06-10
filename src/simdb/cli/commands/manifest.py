@@ -16,8 +16,7 @@ def manifest():
 def check(file_name):
     """Check manifest FILE_NAME."""
 
-    manifest = Manifest()
-    manifest.load(file_name)
+    Manifest.load_from_file(file_name)
     click.echo("ok")
 
 

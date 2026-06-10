@@ -32,8 +32,7 @@ metadata:
     manifest_file = tmp_path / "manifest.yaml"
     manifest_file.write_text(manifest_yaml)
 
-    manifest = Manifest()
-    manifest.load(manifest_file)
+    manifest = Manifest.load_from_file(manifest_file)
 
     assert manifest.manifest_version == 2
     assert manifest.version == 2
@@ -66,8 +65,7 @@ outputs:
     manifest_file = tmp_path / "manifest.yaml"
     manifest_file.write_text(manifest_yaml)
 
-    manifest = Manifest()
-    manifest.load(manifest_file)
+    manifest = Manifest.load_from_file(manifest_file)
 
     inputs = list(manifest.inputs)
     assert len(inputs) == 1
@@ -85,9 +83,8 @@ outputs: []
     manifest_file = tmp_path / "manifest.yaml"
     manifest_file.write_text(manifest_yaml)
 
-    manifest = Manifest()
     with pytest.raises(ValidationError, match="Input should be 2"):
-        manifest.load(manifest_file)
+        Manifest.load_from_file(manifest_file)
 
 
 def test_manifest_version_must_be_integer(tmp_path):
@@ -99,9 +96,8 @@ outputs: []
     manifest_file = tmp_path / "manifest.yaml"
     manifest_file.write_text(manifest_yaml)
 
-    manifest = Manifest()
     with pytest.raises(ValidationError, match="Input should be 2"):
-        manifest.load(manifest_file)
+        Manifest.load_from_file(manifest_file)
 
 
 def test_missing_required_sections(tmp_path):
@@ -113,9 +109,8 @@ alias: some-alias
     manifest_file = tmp_path / "manifest.yaml"
     manifest_file.write_text(manifest_yaml)
 
-    manifest = Manifest()
     with pytest.raises(ValueError, match="Required manifest section"):
-        manifest.load(manifest_file)
+        Manifest.load_from_file(manifest_file)
 
 
 def test_unknown_section(tmp_path):
@@ -128,9 +123,8 @@ unknown_field: true
     manifest_file = tmp_path / "manifest.yaml"
     manifest_file.write_text(manifest_yaml)
 
-    manifest = Manifest()
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-        manifest.load(manifest_file)
+        Manifest.load_from_file(manifest_file)
 
 
 def test_invalid_alias_characters(tmp_path):
@@ -143,9 +137,8 @@ outputs: []
     manifest_file = tmp_path / "manifest.yaml"
     manifest_file.write_text(manifest_yaml)
 
-    manifest = Manifest()
     with pytest.raises(ValidationError, match="illegal characters in alias"):
-        manifest.load(manifest_file)
+        Manifest.load_from_file(manifest_file)
 
 
 def test_duplicate_uris_in_inputs(tmp_path):
@@ -159,9 +152,8 @@ outputs: []
     manifest_file = tmp_path / "manifest.yaml"
     manifest_file.write_text(manifest_yaml)
 
-    manifest = Manifest()
     with pytest.raises(ValidationError, match="Duplicate URI found in inputs"):
-        manifest.load(manifest_file)
+        Manifest.load_from_file(manifest_file)
 
 
 def test_invalid_metadata_forbidden_characters(tmp_path):
@@ -175,9 +167,8 @@ metadata:
     manifest_file = tmp_path / "manifest.yaml"
     manifest_file.write_text(manifest_yaml)
 
-    manifest = Manifest()
     with pytest.raises(ValidationError, match="contains forbidden character"):
-        manifest.load(manifest_file)
+        Manifest.load_from_file(manifest_file)
 
 
 def test_missing_files_causes_validation_error(tmp_path):
@@ -190,6 +181,5 @@ outputs: []
     manifest_file = tmp_path / "manifest.yaml"
     manifest_file.write_text(manifest_yaml)
 
-    manifest = Manifest()
     with pytest.raises(ValidationError, match="No files found matching path"):
-        manifest.load(manifest_file)
+        Manifest.load_from_file(manifest_file)

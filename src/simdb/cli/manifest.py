@@ -23,7 +23,6 @@ from pydantic import (
 def _expand_path(path: Path, base_path: Path) -> Path:
     os.environ["MANIFEST_DIR"] = str(base_path)
     path = Path(os.path.expandvars(str(path))).expanduser()
-    path = Path(str(path).replace("//", "/"))
     if not path.is_absolute():
         if not base_path.is_absolute():
             raise ValueError("base_path must be absolute")
@@ -117,7 +116,7 @@ class Sink(DataObject):
 class Manifest(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    manifest_version: Literal[2] = Field(default=2)
+    manifest_version: Literal[2] = Field(default=2, alias="version")
     alias: Optional[str] = None
     responsible_name: Optional[str] = None
     inputs_raw: List[Source] = Field(default_factory=list, alias="inputs")
@@ -268,13 +267,6 @@ class Manifest(BaseModel):
         )
         model._path = file_path
         return model
-
-    def load(self, file_path: Path) -> None:
-        loaded = self.load_from_file(file_path)
-        self.__dict__.update(loaded.__dict__)
-        self._path = file_path
-        self._inputs = loaded._inputs
-        self._outputs = loaded._outputs
 
     def save(self, out_file: TextIO) -> None:
         yaml.dump(
