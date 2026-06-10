@@ -100,19 +100,6 @@ outputs: []
         Manifest.load_from_file(manifest_file)
 
 
-def test_missing_required_sections(tmp_path):
-    # Missing required inputs/outputs sections
-    manifest_yaml = """\
-manifest_version: 2
-alias: some-alias
-"""
-    manifest_file = tmp_path / "manifest.yaml"
-    manifest_file.write_text(manifest_yaml)
-
-    with pytest.raises(ValueError, match="Required manifest section"):
-        Manifest.load_from_file(manifest_file)
-
-
 def test_unknown_section(tmp_path):
     manifest_yaml = """\
 manifest_version: 2

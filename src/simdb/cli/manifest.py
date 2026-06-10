@@ -251,17 +251,6 @@ class Manifest(BaseModel):
             except yaml.YAMLError as err:
                 raise ValueError("badly formatted manifest") from err
 
-        if not isinstance(raw_data, dict):
-            raise ValueError(
-                "badly formatted manifest - top level sections must be keys not a list"
-            )
-
-        # Ensure required sections exist
-        required_sections = ("manifest_version", "outputs", "inputs")
-        for section in required_sections:
-            if section not in raw_data:
-                raise ValueError(f"Required manifest section '{section}' not found.")
-
         model = cls.model_validate(
             raw_data, context={"base_path": file_path.absolute().parent}
         )
