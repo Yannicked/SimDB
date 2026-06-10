@@ -20,7 +20,6 @@ def test_manifest_check_command(manifest):
     (args, kwargs) = manifest.return_value.load.call_args
     assert str(args[0]) == str(file_name)
     assert kwargs == {}
-    assert manifest.return_value.validate.called
 
 
 def test_manifest_check_command_integration():

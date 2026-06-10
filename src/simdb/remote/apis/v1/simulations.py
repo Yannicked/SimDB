@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple
 
 from flask import jsonify, request
 from flask_restx import Namespace, Resource
+from pydantic import AnyUrl
 
 from simdb.database import DatabaseError
 from simdb.database.models import simulation as models_sim
@@ -20,7 +21,6 @@ from simdb.remote.core.cache import cache, cache_key, clear_cache
 from simdb.remote.core.errors import error
 from simdb.remote.core.path import secure_path
 from simdb.remote.core.typing import current_app
-from simdb.uri import URI
 from simdb.validation import ValidationError, Validator
 
 api = Namespace("simulations", path="/")
@@ -206,7 +206,7 @@ class SimulationList(Resource):
                 if not path.exists():
                     raise ValueError(f"simulation file {sim_file.uuid} not uploaded")
                 if sim_file.uri.scheme.name == "file":
-                    sim_file.uri = URI(scheme="file", path=path)
+                    sim_file.uri = AnyUrl.build(scheme="file", path=path, host="")
 
             result = {
                 "ingested": simulation.uuid.hex,

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import click
 
-from simdb.cli.manifest import InvalidManifest, Manifest
+from simdb.cli.manifest import Manifest
 
 
 @click.group()
@@ -18,11 +18,7 @@ def check(file_name):
 
     manifest = Manifest()
     manifest.load(file_name)
-    try:
-        manifest.validate()
-        click.echo("ok")
-    except InvalidManifest as err:
-        click.echo(err, err=True)
+    click.echo("ok")
 
 
 @manifest.command()

@@ -9,9 +9,9 @@ import imas.ids_defs
 import semantic_version
 from dateutil import parser
 from imas import DBEntry
+from pydantic import AnyUrl
 
 from simdb.config import Config
-from simdb.uri import URI
 
 
 class ImasError(Exception):
@@ -104,7 +104,7 @@ def check_time(entry: DBEntry, ids: str, occurrence) -> None:
 
 
 def _is_al5() -> bool:
-    al_env = os.environ.get("AL_VERSION", default=None)
+    al_env = os.environ.get("AL_VERSION")
     ual_env = os.environ.get("UAL_VERSION", default="5.0.0")
     version = (
         semantic_version.Version(al_env)
@@ -114,8 +114,9 @@ def _is_al5() -> bool:
     return version >= semantic_version.Version("5.0.0")
 
 
-def _open_legacy(uri: URI) -> DBEntry:
-    path = uri.query.get("path", default=None)
+def _open_legacy(uri: AnyUrl) -> DBEntry:
+    qs = dict(uri.query_params())
+    path = qs.get("path")
     if path is not None:
         raise ImasError(f"cannot open AL5 URI {uri} with AL4")
 
@@ -123,12 +124,12 @@ def _open_legacy(uri: URI) -> DBEntry:
         "hdf5": imas.ids_defs.HDF5_BACKEND,
     }
 
-    backend = uri.query.get("backend", default=None)
-    user = uri.query.get("user", default=None)
-    database = uri.query.get("database", default=None)
-    version = uri.query.get("version", default="3")
-    shot = uri.query.get("shot", default=None)
-    run = uri.query.get("run", default=None)
+    backend = qs.get("backend")
+    user = qs.get("user")
+    database = qs.get("database")
+    version = qs.get("version", "3")
+    shot = qs.get("shot")
+    run = qs.get("run")
 
     if backend not in backend_ids:
         raise ImasError(
@@ -174,7 +175,7 @@ def _open_legacy(uri: URI) -> DBEntry:
     return entry
 
 
-def open_imas(uri: URI) -> DBEntry:
+def open_imas(uri: AnyUrl) -> DBEntry:
     """
     Open an IMAS URI and return the IMAS entry object.
 
@@ -191,11 +192,12 @@ def open_imas(uri: URI) -> DBEntry:
     if not _is_al5():
         return _open_legacy(uri)
 
-    path = uri.query.get("path", default=None)
+    qs = dict(uri.query_params())
+    path = qs.get("path")
     if path is None:
         path = get_path_for_legacy_uri(uri)
-        backend = uri.query.get("backend", default="mdsplus")
-        uri = URI(f"imas:{backend}?path={path}")
+        backend = qs.get("backend", "mdsplus")
+        uri = AnyUrl.build(scheme="imas", host="", path=backend, query=f"path={path}")
 
     try:
         entry = imas.DBEntry(str(uri), "r")
@@ -205,7 +207,7 @@ def open_imas(uri: URI) -> DBEntry:
     return entry
 
 
-def imas_timestamp(uri: URI) -> datetime:
+def imas_timestamp(uri: AnyUrl) -> datetime:
     """
     Extract the timestamp from the IDS data for the given IMAS URI.
 
@@ -226,18 +228,19 @@ def imas_timestamp(uri: URI) -> datetime:
     return timestamp
 
 
-def get_path_for_legacy_uri(uri: URI) -> Path:
-    user = uri.query.get("user", default=None)
-    database = uri.query.get("database", default=None)
-    version = uri.query.get("version", default="3")
-    shot = uri.query.get("shot", default=None)
-    run = uri.query.get("run", default=None)
-    backend = uri.query.get("backend", default="hdf5")
+def get_path_for_legacy_uri(uri: AnyUrl) -> Path:
+    qs = dict(uri.query_params())
+    user = qs.get("user")
+    database = qs.get("database")
+    version = qs.get("version", "3")
+    shot = qs.get("shot")
+    run = qs.get("run")
+    backend = qs.get("backend", "hdf5")
     if database is None or shot is None or run is None or version is None:
         raise ValueError(f"Invalid legacy URI {uri}")
 
     if user == "public":
-        imas_home = os.environ.get("IMAS_HOME", default=None)
+        imas_home = os.environ.get("IMAS_HOME")
         if imas_home is None:
             raise ValueError(
                 "Legacy URI passed with user=public but $IMAS_HOME is not set"
@@ -255,24 +258,25 @@ def get_path_for_legacy_uri(uri: URI) -> Path:
         return path / shot / run
 
 
-def _get_path(uri: URI) -> Path:
+def _get_path(uri: AnyUrl) -> Path:
     """
     Return the path to the data for a given IMAS URI
 
     @param uri: a valid IMAS URI
     @return: the path of the IDS data for the given IMAS URI
     """
-    path = uri.query.get("path", default=None)
+    qs = dict(uri.query_params())
+    path = qs.get("path")
     if path is None:
         raise ValueError("Invalid IMAS URI - path not found in query arguments")
 
-    path = Path(path)
+    path = Path(path[0])
     if not path.exists():
         raise ValueError(f"URI path {path} does not exist")
     return path
 
 
-def imas_files(uri: URI) -> List[Path]:
+def imas_files(uri: AnyUrl) -> List[Path]:
     """
     Return all the files associated with the given IMAS URI.
 
@@ -300,7 +304,7 @@ def imas_files(uri: URI) -> List[Path]:
         raise ValueError(f"Unknown IMAS backend {backend}")
 
 
-def convert_uri(uri: URI, path: Path, config: Config) -> URI:
+def convert_uri(uri: AnyUrl, path: Path, config: Config) -> AnyUrl:
     """
     Converts a local IMAS URI to a remote access IMAS URI based on the
     server.imas_remote_host configuration option.
@@ -312,19 +316,21 @@ def convert_uri(uri: URI, path: Path, config: Config) -> URI:
     @param config: Config to read the server.imas_remote_host and
                    server.imas_remote_port options from
     """
-    host = config.get_option("server.imas_remote_host", default=None)
+    host = config.get_string_option("server.imas_remote_host", default=None)
     if host is None:
         raise ValueError(
             "Cannot process IMAS data as server.imas_remote_host configuration option "
             "not set"
         )
-    port = config.get_option("server.imas_remote_port", default=None)
+    port = config.get_string_option("server.imas_remote_port", default=None)
     backend = uri.path
-    if port is None:
-        return URI(f"imas://{host}/uda?path={path}&backend={backend}")
-    else:
-        port = int(port)
-        return URI(f"imas://{host}:{port}/uda?path={path}&backend={backend}")
+    return AnyUrl.build(
+        scheme="imas",
+        host=host,
+        port=int(port),
+        path="uda",
+        query=f"path={path}&backend={backend}",
+    )
 
 
 def extract_ids_occurrence(ids: str) -> tuple[str, int]:

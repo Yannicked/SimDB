@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from simdb.uri import URI
+from pydantic import AnyUrl
 
 
 class FileValidatorBase(ABC):
@@ -26,7 +26,7 @@ class FileValidatorBase(ABC):
         """
 
     @abstractmethod
-    def validate_uri(self, uri: URI, validate_options):
+    def validate_uri(self, uri: AnyUrl, validate_options):
         """
         Validate the given simulation output file.
         """

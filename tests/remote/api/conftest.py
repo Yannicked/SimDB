@@ -35,7 +35,7 @@ for _ in range(100):
 @pytest.fixture(scope="session")
 def client():
     if not has_flask:
-        pytest.skip("Flask not installed")  # type: ignore
+        pytest.skip("Flask not installed")
     config = Config()
     config.load()
     db_fd, db_file = tempfile.mkstemp()
@@ -68,7 +68,7 @@ def client():
 @pytest.fixture(scope="session")
 def client_copy_files():
     if not has_flask:
-        pytest.skip("Flask not installed")  # type: ignore
+        pytest.skip("Flask not installed")
     config = Config()
     config.load()
     db_fd, db_file = tempfile.mkstemp()

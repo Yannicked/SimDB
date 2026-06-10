@@ -7,7 +7,7 @@ from typing import Any, List, Optional, Tuple, Type
 
 import click
 
-from simdb.cli.manifest import InvalidAlias, Manifest
+from simdb.cli.manifest import Manifest
 from simdb.cli.remote_api import RemoteAPI, RemoteError
 from simdb.config.config import Config
 from simdb.database import DatabaseError, get_local_db
@@ -150,11 +150,6 @@ def simulation_ingest(config: Config, manifest_file: str, alias: str):
 
     manifest = Manifest()
     manifest.load(Path(manifest_file))
-    try:
-        manifest.validate()
-    except InvalidAlias:
-        if not alias:
-            raise
 
     simulation = Simulation(manifest, config)
     if alias:
