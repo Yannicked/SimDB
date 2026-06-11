@@ -183,24 +183,23 @@ def open_imas(uri: AnyUrl) -> DBEntry:
     @return: the IMAS data entry object
     """
 
-    if uri.scheme != "imas":
+    if uri.path is None:
+        raise ValueError(f"invalid imas URI: {uri} - no path found in URI")
+
+    if uri.scheme == "file":
+        imas_uri = uri.path
+    elif uri.scheme == "imas":
+        qs = dict(uri.query_params())
+        path = qs.get("path")
+        if path is None:
+            raise ValueError("invalid imas URI: {uri} - no path found")
+        imas_uri = str(uri)
+    else:
         raise ValueError(f"invalid imas URI: {uri} - invalid scheme")
 
-    if uri.query is None:
-        raise ValueError(f"invalid imas URI: {uri} - no query found in URI")
-
-    if not _is_al5():
-        return _open_legacy(uri)
-
-    qs = dict(uri.query_params())
-    path = qs.get("path")
-    if path is None:
-        path = get_path_for_legacy_uri(uri)
-        backend = qs.get("backend", "mdsplus")
-        uri = AnyUrl.build(scheme="imas", host="", path=backend, query=f"path={path}")
 
     try:
-        entry = imas.DBEntry(str(uri), "r")
+        entry = imas.DBEntry(imas_uri, "r")
     except Exception as err:
         raise ImasError(f"failed to open IMAS data with URI {uri}") from err
 
@@ -288,6 +287,12 @@ def imas_files(uri: AnyUrl) -> List[Path]:
     @return: a list of files which contains the IDS data for the backend specified in
              the URI
     """
+    if uri.path is None:
+        raise ValueError("URI path should not be none")
+
+    if uri.scheme == "file":
+        return [Path(uri.path).absolute()]
+
     backend = str(uri.path)
     if backend.startswith("/"):
         backend = backend[1:]
