@@ -9,9 +9,6 @@ IGNORED_FIELDS = ("data_dictionary", "access_layer", "access_layer_language")
 
 
 def checksum(uri: AnyUrl, ids_list: list) -> str:
-    if uri.scheme != "imas":
-        raise ValueError(f"invalid scheme for imas checksum: {uri.scheme}")
-
     sha1 = hashlib.sha1()
 
     if not ids_list:

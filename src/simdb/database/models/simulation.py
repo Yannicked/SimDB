@@ -34,7 +34,6 @@ if "sphinx" in sys.modules:
 
     ClauseElement.__bool__ = lambda self: True  # type: ignore
 
-import re
 
 from simdb.cli.manifest import DataObject, DataType, Manifest
 from simdb.config.config import Config
@@ -44,6 +43,7 @@ from simdb.imas.utils import (
     check_time,
     extract_ids_occurrence,
     get_path_for_legacy_uri,
+    is_legacy_imas_uri,
     list_idss,
     open_imas,
 )
@@ -81,8 +81,6 @@ simulation_watchers = Table(
 
 
 def _update_legacy_uri(data_object: DataObject):
-    if data_object.uri is None:
-        raise ValueError("Data object uri is not set")
     path = get_path_for_legacy_uri(data_object.uri)
     qs = dict(data_object.uri.query_params())
     backend = qs.get("backend", "hdf5")
@@ -189,8 +187,6 @@ class Simulation(Base):
         all_input_idss = []
 
         for input in manifest.inputs:
-            if input.uri is None:
-                raise ValueError("Source uri is not set")
             if input.type == DataType.IMAS:
                 entry = open_imas(input.uri)
                 idss = list_idss(entry)
@@ -204,9 +200,7 @@ class Simulation(Base):
                 entry.close()
 
             file = File(input.type, input.uri, all_input_idss, config=config)
-            if input.type == DataType.IMAS and "path" not in {
-                a[0] for a in input.uri.query_params()
-            }:
+            if input.type == DataType.IMAS and is_legacy_imas_uri(input.uri):
                 file.uri = _update_legacy_uri(input)
             self.inputs.append(file)
 
@@ -216,8 +210,6 @@ class Simulation(Base):
         all_output_idss = []
 
         for output in manifest.outputs:
-            if output.uri is None:
-                raise ValueError("Sink uri is not set")
             if output.type == DataType.IMAS:
                 entry = open_imas(output.uri)
                 idss = list_idss(entry)
@@ -229,16 +221,13 @@ class Simulation(Base):
 
                 meta = load_metadata(entry)
                 entry.close()
-                flattened_meta: Dict[str, str] = {}
-                flatten_dict(flattened_meta, meta)
+                flattened_meta = flatten_dict(meta)
 
                 for key, value in flattened_meta.items():
                     self.set_meta(key, value)
 
             file = File(output.type, output.uri, all_output_idss, config=config)
-            if output.type == DataType.IMAS and "path" not in {
-                a[0] for a in output.uri.query_params()
-            }:
+            if output.type == DataType.IMAS and is_legacy_imas_uri(output.uri):
                 file.uri = _update_legacy_uri(output)
 
             self.outputs.append(file)
@@ -246,12 +235,9 @@ class Simulation(Base):
         if all_output_idss:
             self.set_meta("ids", "[{}]".format(", ".join(all_output_idss)))
 
-        flattened_dict: Dict[str, str] = {}
-        flatten_dict(flattened_dict, manifest.metadata)
+        flattened_dict = flatten_dict(manifest.metadata)
 
         for key, value in flattened_dict.items():
-            if "metadata#" in key:
-                key = re.sub(r"^metadata#\d+\.?", "", key)
             self.set_meta(key, value)
         if not self.find_meta("status"):
             self.set_meta("status", Simulation.Status.NOT_VALIDATED.value)

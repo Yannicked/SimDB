@@ -228,6 +228,10 @@ def imas_timestamp(uri: AnyUrl) -> datetime:
     return timestamp
 
 
+def is_legacy_imas_uri(uri: AnyUrl) -> bool:
+    return bool(uri.scheme == "imas" and dict(uri.query_params()).get("path") is None)
+
+
 def get_path_for_legacy_uri(uri: AnyUrl) -> Path:
     qs = dict(uri.query_params())
     user = qs.get("user")

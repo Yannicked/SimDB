@@ -54,7 +54,7 @@ def _get_data_object_type(data: dict):
             raise ValueError("no path provided")
         if Path(uri.path).suffix == ".nc":
             with Dataset(uri.path, "r") as ds:
-                if getattr(ds, "Convention", None) == "IMAS":
+                if getattr(ds, "Conventions", None) == "IMAS":
                     return DataType.IMAS
         return DataType.FILE
     elif uri.scheme == "simdb":
@@ -66,7 +66,7 @@ class DataObject(BaseModel):
 
     uri: ManifestUrl = Field()
 
-    type: DataType = Field(default_factory=_get_data_object_type)
+    _type: DataType = PrivateAttr(default_factory=_get_data_object_type)
 
     @property
     def name(self) -> str:
@@ -104,6 +104,10 @@ class DataObject(BaseModel):
 
         return v
 
+    @property
+    def type(self):
+        return self._type
+
 
 class Source(DataObject):
     pass
@@ -126,6 +130,7 @@ class Manifest(BaseModel):
     _path: Path = PrivateAttr(default_factory=Path)
     _inputs: List[Source] = PrivateAttr(default_factory=list)
     _outputs: List[Sink] = PrivateAttr(default_factory=list)
+    _metadata: Dict[str, Any] = PrivateAttr(default_factory=dict)
 
     @field_validator("alias")
     @classmethod
@@ -163,6 +168,12 @@ class Manifest(BaseModel):
                 )
             seen_uris.add(uri_str)
         return v
+
+    @model_validator(mode="after")
+    def resolve_metadata(self, info) -> "Manifest":
+        for metadata_item in self.metadata_raw:
+            self._metadata.update(metadata_item)
+        return self
 
     @model_validator(mode="after")
     def resolve_inputs_and_outputs(self, info) -> "Manifest":
@@ -270,7 +281,7 @@ class Manifest(BaseModel):
 
     @property
     def metadata(self) -> Dict[str, Any]:
-        return {"metadata": self.metadata_raw}
+        return self._metadata
 
     @property
     def inputs(self) -> Iterable[Source]:
