@@ -24,7 +24,7 @@ def test_check_role(get_string_option):
     app = Flask("test")
     config = Config()
     app.simdb_config = config  # type: ignore
-    with app.app_context():  # type: ignore
+    with app.app_context():
         get_string_option.return_value = 'user1,"user2", user3'
         ok = check_role(config, User("user1", ""), "test_role")
         assert ok

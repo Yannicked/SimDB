@@ -3,11 +3,11 @@ from unittest import mock
 from uuid import uuid1
 
 import pytest
+from simdb.uri import URI
 
 from simdb.config import Config
 from simdb.enums import IngestionStatus
 from simdb.remote.models import FileData
-from simdb.uri import URI
 from simdb.workers.tasks import (
     _calculate_checksum,
     _copy_files,

@@ -13,7 +13,7 @@ from conftest import (
     post_simulation,
 )
 
-from simdb.cli.manifest import DataObject
+from simdb.cli.manifest import DataType
 from simdb.json import CustomEncoder
 from simdb.remote.models import (
     ChunkInfo,
@@ -97,7 +97,7 @@ def create_simulation_with_file(
 
     registration_data = FileRegistrationData(
         simulation=simulation_data.simulation,
-        obj_type=DataObject.Type.FILE,
+        obj_type=DataType.FILE,
         files=[
             FileRegistrationItem(
                 chunks=num_chunks,
