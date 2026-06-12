@@ -6,7 +6,6 @@ from typing import Any, List
 import imas
 import imas.exception
 import imas.ids_defs
-import semantic_version
 from dateutil import parser
 from imas import DBEntry
 
@@ -103,77 +102,6 @@ def check_time(entry: DBEntry, ids: str, occurrence) -> None:
         raise ImasError(f"IDS {ids} failed validation") from err
 
 
-def _is_al5() -> bool:
-    al_env = os.environ.get("AL_VERSION", default=None)
-    ual_env = os.environ.get("UAL_VERSION", default="5.0.0")
-    version = (
-        semantic_version.Version(al_env)
-        if al_env is not None
-        else semantic_version.Version(ual_env)
-    )
-    return version >= semantic_version.Version("5.0.0")
-
-
-def _open_legacy(uri: URI) -> DBEntry:
-    path = uri.query.get("path", default=None)
-    if path is not None:
-        raise ImasError(f"cannot open AL5 URI {uri} with AL4")
-
-    backend_ids = {
-        "hdf5": imas.ids_defs.HDF5_BACKEND,
-    }
-
-    backend = uri.query.get("backend", default=None)
-    user = uri.query.get("user", default=None)
-    database = uri.query.get("database", default=None)
-    version = uri.query.get("version", default="3")
-    shot = uri.query.get("shot", default=None)
-    run = uri.query.get("run", default=None)
-
-    if backend not in backend_ids:
-        raise ImasError(
-            f"backend {backend} is not supported for legacy IMAS, please use AL5"
-        )
-
-    if (
-        backend is None
-        or user is None
-        or database is None
-        or shot is None
-        or run is None
-    ):
-        raise ImasError("IMAS query is invalid")
-
-    backend_id = backend_ids.get(backend)
-    if backend_id is None:
-        raise ImasError("IMAS backend is invalid")
-
-    if user is not None:
-        try:
-            entry = imas.DBEntry(
-                backend_id,
-                database,
-                int(shot),
-                int(run),
-                user_name=user,
-                data_version=version,
-            )
-        except Exception as err:
-            raise ImasError(f"failed to open IMAS data with URI {uri}") from err
-    else:
-        try:
-            entry = imas.DBEntry(
-                backend_id, database, int(shot), int(run), data_version=version
-            )
-        except Exception as err:
-            raise ImasError(f"failed to open IMAS data with URI {uri}") from err
-    try:
-        entry.open()
-    except RuntimeError as err:
-        raise ImasError(f"failed to open IMAS data with URI {uri}") from err
-    return entry
-
-
 def open_imas(uri: URI) -> DBEntry:
     """
     Open an IMAS URI and return the IMAS entry object.
@@ -187,9 +115,6 @@ def open_imas(uri: URI) -> DBEntry:
 
     if uri.query is None:
         raise ValueError(f"invalid imas URI: {uri} - no query found in URI")
-
-    if not _is_al5():
-        return _open_legacy(uri)
 
     path = uri.query.get("path", default=None)
     if path is None:
