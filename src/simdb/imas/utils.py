@@ -197,7 +197,6 @@ def open_imas(uri: AnyUrl) -> DBEntry:
     else:
         raise ValueError(f"invalid imas URI: {uri} - invalid scheme")
 
-
     try:
         entry = imas.DBEntry(imas_uri, "r")
     except Exception as err:
