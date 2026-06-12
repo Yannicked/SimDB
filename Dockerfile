@@ -15,10 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml alembic.ini ./
+COPY uv.lock pyproject.toml alembic.ini ./
 COPY src/ ./src/
 COPY alembic/ ./alembic/
-RUN uv lock
 RUN uv sync --locked --extra all
 
 ENV SIMDB_SITE_CONFIG_PATH=/app/config/simdb.cfg
