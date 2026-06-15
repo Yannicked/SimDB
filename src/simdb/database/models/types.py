@@ -2,9 +2,10 @@ import enum
 import uuid
 from typing import Any, Dict, Optional
 
-from pydantic import AnyUrl
 from sqlalchemy import types as sql_types
 from sqlalchemy.dialects import postgresql
+
+from simdb.imas.utils import SimDBUrl
 
 
 class UUID(sql_types.TypeDecorator):
@@ -63,19 +64,19 @@ class URI(sql_types.TypeDecorator):
 
     @property
     def python_type(self):
-        return AnyUrl
+        return SimDBUrl
 
-    def process_bind_param(self, value: Optional[AnyUrl], dialect) -> Optional[str]:
+    def process_bind_param(self, value: Optional[SimDBUrl], dialect) -> Optional[str]:
         if value is None:
             return value
         return str(value)
 
-    def process_result_value(self, value: Optional[str], dialect) -> Optional[AnyUrl]:
+    def process_result_value(self, value: Optional[str], dialect) -> Optional[SimDBUrl]:
         if value is None:
             return value
-        return AnyUrl(value)
+        return SimDBUrl(value)
 
-    def process_literal_param(self, value, dialect) -> Optional[AnyUrl]:
+    def process_literal_param(self, value, dialect) -> Optional[SimDBUrl]:
         return self.process_result_value(value, dialect)
 
 

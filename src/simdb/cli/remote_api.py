@@ -23,21 +23,23 @@ from typing import (
     Optional,
     Tuple,
     Union,
+    cast,
 )
 from urllib.parse import urlparse
 
 import appdirs
 import click
 import requests
-from pydantic import AnyUrl
+from netCDF4 import Dataset
 from requests.auth import AuthBase
 from semantic_version import Version
 
 from simdb.config import Config
 from simdb.database.models import Simulation
-from simdb.imas.utils import imas_files
+from simdb.imas.utils import SimDBUrl, imas_files
 from simdb.json import CustomDecoder, CustomEncoder
 from simdb.remote import APIConstants
+from simdb.remote.models import FileData, SimulationPostData
 
 from .manifest import DataType
 
@@ -741,6 +743,7 @@ class RemoteAPI:
         self.post("files", data={}, files=files)
 
     @try_request
+
     def push_simulation(
         self,
         simulation: "Simulation",
@@ -1004,7 +1007,7 @@ class RemoteAPI:
                 (path, checksum) = info[0]
                 rel_path = directory / path.relative_to(common_root)
                 self._pull_file(file.uuid, 0, checksum, path, rel_path, out_stream)
-                file.uri = AnyUrl.build(
+                file.uri = SimDBUrl.build(
                     scheme="file", host="", path=rel_path.absolute().as_posix()
                 )
             elif file.type == DataType.IMAS:
@@ -1019,7 +1022,7 @@ class RemoteAPI:
                     directory / Path(qs.get("path", "")).relative_to(common_root)
                 ).absolute()
                 backend = qs.get("backend")
-                file.uri = AnyUrl.build(
+                file.uri = SimDBUrl.build(
                     scheme="imas", host="", path=backend, query=f"path={to_path}"
                 )
 

@@ -7,8 +7,7 @@ from getpass import getuser
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
 
-from pydantic import AnyUrl
-
+from simdb.imas.utils import SimDBUrl
 from simdb.remote.models import (
     FileDataList,
     MetadataData,
@@ -84,7 +83,7 @@ def _update_legacy_uri(data_object: DataObject):
     path = get_path_for_legacy_uri(data_object.uri)
     qs = dict(data_object.uri.query_params())
     backend = qs.get("backend", "hdf5")
-    return AnyUrl.build(scheme="imas", host="", path=backend, query=f"path={path}")
+    return SimDBUrl.build(scheme="imas", host="", path=backend, query=f"path={path}")
 
 
 class MetaDataWrapper:

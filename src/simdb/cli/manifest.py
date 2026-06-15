@@ -9,7 +9,6 @@ import numpy as np
 import yaml
 from netCDF4 import Dataset
 from pydantic import (
-    AnyUrl,
     BaseModel,
     ConfigDict,
     Field,
@@ -18,6 +17,8 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+from simdb.imas.utils import SimDBUrl
 
 
 def _expand_path(path: Path, base_path: Path) -> Path:
@@ -33,7 +34,7 @@ def _expand_path(path: Path, base_path: Path) -> Path:
 
 
 ManifestUrl = Annotated[
-    AnyUrl, UrlConstraints(allowed_schemes=["file", "imas", "simdb"])
+    SimDBUrl, UrlConstraints(allowed_schemes=["file", "imas", "simdb"])
 ]
 
 
@@ -45,7 +46,7 @@ class DataType(Enum):
 
 
 def _get_data_object_type(data: dict):
-    uri: AnyUrl = data["uri"]
+    uri: SimDBUrl = data["uri"]
 
     if uri.scheme == "imas":
         return DataType.IMAS
@@ -203,7 +204,7 @@ class Manifest(BaseModel):
                         names = [source_path.as_posix()]
                     for name in names:
                         inputs.append(
-                            Source(uri=AnyUrl.build(scheme="file", host="", path=name))
+                            Source(uri=SimDBUrl.build(scheme="file", path=name))
                         )
             else:
                 inputs.append(i)
@@ -221,7 +222,7 @@ class Manifest(BaseModel):
                         names = [sink_path.as_posix()]
                     for name in names:
                         outputs.append(
-                            Sink(uri=AnyUrl.build(scheme="file", host="", path=name))
+                            Sink(uri=SimDBUrl.build(scheme="file", path=name))
                         )
             else:
                 outputs.append(i)

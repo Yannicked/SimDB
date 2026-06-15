@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from dateutil import parser as date_parser
-from pydantic import AnyUrl
 from sqlalchemy import Column
 from sqlalchemy import types as sql_types
 
@@ -13,7 +12,7 @@ from simdb.cli.manifest import DataType
 from simdb.config.config import Config
 from simdb.docstrings import inherit_docstrings
 from simdb.imas.checksum import checksum as imas_checksum
-from simdb.imas.utils import imas_files, imas_timestamp
+from simdb.imas.utils import SimDBUrl, imas_files, imas_timestamp
 from simdb.remote.models import FileData, FileGetDataResponse, FileInfo
 
 from .base import Base
@@ -30,7 +29,7 @@ class File(Base):
     __tablename__ = "files"
     id = Column(sql_types.Integer, primary_key=True)
     uuid = Column(UUID, nullable=False, unique=True, index=True)
-    uri: AnyUrl = Column(URI(1024), nullable=True)
+    uri: SimDBUrl = Column(URI(1024), nullable=True)
     checksum = Column(sql_types.String(64), nullable=True)
     type = Column(sql_types.Enum(DataType), nullable=True)
     datetime = Column(sql_types.DateTime, nullable=False)
@@ -38,7 +37,7 @@ class File(Base):
     def __init__(
         self,
         type: DataType,
-        uri: AnyUrl,
+        uri: SimDBUrl,
         ids_list: Optional[list] = None,
         perform_integrity_check: bool = True,
         config: Optional[Config] = None,
@@ -98,7 +97,7 @@ class File(Base):
     def from_data(cls, data: Dict) -> "File":
         data_type = checked_get(data, "type", str)
         uri = checked_get(data, "uri", str)
-        file = File(DataType[data_type], AnyUrl(uri), perform_integrity_check=False)
+        file = File(DataType[data_type], SimDBUrl(uri), perform_integrity_check=False)
         file.uuid = checked_get(data, "uuid", uuid.UUID)
         file.checksum = checked_get(data, "checksum", str)
         file.datetime = date_parser.parse(checked_get(data, "datetime", str))
@@ -108,7 +107,7 @@ class File(Base):
     def from_data_model(cls, data: FileData) -> "File":
         data_type = data.type
         uri = data.uri
-        file = File(DataType[data_type], AnyUrl(uri), perform_integrity_check=False)
+        file = File(DataType[data_type], SimDBUrl(uri), perform_integrity_check=False)
         file.uuid = data.uuid
         file.checksum = data.checksum
         file.datetime = data.datetime

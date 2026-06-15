@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Optional
 
 import imas
 import imas.exception
@@ -9,7 +9,7 @@ import imas.ids_defs
 import semantic_version
 from dateutil import parser
 from imas import DBEntry
-from pydantic import AnyUrl
+from pydantic import AnyUrl, TypeAdapter
 
 from simdb.config import Config
 
@@ -20,6 +20,26 @@ class ImasError(Exception):
 
 FLOAT_MISSING_VALUE = -9.0e40
 INT_MISSING_VALUE = -999999999
+
+
+class SimDBUrl(AnyUrl):
+    @classmethod
+    def build(
+        cls,
+        *,
+        scheme: str,
+        path: Optional[str] = None,
+        query: Optional[str] = None,
+        fragment: Optional[str] = None,
+        **kwargs,
+    ) -> "SimDBUrl":
+        url_str = f"{scheme}:{path or ''}"
+        if query:
+            url_str += f"?{query}"
+        if fragment:
+            url_str += f"#{fragment}"
+
+        return TypeAdapter(cls).validate_python(url_str)
 
 
 def is_missing(value: Any):
@@ -114,7 +134,7 @@ def _is_al5() -> bool:
     return version >= semantic_version.Version("5.0.0")
 
 
-def _open_legacy(uri: AnyUrl) -> DBEntry:
+def _open_legacy(uri: SimDBUrl) -> DBEntry:
     qs = dict(uri.query_params())
     path = qs.get("path")
     if path is not None:
@@ -175,7 +195,7 @@ def _open_legacy(uri: AnyUrl) -> DBEntry:
     return entry
 
 
-def open_imas(uri: AnyUrl) -> DBEntry:
+def open_imas(uri: SimDBUrl) -> DBEntry:
     """
     Open an IMAS URI and return the IMAS entry object.
 
@@ -205,7 +225,7 @@ def open_imas(uri: AnyUrl) -> DBEntry:
     return entry
 
 
-def imas_timestamp(uri: AnyUrl) -> datetime:
+def imas_timestamp(uri: SimDBUrl) -> datetime:
     """
     Extract the timestamp from the IDS data for the given IMAS URI.
 
@@ -226,11 +246,11 @@ def imas_timestamp(uri: AnyUrl) -> datetime:
     return timestamp
 
 
-def is_legacy_imas_uri(uri: AnyUrl) -> bool:
+def is_legacy_imas_uri(uri: SimDBUrl) -> bool:
     return bool(uri.scheme == "imas" and dict(uri.query_params()).get("path") is None)
 
 
-def get_path_for_legacy_uri(uri: AnyUrl) -> Path:
+def get_path_for_legacy_uri(uri: SimDBUrl) -> Path:
     qs = dict(uri.query_params())
     user = qs.get("user")
     database = qs.get("database")
@@ -260,7 +280,7 @@ def get_path_for_legacy_uri(uri: AnyUrl) -> Path:
         return path / shot / run
 
 
-def _get_path(uri: AnyUrl) -> Path:
+def _get_path(uri: SimDBUrl) -> Path:
     """
     Return the path to the data for a given IMAS URI
 
@@ -278,7 +298,7 @@ def _get_path(uri: AnyUrl) -> Path:
     return path
 
 
-def imas_files(uri: AnyUrl) -> List[Path]:
+def imas_files(uri: SimDBUrl) -> List[Path]:
     """
     Return all the files associated with the given IMAS URI.
 
@@ -312,7 +332,7 @@ def imas_files(uri: AnyUrl) -> List[Path]:
         raise ValueError(f"Unknown IMAS backend {backend}")
 
 
-def convert_uri(uri: AnyUrl, path: Path, config: Config) -> AnyUrl:
+def convert_uri(uri: SimDBUrl, path: Path, config: Config) -> SimDBUrl:
     """
     Converts a local IMAS URI to a remote access IMAS URI based on the
     server.imas_remote_host configuration option.
@@ -332,7 +352,7 @@ def convert_uri(uri: AnyUrl, path: Path, config: Config) -> AnyUrl:
         )
     port = config.get_string_option("server.imas_remote_port", default=None)
     backend = uri.path
-    return AnyUrl.build(
+    return SimDBUrl.build(
         scheme="imas",
         host=host,
         port=int(port),
