@@ -135,12 +135,12 @@ class Config:
         self._load_environmental_vars()
 
         # Import configuration options from files defined by environment variables
-        path = self.get_string_option("user.config-path", default="")
+        path = self.get_string_option("user.config.path", default="")
         if path:
             self._user_config_path = Path(path)
             self._user_config_dir = self._user_config_path.parent
 
-        path = self.get_string_option("site.config-path", default="")
+        path = self.get_string_option("site.config.path", default="")
         if path:
             self._site_config_path = Path(path)
             self._site_config_dir = self._site_config_path.parent
