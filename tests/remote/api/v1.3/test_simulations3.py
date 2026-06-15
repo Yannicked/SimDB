@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest import mock
 from uuid import UUID
 
@@ -107,6 +108,6 @@ def test_post_simulations_v13(client_with_task_mock, tmp_path):
     simulation = client.application.db.get_simulation(result.ingested.hex)
     assert simulation.ingestion_status == IngestionStatus.COMPLETED
     assert (
-        simulation.inputs[0].uri.path
+        Path(simulation.inputs[0].uri.path)
         == tmp_path / "uploads" / result.ingested.hex / "file.txt"
     )

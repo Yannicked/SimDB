@@ -23,6 +23,7 @@ from typing import (
     Optional,
     Tuple,
     Union,
+    cast,
 )
 from urllib.parse import ParseResult, urlparse
 
@@ -30,17 +31,15 @@ import appdirs
 import click
 import requests
 from netCDF4 import Dataset
-from pydantic import AnyUrl
 from requests.auth import AuthBase
 from semantic_version import Version
 
 from simdb.config import Config
 from simdb.database.models import Simulation
-from simdb.imas.utils import imas_files
+from simdb.imas.utils import SimDBUrl, imas_files
 from simdb.json import CustomDecoder, CustomEncoder
 from simdb.remote import APIConstants
 from simdb.remote.models import FileData, SimulationPostData
-from simdb.uri import URI
 from simdb.workers.tasks import _calculate_checksum
 
 from .manifest import DataType
@@ -188,23 +187,43 @@ def _check_file_is_imas(file: Path) -> bool:
     return False
 
 
-def _expand_directories(files: Iterable[FileData]):
+def _find_partition_for_file(file: Path, partitions: dict[str, str]):
+    for partition, path in partitions.items():
+        try:
+            return partition, file.relative_to(str(path))
+        except ValueError:
+            pass
+    return "file", file
+
+
+def _expand_directories(files: Iterable[FileData], partitions: dict[str, str]):
     new_file_list = []
     for file in files:
-        file_uri = URI(file.uri)
-        file_path = file_uri.path
-        if file_path is None:
+        file_uri = SimDBUrl(file.uri)
+        if file_uri.path is None:
             raise ValueError("File has no associated path")
+        file_path = Path(file_uri.path)
+        if file_uri.scheme == "imas":
+            qs = dict(file_uri.query_params())
+            path = qs.get("path")
+            if path is None:
+                raise ValueError("IMAS uri has not path set")
+            file_path = Path(path)
 
         if file_path.is_dir():
             for sub_file in file_path.iterdir():
                 if sub_file.is_dir():
                     raise ValueError("Nested directory found")
-                file_uri.path = sub_file
+                partition, sub_file_path = _find_partition_for_file(
+                    sub_file, partitions
+                )
+                new_uri = SimDBUrl.build(
+                    scheme=partition, path=sub_file_path.as_posix(), host=""
+                )
                 new_file_list.append(
                     FileData(
                         type=file.type,
-                        uri=str(file_uri),
+                        uri=new_uri.encoded_string(),
                         checksum=_calculate_checksum(sub_file),
                         datetime=file.datetime,
                         usage=file.usage,
@@ -217,6 +236,7 @@ def _expand_directories(files: Iterable[FileData]):
         else:
             new_file_list.append(file.model_copy(deep=True))
     return new_file_list
+
 
 class RemoteAPI:
     """
@@ -809,14 +829,15 @@ class RemoteAPI:
     def push_local_simulation(self, simulation: Simulation):
         sim_data = simulation.to_model(recurse=True)
 
-        sim_data.inputs.root = _expand_directories(sim_data.inputs.root)
-        sim_data.outputs.root = _expand_directories(sim_data.outputs.root)
+        partitions = cast(dict[str, str], self._config.get_section("partitions"))
+        sim_data.inputs.root = _expand_directories(sim_data.inputs.root, partitions)
+        sim_data.outputs.root = _expand_directories(sim_data.outputs.root, partitions)
 
-        for file in itertools.chain(sim_data.inputs.root, sim_data.outputs.root):
-            file_uri = URI(file.uri)
-            file_path = file_uri.path
-            if file_path is None:
+        for file in sim_data.inputs.root:
+            file_uri = SimDBUrl(file.uri)
+            if file_uri.path is None:
                 raise ValueError("File has no associated path")
+            file_path = Path(file_uri.path)
 
             if _check_file_is_imas(file_path):
                 file.type = "IMAS"
@@ -1106,7 +1127,7 @@ class RemoteAPI:
                 (path, checksum) = info[0]
                 rel_path = directory / path.relative_to(common_root)
                 self._pull_file(file.uuid, 0, checksum, path, rel_path, out_stream)
-                file.uri = AnyUrl.build(
+                file.uri = SimDBUrl.build(
                     scheme="file", host="", path=rel_path.absolute().as_posix()
                 )
             elif file.type == DataType.IMAS:
@@ -1121,7 +1142,7 @@ class RemoteAPI:
                     directory / Path(qs.get("path", "")).relative_to(common_root)
                 ).absolute()
                 backend = qs.get("backend")
-                file.uri = AnyUrl.build(
+                file.uri = SimDBUrl.build(
                     scheme="imas", host="", path=backend, query=f"path={to_path}"
                 )
 

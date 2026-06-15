@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import AnyUrl
+from simdb.imas.utils import SimDBUrl
 
 try:
     from imas_validator.report.validationReportGenerator import (
@@ -73,7 +73,7 @@ class IdsValidator(FileValidatorBase):
             "rule_files": [],
         }
 
-    def validate_uri(self, uri: AnyUrl, validate_options):
+    def validate_uri(self, uri: SimDBUrl, validate_options):
         if not imas_validator_available:
             raise RuntimeError(
                 "IMAS-validator not available, please install this optional dependency"
@@ -86,7 +86,7 @@ class IdsValidator(FileValidatorBase):
             qs = dict(uri.query_params())
             backend = qs.get("backend")
             path = qs.get("path")
-            validate_uri = AnyUrl.build(
+            validate_uri = SimDBUrl.build(
                 scheme="imas", host="", path=backend, query=f"path={path}"
             )
 

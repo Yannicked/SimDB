@@ -9,13 +9,12 @@ from typing import Annotated, List, Optional, Tuple
 
 from flask import request, send_file
 from flask_restx import Namespace, Resource
-from pydantic import AnyUrl
 
 from simdb.database import DatabaseError
 from simdb.database.models import simulation as models_sim
 from simdb.database.models import watcher as models_watcher
 from simdb.email.server import EmailServer
-from simdb.imas.utils import convert_uri
+from simdb.imas.utils import SimDBUrl, convert_uri
 from simdb.query import QueryType, parse_query_arg
 from simdb.remote.core.alias import create_alias_dir
 from simdb.remote.core.auth import User, requires_auth
@@ -273,7 +272,7 @@ class SimulationList(Resource):
                         raise ResponseException(
                             f"simulation file {sim_file.uuid} not uploaded"
                         )
-                    sim_file.uri = AnyUrl.build(
+                    sim_file.uri = SimDBUrl.build(
                         scheme="file", host="", path=path.as_posix()
                     )
                 elif sim_file.uri.scheme == "imas":

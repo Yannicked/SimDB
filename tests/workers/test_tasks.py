@@ -3,10 +3,10 @@ from unittest import mock
 from uuid import uuid1
 
 import pytest
-from simdb.uri import URI
 
 from simdb.config import Config
 from simdb.enums import IngestionStatus
+from simdb.imas.utils import SimDBUrl
 from simdb.remote.models import FileData
 from simdb.workers.tasks import (
     _calculate_checksum,
@@ -47,7 +47,7 @@ def test_get_imas_identifier_path_returns_parent_for_directory(tmp_path):
     "files,expected_backend",
     [
         (["child.ids"], "ascii"),
-        (["file1.h5", "file2.h5"], "hdf5"),
+        (["master.h5", "file2.h5"], "hdf5"),
         (["ids_001.tree", "ids_001.characteristics", "ids_001.datafile"], "mdsplus"),
     ],
 )
@@ -63,7 +63,7 @@ def test_imas_path_to_uri_detects_backend_from_directory(
 
     assert uri.scheme == "imas"
     assert str(uri.path) == expected_backend
-    assert uri.query.get("path") == str(ids_dir)
+    assert dict(uri.query_params()).get("path") == str(ids_dir)
 
 
 def test_imas_path_to_uri_unknown_backend_raises(tmp_path):
@@ -87,7 +87,7 @@ def config_with_partition(tmp_path):
 def test_resolve_uri_to_path_returns_partition_relative_path(config_with_partition):
     config, partition_path = config_with_partition
 
-    result = _resolve_uri_to_path(URI("data:/subdir/file.txt"), config)
+    result = _resolve_uri_to_path(SimDBUrl("data:/subdir/file.txt"), config)
 
     assert result == partition_path / "subdir" / "file.txt"
 
@@ -96,7 +96,7 @@ def test_resolve_uri_to_path_unknown_partition_raises(config_with_partition):
     config, _ = config_with_partition
 
     with pytest.raises(ValueError, match="Partition 'unknown' not found"):
-        _resolve_uri_to_path(URI("unknown:/file.txt"), config)
+        _resolve_uri_to_path(SimDBUrl("unknown:/file.txt"), config)
 
 
 def test_resolve_paths_resolves_multiple_files(config_with_partition):

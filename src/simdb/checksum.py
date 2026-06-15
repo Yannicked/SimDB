@@ -1,10 +1,10 @@
 import hashlib
 from pathlib import Path
 
-from pydantic import AnyUrl
+from simdb.imas.utils import SimDBUrl
 
 
-def sha1_checksum(uri: AnyUrl) -> str:
+def sha1_checksum(uri: SimDBUrl) -> str:
     """Generate a SHA1 checksum from the given file.
 
     :param uri: the URI of the file to checksum

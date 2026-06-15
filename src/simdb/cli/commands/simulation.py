@@ -179,6 +179,51 @@ def n_required_args_adaptor(n) -> Type[click.Command]:
     return NRequiredArgs
 
 
+@simulation.command("push_local", cls=n_required_args_adaptor(1))
+@pass_config
+@click.argument("remote", required=False)
+@click.argument("sim_id")
+@click.option("--username", help="Username used to authenticate with the remote.")
+@click.option("--password", help="Password used to authenticate with the remote.")
+@click.option("--replaces", help="SIM_ID of simulation to deprecate and replace.")
+@click.option(
+    "--add-watcher",
+    is_flag=True,
+    help="Add the current user as a watcher of the simulation.",
+)
+def simulation_push_local(
+    config: Config,
+    remote: Optional[str],
+    sim_id: str,
+    username: Optional[str],
+    password: Optional[str],
+    replaces: Optional[str],
+    add_watcher: bool,
+):
+    """Push the simulation with the given SIM_ID (UUID or alias) to the REMOTE."""
+
+    api = RemoteAPI(remote, username, password, config)
+    db = get_local_db(config)
+
+    simulation = db.get_simulation(sim_id)
+    if simulation is None:
+        raise click.ClickException(f"Failed to find simulation: {sim_id}")
+
+    if replaces:
+        simulation.set_meta("replaces", replaces)
+
+    schemas = api.get_validation_schemas()
+    try:
+        for schema in schemas:
+            Validator(schema).validate(simulation)
+    except ValidationError as err:
+        raise click.ClickException(f"Simulation does not validate: {err}") from err
+
+    api.push_local_simulation(simulation)
+
+    click.echo(f"Successfully pushed simulation {simulation.uuid}")
+
+
 @simulation.command("push", cls=n_required_args_adaptor(1))
 @pass_config
 @click.argument("remote", required=False)

@@ -7,14 +7,13 @@ from typing import Dict, Iterable, List, Optional
 import magic
 from flask import Response, jsonify, request, send_file, stream_with_context
 from flask_restx import Namespace, Resource
-from pydantic import AnyUrl
 from werkzeug.datastructures import FileStorage
 
 from simdb.checksum import sha1_checksum
 from simdb.cli.manifest import DataType
 from simdb.database import DatabaseError, models
 from simdb.imas.checksum import checksum as imas_checksum
-from simdb.imas.utils import imas_files
+from simdb.imas.utils import SimDBUrl, imas_files
 from simdb.json import CustomDecoder
 from simdb.remote.core.auth import User, requires_auth
 from simdb.remote.core.errors import error
@@ -47,7 +46,7 @@ def _verify_file(
         if not path.exists():
             raise ValueError(f"file {path} does not exist")
         checksum = sha1_checksum(
-            AnyUrl.build(scheme="file", host="", path=path.as_posix())
+            SimDBUrl.build(scheme="file", host="", path=path.as_posix())
         )
         if sim_file.checksum != checksum:
             raise ValueError(f"checksum failed for file {sim_file!r}")

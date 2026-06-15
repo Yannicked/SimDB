@@ -8,11 +8,11 @@ from typing import Dict, List, Optional, Tuple
 
 from flask import jsonify, request
 from flask_restx import Namespace, Resource
-from pydantic import AnyUrl
 
 from simdb.database import DatabaseError
 from simdb.database.models import simulation as models_sim
 from simdb.email.server import EmailServer
+from simdb.imas.utils import SimDBUrl
 from simdb.query import QueryType, parse_query_arg
 from simdb.remote import APIConstants
 from simdb.remote.core.alias import create_alias_dir
@@ -235,7 +235,7 @@ class SimulationList(Resource):
                 if not path.exists():
                     raise ValueError(f"simulation file {sim_file.uuid} not uploaded")
                 if sim_file.uri.scheme.name == "file":
-                    sim_file.uri = AnyUrl.build(scheme="file", path=path, host="")
+                    sim_file.uri = SimDBUrl.build(scheme="file", path=path, host="")
 
             result = {
                 "ingested": simulation.uuid.hex,
