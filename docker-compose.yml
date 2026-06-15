@@ -15,6 +15,7 @@ services:
     ports:
       - "5000:5000"
     volumes:
+      - ./validation:/app/validation:ro
       - ./config:/app/config:ro
       - ./tmp/partition_data:/data/simdb/partition:ro
       - ./upload_folder:/data/simdb/simulations
@@ -90,3 +91,4 @@ services:
 volumes:
   redis_data:
   postgres_data:
+

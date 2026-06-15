@@ -1,6 +1,5 @@
 ARG PYVER=3.12
-FROM python:${PYVER}-slim-trixie
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+FROM ghcr.io/astral-sh/uv:python${PYVER}-trixie-slim
 
 ENV UV_NO_DEV=1
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
@@ -15,12 +14,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml alembic.ini ./
+COPY uv.lock pyproject.toml alembic.ini ./
 COPY src/ ./src/
 COPY alembic/ ./alembic/
-RUN uv lock
 RUN uv sync --locked --extra all
 
 ENV SIMDB_SITE_CONFIG_PATH=/app/config/simdb.cfg
 
 CMD ["uv", "run", "simdb_server"]
+
