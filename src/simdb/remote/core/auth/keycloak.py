@@ -18,7 +18,7 @@ class KeyCloakAuthenticator(Authenticator):
     Name = "KeyCloak"
 
     def authenticate(self, config: Config, request: Request) -> Optional[User]:
-        sever_url = config.get_string_option("authentication.sever_url")
+        server_url = config.get_string_option("authentication.server_url")
         realm_name = config.get_string_option("authentication.realm_name")
         client_id = config.get_string_option("authentication.client_id")
 
@@ -26,7 +26,7 @@ class KeyCloakAuthenticator(Authenticator):
 
         try:
             oid = KeycloakOpenID(
-                server_url=sever_url, client_id=realm_name, realm_name=client_id
+                server_url=server_url, client_id=realm_name, realm_name=client_id
             )
             decoded = oid.decode_token(token)
 
