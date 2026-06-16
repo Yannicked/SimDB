@@ -1,5 +1,6 @@
 import contextlib
 import sys
+import time
 import urllib.parse
 from itertools import chain
 from pathlib import Path
@@ -245,7 +246,34 @@ def simulation_push_local(
 
     api.push_local_simulation(simulation)
 
-    click.echo(f"Successfully pushed simulation {simulation.uuid}")
+    click.echo("Waiting for ingestion to complete...", nl=False)
+    last_status = None
+    while True:
+        try:
+            status = api.get_ingestion_status(simulation.uuid.hex)
+        except Exception as err:
+            click.echo()
+            raise click.ClickException(
+                f"Failed to check ingestion status: {err}"
+            ) from err
+
+        if status != last_status:
+            if last_status is not None:
+                click.echo(f" -> {status}", nl=False)
+            else:
+                click.echo(f" {status}", nl=False)
+            last_status = status
+
+        if status in ("completed", "copy_failed", "validation_failed"):
+            break
+
+        time.sleep(1)
+
+    click.echo()
+    if status == "completed":
+        click.echo(f"Successfully pushed simulation {simulation.uuid}")
+    else:
+        raise click.ClickException(f"Simulation ingestion failed with status: {status}")
 
 
 @simulation.command("push", cls=n_required_args_adaptor(1))

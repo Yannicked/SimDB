@@ -190,7 +190,7 @@ def _check_file_is_imas(file: Path) -> bool:
 def _find_partition_for_file(file: Path, partitions: dict[str, str]):
     for partition, path in partitions.items():
         try:
-            return partition, file.relative_to(str(path))
+            return partition, file.relative_to(Path(path))
         except ValueError:
             pass
     return "file", file
@@ -234,7 +234,23 @@ def _expand_directories(files: Iterable[FileData], partitions: dict[str, str]):
                     )
                 )
         else:
-            new_file_list.append(file.model_copy(deep=True))
+            partition, new_file_path = _find_partition_for_file(file_path, partitions)
+            new_uri = SimDBUrl.build(
+                scheme=partition, path=new_file_path.as_posix(), host=""
+            )
+            new_file_list.append(
+                FileData(
+                    type=file.type,
+                    uri=new_uri.encoded_string(),
+                    checksum=_calculate_checksum(file_path),
+                    datetime=file.datetime,
+                    usage=file.usage,
+                    purpose=file.purpose,
+                    sensitivity=file.sensitivity,
+                    access=file.access,
+                    embargo=file.embargo,
+                )
+            )
     return new_file_list
 
 
@@ -330,17 +346,7 @@ class RemoteAPI:
         self._username = username
         self._password = password
 
-        endpoints = self.get_endpoints()
-        endpoint_versions = [endpoint.split("/")[-1] for endpoint in endpoints]
-
-        if not endpoint_versions:
-            raise RemoteError("No compatible API version found on remote")
-
-        latest_version = max(endpoint_versions)
-        if config.verbose:
-            print(f"Selected latest endpoint version {latest_version}")
-
-        self._api_url += f"{latest_version}/"
+        self._api_url += "v1.2/"
         self.version = Version.coerce(self.get_api_version())
         self.server_version = Version.coerce(self.get_server_version())
 
@@ -829,7 +835,7 @@ class RemoteAPI:
     def push_local_simulation(self, simulation: Simulation):
         sim_data = simulation.to_model(recurse=True)
 
-        partitions = cast(dict[str, str], self._config.get_section("partitions"))
+        partitions = cast(dict[str, str], self._config.get_section("partition"))
         sim_data.inputs.root = _expand_directories(sim_data.inputs.root, partitions)
         sim_data.outputs.root = _expand_directories(sim_data.outputs.root, partitions)
 
@@ -839,7 +845,22 @@ class RemoteAPI:
                 raise ValueError("File has no associated path")
             file_path = Path(file_uri.path)
 
-            if _check_file_is_imas(file_path):
+            partition = Path(
+                self._config.get_string_option(f"partition.{file_uri.scheme}")
+            )
+            if _check_file_is_imas(partition / file_path):
+                file.type = "IMAS"
+
+        for file in sim_data.outputs.root:
+            file_uri = SimDBUrl(url=file.uri)
+            if file_uri.path is None:
+                raise ValueError("File has no associated path")
+            file_path = Path(file_uri.path)
+
+            partition = Path(
+                self._config.get_string_option(f"partition.{file_uri.scheme}")
+            )
+            if _check_file_is_imas(partition / file_path):
                 file.type = "IMAS"
 
         uploaded_by = str(simulation.meta_dict().get("uploaded_by", None))
@@ -848,20 +869,33 @@ class RemoteAPI:
         post_data = SimulationPostData(
             simulation=sim_data, add_watcher=False, uploaded_by=uploaded_by
         ).model_dump_json()
-        requests.post(
-            f"{self._url}/v1.3/",
+        res = requests.post(
+            f"{self._url}/v1.3/simulations",
             data=post_data,
             headers=headers,
             auth=self._get_auth(),
             cookies=self._cookies,
         )
-        self.post(
-            "simulations",
-            data={
-                "simulation": sim_data,
-                "uploaded_by": uploaded_by,
-            },
-        )
+        check_return(res)
+
+    @try_request
+    def get_ingestion_status(self, sim_id: str) -> str:
+        headers = {"User-Agent": "it_script_basic"}
+        if self._server_auth != "None":
+            res = requests.get(
+                f"{self._url}/v1.3/simulation/status/{sim_id}",
+                headers=headers,
+                auth=self._get_auth(),
+                cookies=self._cookies,
+            )
+        else:
+            res = requests.get(
+                f"{self._url}/v1.3/simulation/status/{sim_id}",
+                headers=headers,
+                cookies=self._cookies,
+            )
+        check_return(res)
+        return res.json()["status"]
 
     @try_request
     def push_simulation(

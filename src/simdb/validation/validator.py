@@ -26,7 +26,7 @@ class ValidationError(Exception):
 
 class CustomValidator(ValidatorBase):
     types_mapping = cast(Any, cerberus.Validator).types_mapping.copy()
-    types_mapping["numpy"] = cerberus.TypeDefinition("numpy", (np.ndarray,), ())
+    types_mapping["numpy"] = cerberus.TypeDefinition("numpy", (np.ndarray, dict), ())
 
     def _validate_exists(self, check_exists, field, value):
         """The rule's arguments are validated against this schema:
@@ -40,41 +40,73 @@ class CustomValidator(ValidatorBase):
         {'type': 'float'}
         """
 
-        if not isinstance(value, np.ndarray):
-            value = value[~np.isnan(value)]
+        if isinstance(value, dict) and "min" in value and "max" in value:
+            if min_value is not None and value["min"] < min_value:
+                self._error(field, f"Minimum {value['min']} less than {min_value}")
+        elif isinstance(value, np.ndarray):
+            try:
+                if np.issubdtype(value.dtype, np.number):
+                    value = value[~np.isnan(value)]
+            except TypeError:
+                pass
             if value.size == 0:
                 self._error(field, "Values in numpy array are NaN or empty")
+            elif min_value is not None and value.min() < min_value:
+                self._error(field, f"Minimum {value.min()} less than {min_value}")
+        else:
             self._error(field, "Value is not a numpy array")
-        if min_value is not None and value.min() < min_value:
-            self._error(field, f"Minimum {value.min()} less than {min_value}")
 
     def _validate_max_value(self, max_value, field, value):
         """The rule's arguments are validated against this schema:
         {'type': 'float'}
         """
 
-        if not isinstance(value, np.ndarray):
-            value = value[~np.isnan(value)]
+        if isinstance(value, dict) and "min" in value and "max" in value:
+            if max_value is not None and value["max"] > max_value:
+                self._error(field, f"Maximum {value['max']} greater than {max_value}")
+        elif isinstance(value, np.ndarray):
+            try:
+                if np.issubdtype(value.dtype, np.number):
+                    value = value[~np.isnan(value)]
+            except TypeError:
+                pass
             if value.size == 0:
                 self._error(field, "Values in numpy array are NaN or empty")
+            elif max_value is not None and value.max() > max_value:
+                self._error(field, f"Maximum {value.max()} greater than {max_value}")
+        else:
             self._error(field, "Value is not a numpy array")
-        if max_value is not None and value.max() > max_value:
-            self._error(field, f"Maximum {value.max()} greater than {max_value}")
 
     def _compare(self, comparison, field, value, comparator: str, message: str):
         if comparison is None:
             return
         if isinstance(value, np.ndarray):
-            value = value[~np.isnan(value)]
+            try:
+                if np.issubdtype(value.dtype, np.number):
+                    value = value[~np.isnan(value)]
+            except TypeError:
+                pass
             if value.size == 0:
                 self._error(field, "Values in numpy array are NaN or empty")
+                return
             if not getattr(value, comparator)(comparison).all():
                 self._error(field, f"Values are not {message} {comparison}")
-        elif isinstance(value, float):
+        elif isinstance(value, (float, int)):
             if not getattr(value, comparator)(comparison):
                 self._error(field, f"Value is not {message} {comparison}")
+        elif isinstance(value, dict) and "min" in value and "max" in value:
+            if comparator in ("__gt__", "__ge__"):
+                val_to_compare = value["min"]
+            elif comparator in ("__lt__", "__le__"):
+                val_to_compare = value["max"]
+            else:
+                self._error(field, f"Unsupported comparison for range: {comparator}")
+                return
+
+            if not getattr(val_to_compare, comparator)(comparison):
+                self._error(field, f"Value is not {message} {comparison}")
         else:
-            self._error(field, "Value is not a numpy array or a float")
+            self._error(field, "Value is not a numpy array, range, or a float")
 
     def _validate_gt(self, comparison, field, value):
         """The rule's arguments are validated against this schema:
@@ -110,7 +142,7 @@ class CustomValidator(ValidatorBase):
 
     @classmethod
     def _normalize_coerce_numpy(cls, value):
-        if isinstance(value, np.ndarray):
+        if isinstance(value, (np.ndarray, dict)):
             return value
         elif isinstance(value, str):
             return np.fromstring(value[1:-1], sep=" ")
