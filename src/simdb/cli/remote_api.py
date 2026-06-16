@@ -23,14 +23,12 @@ from typing import (
     Optional,
     Tuple,
     Union,
-    cast,
 )
 from urllib.parse import urlparse
 
 import appdirs
 import click
 import requests
-from netCDF4 import Dataset
 from requests.auth import AuthBase
 from semantic_version import Version
 
@@ -39,7 +37,6 @@ from simdb.database.models import Simulation
 from simdb.imas.utils import SimDBUrl, imas_files
 from simdb.json import CustomDecoder, CustomEncoder
 from simdb.remote import APIConstants
-from simdb.remote.models import FileData, SimulationPostData
 
 from .manifest import DataType
 
@@ -743,7 +740,6 @@ class RemoteAPI:
         self.post("files", data={}, files=files)
 
     @try_request
-
     def push_simulation(
         self,
         simulation: "Simulation",
