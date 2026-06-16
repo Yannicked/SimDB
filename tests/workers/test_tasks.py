@@ -160,6 +160,7 @@ def task_environment(tmp_path):
     config.set_option("database.file", str(tmp_path / "test.db"))
     config.set_option("server.upload_folder", str(upload_dir))
     config.set_option("partition.data", str(partition_dir))
+    config.load = mock.MagicMock()
 
     simulation_uuid = uuid1()
     mock_simulation = mock.MagicMock(uuid=simulation_uuid, inputs=[], outputs=[])
