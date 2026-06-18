@@ -8,6 +8,7 @@ import yaml
 
 from simdb.config import Config, ConfigError
 from simdb.database.models.simulation import Simulation
+from simdb.remote.models import RangeValue
 
 ValidatorBase = cast(Any, cerberus.Validator)
 
@@ -115,6 +116,8 @@ class CustomValidator(ValidatorBase):
             return value
         elif isinstance(value, dict) and "min" in value and "max" in value:
             return np.array([value["min"], value["max"]], dtype=float)
+        elif isinstance(value, RangeValue):
+            return np.array([float(value.min), float(value.max)])
         elif isinstance(value, str):
             return np.fromstring(value[1:-1], sep=" ")
         else:
