@@ -272,9 +272,7 @@ class SimulationList(Resource):
                         raise ResponseException(
                             f"simulation file {sim_file.uuid} not uploaded"
                         )
-                    sim_file.uri = SimDBUrl.build(
-                        scheme="file", path=path.as_posix()
-                    )
+                    sim_file.uri = SimDBUrl.build(scheme="file", path=path.as_posix())
                 elif sim_file.uri.scheme == "imas":
                     qs = dict(sim_file.uri.query_params())
                     if copy_files:

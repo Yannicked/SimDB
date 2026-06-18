@@ -45,9 +45,7 @@ def _verify_file(
         path = secure_path(Path(sim_file.uri.path), common_root, staging_dir)
         if not path.exists():
             raise ValueError(f"file {path} does not exist")
-        checksum = sha1_checksum(
-            SimDBUrl.build(scheme="file", path=path.as_posix())
-        )
+        checksum = sha1_checksum(SimDBUrl.build(scheme="file", path=path.as_posix()))
         if sim_file.checksum != checksum:
             raise ValueError(f"checksum failed for file {sim_file!r}")
     elif sim_file.type == DataType.IMAS:
