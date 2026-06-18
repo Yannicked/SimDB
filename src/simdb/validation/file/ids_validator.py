@@ -87,7 +87,7 @@ class IdsValidator(FileValidatorBase):
             backend = qs.get("backend")
             path = qs.get("path")
             validate_uri = SimDBUrl.build(
-                scheme="imas", host="", path=backend, query=f"path={path}"
+                scheme="imas", path=backend, query=f"path={path}"
             )
 
             validate_output = validate(

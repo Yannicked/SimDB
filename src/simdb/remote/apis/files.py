@@ -46,7 +46,7 @@ def _verify_file(
         if not path.exists():
             raise ValueError(f"file {path} does not exist")
         checksum = sha1_checksum(
-            SimDBUrl.build(scheme="file", host="", path=path.as_posix())
+            SimDBUrl.build(scheme="file", path=path.as_posix())
         )
         if sim_file.checksum != checksum:
             raise ValueError(f"checksum failed for file {sim_file!r}")
@@ -64,7 +64,7 @@ def _verify_file(
         else:
             path_value = str(staging_dir)
         new_uri = uri.build(
-            scheme=uri.scheme, host="", path=uri.path, query=f"path={path_value}"
+            scheme=uri.scheme, path=uri.path, query=f"path={path_value}"
         )
         checksum = imas_checksum(new_uri, ids_list or [])
         if sim_file.checksum != checksum:

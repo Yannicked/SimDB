@@ -83,7 +83,7 @@ def _update_legacy_uri(data_object: DataObject):
     path = get_path_for_legacy_uri(data_object.uri)
     qs = dict(data_object.uri.query_params())
     backend = qs.get("backend", "hdf5")
-    return SimDBUrl.build(scheme="imas", host="", path=backend, query=f"path={path}")
+    return SimDBUrl.build(scheme="imas", path=backend, query=f"path={path}")
 
 
 class MetaDataWrapper:

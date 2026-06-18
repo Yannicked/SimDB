@@ -1004,7 +1004,7 @@ class RemoteAPI:
                 rel_path = directory / path.relative_to(common_root)
                 self._pull_file(file.uuid, 0, checksum, path, rel_path, out_stream)
                 file.uri = SimDBUrl.build(
-                    scheme="file", host="", path=rel_path.absolute().as_posix()
+                    scheme="file", path=rel_path.absolute().as_posix()
                 )
             elif file.type == DataType.IMAS:
                 for index, (path, checksum) in enumerate(info):
@@ -1019,7 +1019,7 @@ class RemoteAPI:
                 ).absolute()
                 backend = qs.get("backend")
                 file.uri = SimDBUrl.build(
-                    scheme="imas", host="", path=backend, query=f"path={to_path}"
+                    scheme="imas", path=backend, query=f"path={to_path}"
                 )
 
         return simulation

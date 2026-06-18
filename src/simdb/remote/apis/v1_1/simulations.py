@@ -235,7 +235,7 @@ class SimulationList(Resource):
                 if not path.exists():
                     raise ValueError(f"simulation file {sim_file.uuid} not uploaded")
                 if sim_file.uri.scheme.name == "file":
-                    sim_file.uri = SimDBUrl.build(scheme="file", path=path, host="")
+                    sim_file.uri = SimDBUrl.build(scheme="file", path=path)
 
             result = {
                 "ingested": simulation.uuid.hex,

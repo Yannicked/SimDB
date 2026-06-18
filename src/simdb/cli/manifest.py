@@ -96,7 +96,6 @@ class DataObject(BaseModel):
         elif v.scheme == "file":
             v = v.build(
                 scheme="file",
-                host="",
                 path=_expand_path(Path(v.path), base_path).as_posix(),
             )
 
