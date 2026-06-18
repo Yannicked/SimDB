@@ -1,0 +1,123 @@
+# Run with Docker Compose
+
+SimDB ships a Docker Compose setup that runs the server together with its
+PostgreSQL database and a Redis instance, applying database migrations
+automatically. This is the quickest way to stand up a complete server.
+
+## Prerequisites
+
+- Docker and Docker Compose.
+- A checkout of the SimDB repository (the `Dockerfile` and `docker-compose.yml`
+  live at its root).
+
+## Services
+
+`docker-compose.yml` defines the following:
+
+| Service | Role |
+| --- | --- |
+| `web` | The SimDB server, published on port 5000. |
+| `postgres` | PostgreSQL database (user/password/db `simdb`). |
+| `redis` | Redis, used as the message broker for background workers. |
+| `migrations` | One-shot service that runs `alembic upgrade head`, then exits. |
+| `worker`, `beat` | Optional Celery worker and scheduler (see [Background workers](#background-workers)). |
+
+The image is built from the `Dockerfile`, which uses `uv` and installs SimDB
+with the `all` extra.
+
+## Configure
+
+The server reads its configuration from `config/simdb.cfg`, which is mounted into
+the container. The image sets `SIMDB_SITE_CONFIG_PATH=/app/config/simdb.cfg`, so
+edit `config/simdb.cfg` to configure the deployment. A starting point:
+
+```ini
+[flask]
+flask_env = development
+debug = True
+testing = True
+secret_key = CHANGE_ME
+
+[authentication]
+type = None
+
+[server]
+upload_folder = /data/simdb/simulations
+port = 5000
+ssl_enabled = False
+admin_password = CHANGE_ME
+imas_remote_host = localhost
+
+[database]
+type = postgres
+host = postgres
+port = 5432
+username = simdb
+password = simdb
+database = simdb
+
+[validation]
+path = ./validation
+auto_validate = True
+error_on_fail = True
+
+[celery]
+broker_url = redis://redis:6379/0
+result_backend = redis://redis:6379/0
+
+[partition]
+data = /data/simdb/partition
+```
+
+Note that `[database].host` is `postgres` (the Compose service name) and the
+Celery broker points at the `redis` service. The `[server].port` value must
+match the published port.
+
+See the [server configuration reference](../../reference/server-configuration.md)
+for all options.
+
+## Start
+
+```bash
+docker compose up --build
+```
+
+Compose builds the image, starts PostgreSQL and Redis, waits for them to become
+healthy, runs the migrations, and then starts the `web` service. The server is
+then reachable at <http://localhost:5000>.
+
+To run in the background:
+
+```bash
+docker compose up --build -d
+```
+
+Stop everything with:
+
+```bash
+docker compose down
+```
+
+Database and Redis state persist in named volumes (`postgres_data`,
+`redis_data`).
+
+## Background workers
+
+The `worker` and `beat` services run under the `with_workers`
+[Compose profile](https://docs.docker.com/compose/profiles/), so they are off by
+default. Enable them when you want asynchronous processing:
+
+```bash
+docker compose --profile with_workers up --build
+```
+
+They use the `[celery]` broker and result backend from `config/simdb.cfg`.
+
+## Building for a specific Python version
+
+`docker-compose-pyver.yml` and the `PYVER` build argument let you build against
+a chosen Python version, for example:
+
+```bash
+PYVER=3.12 docker compose -f docker-compose-pyver.yml up --build
+```

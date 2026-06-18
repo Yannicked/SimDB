@@ -1,23 +1,23 @@
-# Minimal makefile for Sphinx documentation
+# Minimal makefile for Sphinx documentation.
 #
+# The documentation source lives directly in this directory (docs/). The CLI
+# reference and Python API pages are generated automatically by conf.py during
+# the build, so `make html` produces a complete site with no extra steps.
 
-# You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
-SOURCEDIR     = sphinx
+SOURCEDIR     = .
 BUILDDIR      = _build
 
-# Put it first so that "make" without argument is like "make help".
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
-.PHONY: help html Makefile
+clean:
+	rm -rf "$(BUILDDIR)"
+	rm -f reference/cli.md
+	rm -f reference/python-api/simdb*.rst reference/python-api/modules.rst
 
-# Copy source files from docs/ into sphinx/ before building (mirrors .readthedocs.yml)
-html: Makefile
-	cp ../*.md $(SOURCEDIR)/ 2>/dev/null || true
-	cp ../*.svg $(SOURCEDIR)/ 2>/dev/null || true
-	@$(SPHINXBUILD) -M html "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+.PHONY: help clean Makefile
 
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).

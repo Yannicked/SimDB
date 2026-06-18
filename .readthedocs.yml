@@ -6,20 +6,22 @@ build:
     python: "3.11"
   jobs:
     post_checkout:
+      # Needed so setuptools_scm can determine the version from git tags.
       - git fetch --unshallow || true
-      - cp docs/*.md docs/sphinx/ || true
-      - cp docs/*.svg docs/sphinx/ || true
-    pre_build:
-      - cd docs && sphinx-apidoc -f -o sphinx -e -M ../src/simdb
-    
+
 python:
   install:
     - method: pip
       path: .
       extra_requirements:
+        # `all` (server, postgres, imas-validator) so autodoc can import every
+        # module for the API reference; `build-docs` for Sphinx itself.
+        - all
         - build-docs
 
 sphinx:
   builder: html
-  configuration: docs/sphinx/conf.py
+  # The CLI reference and Python API pages are generated from conf.py at build
+  # time, so no pre_build / copy steps are needed.
+  configuration: docs/conf.py
   fail_on_warning: false

@@ -4,122 +4,55 @@
 [![Documentation Status](https://readthedocs.org/projects/simdb/badge/?version=latest)](https://simdb.readthedocs.io/en/latest/)
 [![CI](https://github.com/iterorganization/SimDB/actions/workflows/build_and_test.yml/badge.svg)](https://github.com/iterorganization/SimDB/actions)
 
----
-
-## Overview
-
-**SimDB** is a powerful tool designed to track, manage, upload, and query simulations. Simulation data can be tagged with metadata, managed locally, and seamlessly transferred to remote SimDB services. Uploaded simulations can then be queried based on metadata.
-
----
-
-## Features
-
-- **CLI Tool:** Intuitive command line tool for all major operations.
-- **Metadata Tagging:** Associate simulations with flexible, searchable metadata.
-- **Remote Sync:** Transfer data to/from remote SimDB servers.
-- **Developer Friendly:** Easy setup for contributing & extending codebase.
-
----
+**SimDB** tracks, manages, validates and shares scientific simulations. You
+describe a simulation and its data in a small manifest file, ingest it into your
+local catalogue, and push it to a shared SimDB server where colleagues can query,
+validate and reuse it. It is built for [IMAS](https://imas.iter.org/)
+fusion-simulation workflows.
 
 ## Quickstart
 
-Install SimDB (requires Python 3.11+):
+SimDB requires Python 3.11 or newer.
 
 ```bash
 pip install imas-simdb
-```
-
-SimDB version:
-
-```bash
 simdb --version
-simdb remote [NAME] version
 ```
 
-Ingest and upload your first simulation:
+Catalogue a simulation and share it:
 
 ```bash
-simdb simulation ingest -a SIM_ID MANIFEST_FILE
-simdb simulation push [REMOTE] SIM_ID
+simdb manifest create manifest.yaml      # create and edit a manifest
+simdb simulation ingest manifest.yaml    # add it to your local catalogue
+simdb simulation push [REMOTE] SIM_ID    # push it to a server
 ```
 
 Query simulations by metadata:
 
 ```bash
-simdb simulation query [OPTIONS] [CONSTRAINTS]
-simdb remote [REMOTE] query [OPTIONS] [CONSTRAINTS]
-```
-_where:_
-- `SIM_ID` — UUID or alias for your simulation  
-- `REMOTE` — The remote server name (as configured locally)  
-- `MANIFEST_FILE` — YAML document that describes your simulation and its associated data
-- `OPTION` - Additional optional parameters for the given command (see `--help` output)
-
-[See full installation guide in the documentation &rarr;](https://simdb.readthedocs.io/en/latest/install_guide.html)
-
----
-
-## Command Line Interface
-
-SimDB provides a CLI tool to manage your simulation workflow.  
-To view help and subcommands:
-
-```bash
-simdb --help
+simdb simulation query code.name=SOLPS-ITER     # local
+simdb remote [REMOTE] query code.name=SOLPS-ITER # on a server
 ```
 
-[Full CLI usage reference &rarr;](https://simdb.readthedocs.io/en/latest/cli.html)
+See the [quickstart guide](https://simdb.readthedocs.io/en/latest/getting-started/quickstart.html)
+for a full walkthrough.
 
----
+## Documentation
 
-## Usage Examples
+Full documentation is at **[simdb.readthedocs.io](https://simdb.readthedocs.io/en/latest/)**:
 
-- Uploading data:
-  ```bash
-  simdb simulation ingest -a my_simulation my_sim_manifest.yaml
-  simdb simulation push ITER my_simulation
-  ```
-- Querying simulations:
-  ```bash
-  simdb simulation query code.name=ITER
-  simdb remote ITER query code.name=ITER
-  alias     code.name  
-  --------------------
-  103027/3  SOLPS-ITER 
-  103028/3  SOLPS-ITER
-  ```
-
----
-
-## Accessing ITER Remotes
-
-To access data from the ITER remotes outside ITER systems, you'll need to [configure a SimDB remote](https://simdb.readthedocs.io/en/latest/iter_remotes.html).
-
----
-
-## Server Setup
-
-Setting up and maintaining a remote CLI server is documented [here](https://simdb.readthedocs.io/en/latest/maintenance_guide.html).
-
----
-
-## Developer Guide
-
-Want to contribute or run SimDB from source?  
-[See the developer guide &rarr;](https://simdb.readthedocs.io/en/latest/developer_guide.html)
-
----
+- [Installation](https://simdb.readthedocs.io/en/latest/getting-started/installation.html)
+- [Tutorial: catalogue your first simulation](https://simdb.readthedocs.io/en/latest/tutorials/first-simulation.html)
+- [CLI reference](https://simdb.readthedocs.io/en/latest/reference/cli.html)
+- [Connect to ITER](https://simdb.readthedocs.io/en/latest/how-to/connect-to-iter.html)
+- [Operating a server](https://simdb.readthedocs.io/en/latest/how-to/operate-server/install-server.html)
+- [Developer guide](https://simdb.readthedocs.io/en/latest/how-to/contribute/set-up-dev-env.html)
 
 ## License
 
-The software is licensed under the **LGPLv3** License which allows for extensive freedom in using, modifying, and distributing it, provided that the license terms are met.
-Details can be found in [LICENSE-LGPL](LICENSE.txt).
-
----
+SimDB is licensed under the **LGPLv3** license. See [LICENSE.txt](LICENSE.txt).
 
 ## Contact
 
-- Issues & Feature Requests: [GitHub Issues](https://github.com/deepakmaroo/SimDB/issues)
+- Issues and feature requests: [GitHub Issues](https://github.com/iterorganization/SimDB/issues)
 - Documentation: [simdb.readthedocs.io](https://simdb.readthedocs.io/en/latest/)
-
----
