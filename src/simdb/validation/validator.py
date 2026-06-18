@@ -119,18 +119,28 @@ class CustomValidator(ValidatorBase):
 
 
 def _load_schema(path: Path):
+    path = Path(path)
     if not path.exists():
-        return [{}]
+        import warnings
+        warnings.warn(f"Validation schema not found: {path}")
+        return {}
 
-    # load schema from file
     with path.open() as file:
         try:
             schema = yaml.load(file, Loader=yaml.SafeLoader)
-            return schema
         except yaml.YAMLError as err:
             raise LoadError(
-                f"Failed to read validation schema from file {file}"
+                f"Failed to read validation schema from file {path}"
             ) from err
+
+    # Check _redirect stub and resolve file to the stub file's directory
+    if isinstance(schema, dict) and "_redirect" in schema:
+        target = Path(schema["_redirect"])
+        if not target.is_absolute():
+            target = path.parent / target
+        return _load_schema(target)
+
+    return schema
 
 
 class Validator:
