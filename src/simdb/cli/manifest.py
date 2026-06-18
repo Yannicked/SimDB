@@ -1,5 +1,6 @@
 import os
 import urllib.parse
+import warnings
 from enum import Enum, auto
 from pathlib import Path
 from typing import Annotated, Any, Dict, Iterable, List, Literal, Optional, TextIO
@@ -120,7 +121,7 @@ class Sink(DataObject):
 class Manifest(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    manifest_version: Literal[2] = Field(default=2, alias="version")
+    manifest_version: Literal[2] = Field(default=2)
     alias: Optional[str] = None
     responsible_name: Optional[str] = None
     inputs_raw: List[Source] = Field(default_factory=list, alias="inputs")
@@ -131,6 +132,20 @@ class Manifest(BaseModel):
     _inputs: List[Source] = PrivateAttr(default_factory=list)
     _outputs: List[Sink] = PrivateAttr(default_factory=list)
     _metadata: Dict[str, Any] = PrivateAttr(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def check_deprecated_version(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "version" in data:
+            warnings.warn(
+                "The 'version' field is deprecated and will be removed "
+                "in a future version. Please use 'manifest_version' instead.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+            if "manifest_version" not in data:
+                data["manifest_version"] = data.pop("version")
+        return data
 
     @field_validator("alias")
     @classmethod
