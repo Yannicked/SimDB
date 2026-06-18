@@ -87,9 +87,7 @@ build-docs = [
     "sphinx-immaterial>=0.11.14",
     "sphinx-autodoc-typehints>=1.12.0",
     "myst-parser>=0.18.0",
-    "nbsphinx>=0.8.0",
     "docutils>=0.17",
-    "recommonmark>=0.7.0",
 ]
 postgres = [
     "psycopg2-binary>=2.8.0",

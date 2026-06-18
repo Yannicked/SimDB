@@ -1,4 +1,7 @@
-_build
-/sphinx/*.rst
-/sphinx/*.md
-/sphinx/*.svg
+# Sphinx build output
+_build/
+
+# Generated at build time (see conf.py)
+reference/cli.md
+reference/python-api/simdb*.rst
+reference/python-api/modules.rst
