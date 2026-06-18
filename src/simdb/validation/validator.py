@@ -65,7 +65,8 @@ class CustomValidator(ValidatorBase):
         if comparison is None:
             return
         if isinstance(value, np.ndarray):
-            value = value[~np.isnan(value)]
+            if np.issubdtype(value.dtype, np.floating):
+                value = value[~np.isnan(value)]
             if value.size == 0:
                 self._error(field, "Values in numpy array are NaN or empty")
             if not getattr(value, comparator)(comparison).all():
@@ -112,6 +113,8 @@ class CustomValidator(ValidatorBase):
     def _normalize_coerce_numpy(cls, value):
         if isinstance(value, np.ndarray):
             return value
+        elif isinstance(value, dict) and "min" in value and "max" in value:
+            return np.array([value["min"], value["max"]], dtype=float)
         elif isinstance(value, str):
             return np.fromstring(value[1:-1], sep=" ")
         else:
