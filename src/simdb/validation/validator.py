@@ -1,6 +1,7 @@
 import re
+import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 import cerberus
 import numpy as np
@@ -124,11 +125,10 @@ class CustomValidator(ValidatorBase):
             return np.array(value)
 
 
-def _load_schema(path: Path):
+def _load_schema(path: Union[Path, str]):
     path = Path(path)
     if not path.exists():
-        import warnings
-        warnings.warn(f"Validation schema not found: {path}")
+        warnings.warn(f"Validation schema not found: {path}", stacklevel=2)
         return {}
 
     with path.open() as file:
