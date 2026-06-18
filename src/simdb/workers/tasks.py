@@ -82,6 +82,10 @@ def _resolve_uri_to_path(uri: SimDBUrl, config: Config) -> Path:
         raise ValueError("Path not given")
     path = Path(path)
     path = path.relative_to(path.anchor)
+    # Standard schemes (e.g. ``http``) parse the first path segment as the URL
+    # authority. Fold it back in so the full relative path is reconstructed.
+    if uri.host:
+        path = Path(uri.host) / path
     target = (partition_path / path).resolve()
     if not target.is_relative_to(partition_path):
         raise ValueError("Access denied.")
@@ -282,3 +286,25 @@ def fail_stale_ingestions_task() -> dict:
         return {"failed": failed}
     finally:
         database.close()
+
+
+@celery_app.task
+def cleanup_http_staging_task(simulation_uuid: UUID):
+    """Remove a simulation's staged files from the ``http`` partition.
+
+    HTTP-uploaded files are staged into the ``http`` partition and then copied
+    into the simulation's upload folder by :func:`copy_files_task`. Once copied
+    they are duplicates, so the staging directory is removed here.
+    """
+    config = Config()
+    config.load()
+
+    partition_path_str = config.get_string_option("partition.http", default=None)
+    if not partition_path_str:
+        return
+
+    partition_path = Path(partition_path_str).resolve()
+    staging_dir = (partition_path / simulation_uuid.hex).resolve()
+    # Guard against escaping the partition before removing anything.
+    if staging_dir.is_relative_to(partition_path) and staging_dir != partition_path:
+        shutil.rmtree(staging_dir, ignore_errors=True)
