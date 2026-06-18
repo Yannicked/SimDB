@@ -3,7 +3,7 @@ from typing import Optional
 import ldap
 from flask import Request
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 
 from ._authenticator import Authenticator
 from ._exceptions import AuthenticationError
@@ -27,8 +27,8 @@ class LdapAuthenticator(Authenticator):
 
     Name = "LDAP"
 
-    def authenticate(self, config: Config, request: Request) -> Optional[User]:
-        ldap_host = config.get_option("authentication.ldap_server")
+    def authenticate(self, config: SimDBSettings, request: Request) -> Optional[User]:
+        ldap_host = config.authentication.ldap_server
         try:
             conn = ldap.initialize(ldap_host)
         except ldap.LDAPError as err:  # ty: ignore[unresolved-attribute]
@@ -41,18 +41,14 @@ class LdapAuthenticator(Authenticator):
         username = auth.username
         password = auth.password
 
-        ldap_bind: str = config.get_string_option("authentication.ldap_bind")
+        ldap_bind: str = config.authentication.ldap_bind
         try:
             conn.simple_bind_s(ldap_bind.format(username=username), password)
         except ldap.INVALID_CREDENTIALS:  # ty: ignore[unresolved-attribute]
             return None
 
-        ldap_query_user = config.get_option(
-            "authentication.ldap_query_user", default=None
-        )
-        ldap_query_password = config.get_option(
-            "authentication.ldap_query_password", default=None
-        )
+        ldap_query_user = config.authentication.ldap_query_user
+        ldap_query_password = config.authentication.ldap_query_password
 
         if ldap_query_user is not None:
             conn.unbind_s()
@@ -68,14 +64,10 @@ class LdapAuthenticator(Authenticator):
                     "failed to bind to LDAP server for user query"
                 ) from err
 
-        ldap_query_base = config.get_option("authentication.ldap_query_base")
-        ldap_query_filter = str(config.get_option("authentication.ldap_query_filter"))
-        ldap_query_uid = config.get_option(
-            "authentication.ldap_query_uid", default="uid"
-        )
-        ldap_query_mail = config.get_option(
-            "authentication.ldap_query_mail", default="mail"
-        )
+        ldap_query_base = config.authentication.ldap_query_base
+        ldap_query_filter = str(config.authentication.ldap_query_filter)
+        ldap_query_uid = config.authentication.ldap_query_uid or "uid"
+        ldap_query_mail = config.authentication.ldap_query_mail or "mail"
 
         results = conn.search_s(
             ldap_query_base,

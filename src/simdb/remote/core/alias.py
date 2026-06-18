@@ -4,7 +4,7 @@ from simdb.remote.core.typing import current_app
 
 
 def create_alias_dir(simulation):
-    base_dir = Path(current_app.simdb_config.get_string_option("server.upload_folder"))
+    base_dir = current_app.simdb_config.server.upload_folder
 
     # Make sure the aliases directory exists
     (base_dir / "aliases").mkdir(exist_ok=True, parents=True)

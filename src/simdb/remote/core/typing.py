@@ -3,7 +3,7 @@ from typing import cast
 from flask import Flask
 from flask import current_app as _current_app
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 from simdb.database import Database
 
 
@@ -13,7 +13,7 @@ class SimDBApp(Flask):
     configuration and database.
     """
 
-    simdb_config: Config
+    simdb_config: SimDBSettings
     db: Database
 
 

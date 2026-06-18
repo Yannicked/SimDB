@@ -3,7 +3,7 @@ from typing import Optional
 from easyad import EasyAD  # type: ignore[import]
 from flask import Request
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 
 from ._authenticator import Authenticator
 from ._user import User
@@ -21,14 +21,12 @@ class ActiveDirectoryAuthenticator(Authenticator):
 
     Name = "ActiveDirectory"
 
-    def authenticate(self, config: Config, request: Request) -> Optional[User]:
+    def authenticate(self, config: SimDBSettings, request: Request) -> Optional[User]:
         try:
             ad_config = {
-                "AD_SERVER": config.get_option("authentication.ad_server"),
-                "AD_DOMAIN": config.get_option("authentication.ad_domain"),
-                "AD_CA_CERT_FILE": config.get_option(
-                    "authentication.ad_cert", default=""
-                ),
+                "AD_SERVER": config.authentication.ad_server,
+                "AD_DOMAIN": config.authentication.ad_domain,
+                "AD_CA_CERT_FILE": config.authentication.ad_cert or "",
             }
             ad = EasyAD(ad_config)
         except (KeyError, ImportError):

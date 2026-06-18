@@ -41,10 +41,10 @@ def register(api, version, namespaces):
     @blueprint.record
     def setup_db(setup_state):
         config = setup_state.app.simdb_config
-        db_type = config.get_option("database.type")
+        db_type = config.database.type
 
         if db_type == "postgres":
-            args = config.get_section("database")
+            args = config.database.model_dump()
             setup_state.app.db = Database(
                 Database.DBMS.POSTGRESQL,
                 scopefunc=_app_ctx_stack.__ident_func__,
@@ -52,7 +52,8 @@ def register(api, version, namespaces):
             )
         elif db_type == "sqlite":
             db_dir = appdirs.user_data_dir("simdb")
-            file = Path(config.get_option("database.file", default=None)) or Path(
+            db_file = getattr(config.database, "file", None)
+            file = Path(db_file) if db_file else Path(
                 db_dir, "remote.db"
             )
             file.parent.mkdir(parents=True, exist_ok=True)
@@ -101,9 +102,7 @@ def register(api, version, namespaces):
             auth = request.authorization
             if auth is None:
                 return error("Authorization invalid")
-            lifetime = current_app.simdb_config.get_option(
-                "server.token_lifetime", default=30
-            )
+            lifetime = current_app.simdb_config.server.token_lifetime
             if not isinstance(lifetime, int):
                 return error("Token lifetime is not valid")
             payload = {
@@ -134,8 +133,8 @@ def register(api, version, namespaces):
         def get(self, user: User):
             config = current_app.simdb_config
             options = {
-                "copy_files": config.get_option("server.copy_files", default=True),
-                "copy_ids": config.get_option("server.copy_ids", default=True),
+                "copy_files": config.server.copy_files,
+                "copy_ids": config.server.copy_ids,
             }
 
             return jsonify(options)

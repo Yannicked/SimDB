@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from simdb.cli.manifest import Manifest
-from simdb.config import Config
+from simdb.config import SimDBSettings, RoleSettings
 from simdb.database.models import Simulation
 from simdb.remote.app import create_app
 from simdb.remote.models import (
@@ -36,17 +36,18 @@ for _ in range(100):
 def client():
     if not has_flask:
         pytest.skip("Flask not installed")  # type: ignore
-    config = Config()
-    config.load()
+    config = SimDBSettings.load()
     db_fd, db_file = tempfile.mkstemp()
     upload_dir = tempfile.mkdtemp()
-    config.set_option("database.type", "sqlite")
-    config.set_option("database.file", db_file)
-    config.set_option("server.admin_password", TEST_PASSWORD)
-    config.set_option("server.upload_folder", upload_dir)
-    config.set_option("authentication.type", "None")
-    config.set_option("server.copy_files", False)
-    config.set_option("role.admin.users", "admin,admin2")
+    config.database.type = "sqlite"
+    config.database.file = Path(db_file)
+    config.server.admin_password = TEST_PASSWORD
+    config.server.upload_folder = Path(upload_dir)
+    config.authentication.type = "None"
+    config.server.copy_files = False
+    config.validation.auto_validate = False
+    config.validation.error_on_fail = False
+    config.roles["admin"] = RoleSettings(users="admin,admin2")
     app = create_app(config=config, testing=True, debug=True)
     app.testing = True
 
@@ -61,7 +62,9 @@ def client():
         yield client
 
     os.close(db_fd)
-    Path(app.simdb_config.get_option("database.file")).unlink()
+    db_file_path = getattr(app.simdb_config.database, "file", None)
+    if db_file_path:
+        Path(db_file_path).unlink(missing_ok=True)
     shutil.rmtree(upload_dir)
 
 
@@ -69,17 +72,18 @@ def client():
 def client_copy_files():
     if not has_flask:
         pytest.skip("Flask not installed")  # type: ignore
-    config = Config()
-    config.load()
+    config = SimDBSettings.load()
     db_fd, db_file = tempfile.mkstemp()
     upload_dir = tempfile.mkdtemp()
-    config.set_option("database.type", "sqlite")
-    config.set_option("database.file", db_file)
-    config.set_option("server.admin_password", TEST_PASSWORD)
-    config.set_option("server.upload_folder", upload_dir)
-    config.set_option("authentication.type", "None")
-    config.set_option("server.copy_files", True)
-    config.set_option("role.admin.users", "admin,admin2")
+    config.database.type = "sqlite"
+    config.database.file = Path(db_file)
+    config.server.admin_password = TEST_PASSWORD
+    config.server.upload_folder = Path(upload_dir)
+    config.authentication.type = "None"
+    config.server.copy_files = True
+    config.validation.auto_validate = False
+    config.validation.error_on_fail = False
+    config.roles["admin"] = RoleSettings(users="admin,admin2")
     app = create_app(config=config, testing=True, debug=True)
     app.testing = True
 
@@ -94,7 +98,9 @@ def client_copy_files():
         yield client
 
     os.close(db_fd)
-    Path(app.simdb_config.get_option("database.file")).unlink()
+    db_file_path = getattr(app.simdb_config.database, "file", None)
+    if db_file_path:
+        Path(db_file_path).unlink(missing_ok=True)
     shutil.rmtree(upload_dir)
 
 

@@ -11,7 +11,7 @@ from rich.prompt import Confirm
 
 from simdb.cli.manifest import InvalidAlias, Manifest
 from simdb.cli.remote_api import RemoteAPI, RemoteError
-from simdb.config.config import Config
+from simdb.config import SimDBSettings
 from simdb.database import DatabaseError, get_local_db
 from simdb.database.models import Simulation
 from simdb.query import QueryType, parse_query_arg
@@ -53,7 +53,7 @@ def simulation():
     help="Include UUID in the output.",
     default=False,
 )
-def simulation_list(config: Config, meta: List[str], limit: int, show_uuid: bool):
+def simulation_list(config: SimDBSettings, meta: List[str], limit: int, show_uuid: bool):
     """List ingested simulations."""
 
     check_meta_args(meta)
@@ -78,7 +78,7 @@ class NameValueOption(click.Option):
 )
 @click.option("--del-meta", help="Delete metadata entry.", metavar="NAME")
 def simulation_modify(
-    config: Config,
+    config: SimDBSettings,
     sim_id: str,
     alias: Optional[str],
     set_meta: Optional[str],
@@ -123,16 +123,15 @@ def simulation_modify(
     is_flag=True,
     help="Reset the local database, deleting all simulations.",
 )
-def simulation_delete(config: Config, sim_id: Optional[str], delete_all: bool):
+def simulation_delete(config: SimDBSettings, sim_id: Optional[str], delete_all: bool):
     """Delete the ingested simulation with given SIM_ID (UUID or alias).
 
     Use --all to reset the local database and delete all simulations."""
     if delete_all and Confirm.ask(
         "This will delete all locally stored simulation entries, are you sure?"
     ):
-        db_file = Path(
-            config.get_string_option("db.file", default=None)
-            or f"{appdirs.user_data_dir('simdb')}/sim.db"
+        db_file = getattr(config.database, "file", None) or Path(
+            f"{appdirs.user_data_dir('simdb')}/sim.db"
         )
         db_file.unlink(missing_ok=True)
         click.echo("Local database reset.")
@@ -151,7 +150,7 @@ def simulation_delete(config: Config, sim_id: Optional[str], delete_all: bool):
 @simulation.command("info")
 @pass_config
 @click.argument("sim_id")
-def simulation_info(config: Config, sim_id: str):
+def simulation_info(config: SimDBSettings, sim_id: str):
     """Print information on the simulation with given SIM_ID (UUID or alias)."""
 
     db = get_local_db(config)
@@ -169,7 +168,7 @@ def simulation_info(config: Config, sim_id: str):
     "--alias",
     help="Alias to give to simulation (overwrites any set in manifest).",
 )
-def simulation_ingest(config: Config, manifest_file: str, alias: str):
+def simulation_ingest(config: SimDBSettings, manifest_file: str, alias: str):
     """Ingest a MANIFEST_FILE."""
 
     manifest = Manifest()
@@ -222,7 +221,7 @@ def n_required_args_adaptor(n) -> Type[click.Command]:
     help="Add the current user as a watcher of the simulation.",
 )
 def simulation_push(
-    config: Config,
+    config: SimDBSettings,
     remote: Optional[str],
     sim_id: str,
     username: Optional[str],
@@ -262,7 +261,7 @@ def simulation_push(
 @click.option("--username", help="Username used to authenticate with the remote.")
 @click.option("--password", help="Password used to authenticate with the remote.")
 def simulation_pull(
-    config: Config,
+    config: SimDBSettings,
     remote: Optional[str],
     sim_id: str,
     directory: Path,
@@ -310,7 +309,7 @@ def simulation_pull(
     default=False,
 )
 def simulation_query(
-    config: Config, constraints: List[str], meta: List[str], show_uuid: bool
+    config: SimDBSettings, constraints: List[str], meta: List[str], show_uuid: bool
 ):
     """Perform a metadata query to find matching local simulations.
 
@@ -384,7 +383,7 @@ def simulation_query(
 @click.option("--username", help="Username used to authenticate with the remote.")
 @click.option("--password", help="Password used to authenticate with the remote.")
 def simulation_validate(
-    config: Config, remote: Optional[str], sim_id: str, username: str, password: str
+    config: SimDBSettings, remote: Optional[str], sim_id: str, username: str, password: str
 ):
     """Validate the ingested simulation with given SIM_ID (UUID or alias) using
     validation schema from REMOTE."""

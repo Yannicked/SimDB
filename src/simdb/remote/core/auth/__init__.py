@@ -4,7 +4,7 @@ from typing import Optional
 
 from flask import Request, Response, request
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 from simdb.remote.core.typing import current_app
 
 from ._authenticator import Authenticator
@@ -63,7 +63,7 @@ def authenticate():
     )
 
 
-def check_role(config: Config, user: User, role: Optional[str]) -> bool:
+def check_role(config: SimDBSettings, user: User, role: Optional[str]) -> bool:
     """
     This function is called to check if an authenticated user is a member of the
     specified role.
@@ -71,14 +71,15 @@ def check_role(config: Config, user: User, role: Optional[str]) -> bool:
     If no role is specified then the function always returns true.
     """
     if role:
-        users = config.get_string_option(f"role.{role}.users", default="")
+        role_settings = config.roles.get(role)
+        users = role_settings.users if role_settings else ""
         reader = csv.reader([users])
         return any(user.name in row for row in reader)
 
     return True
 
 
-def check_auth(config: Config, request: Request) -> Optional[User]:
+def check_auth(config: SimDBSettings, request: Request) -> Optional[User]:
     """
     This function is called to check if a request is authenticated.
     """
@@ -86,13 +87,13 @@ def check_auth(config: Config, request: Request) -> Optional[User]:
     username = auth.username if auth is not None else None
     password = auth.password if auth is not None else None
     if username == "admin":
-        if password == config.get_option("server.admin_password"):
+        if password == config.server.admin_password:
             return User("admin", None)
         else:
             raise AuthenticationError(f"Authentication failed for user {username}")
 
     authentication_types = (
-        config.get_string_option("authentication.type").lower().split(",")
+        (config.authentication.type or "").lower().split(",")
     )
     if "token" not in authentication_types:
         authentication_types = ["token", *authentication_types]

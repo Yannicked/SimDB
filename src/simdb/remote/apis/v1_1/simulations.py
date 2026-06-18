@@ -219,7 +219,7 @@ class SimulationList(Resource):
                 simulation.alias = simulation.uuid.hex[0:8]
 
             staging_dir = (
-                Path(current_app.simdb_config.get_option("server.upload_folder"))
+                current_app.simdb_config.server.upload_folder
                 / simulation.uuid.hex
             )
 
@@ -241,14 +241,10 @@ class SimulationList(Resource):
                 "ingested": simulation.uuid.hex,
             }
 
-            if current_app.simdb_config.get_option(
-                "validation.auto_validate", default=False
-            ):
+            if current_app.simdb_config.validation.auto_validate:
                 result["validation"] = _validate(simulation, user)
 
-            if current_app.simdb_config.get_option(
-                "validation.error_on_fail", default=False
-            ):
+            if current_app.simdb_config.validation.error_on_fail:
                 if simulation.status == models_sim.Simulation.Status.NOT_VALIDATED:
                     raise Exception(
                         "Validation config option error_on_fail=True without "
@@ -265,9 +261,7 @@ class SimulationList(Resource):
 
             replaces = simulation.find_meta("replaces")
             if (
-                not current_app.simdb_config.get_option(
-                    "development.disable_replaces", default=False
-                )
+                not current_app.simdb_config.development.disable_replaces
                 and replaces
                 and replaces[0].value
             ):

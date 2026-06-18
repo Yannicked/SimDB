@@ -23,7 +23,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.sql import elements
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 from simdb.json import CustomDecoder, CustomEncoder
 from simdb.query import QueryType
 from simdb.remote.models import SimulationReference
@@ -869,11 +869,10 @@ class Database:
             return [alias for (alias,) in query.all()]
 
 
-def get_local_db(config: Config) -> Database:
-    db_file = Path(
-        config.get_string_option("db.file", default=None)
-        or f"{appdirs.user_data_dir('simdb')}/sim.db"
-    )
+def get_local_db(config: SimDBSettings) -> Database:
+    db_file = getattr(config.database, "file", None)
+    if db_file is None:
+        db_file = Path(f"{appdirs.user_data_dir('simdb')}/sim.db")
     db_file.parent.mkdir(parents=True, exist_ok=True)
     database = Database(Database.DBMS.SQLITE, file=db_file)
     try:
@@ -892,11 +891,10 @@ def get_local_db(config: Config) -> Database:
     return database
 
 
-def backup_local_db(config: Config):
-    db_file = Path(
-        config.get_string_option("db.file", default=None)
-        or f"{appdirs.user_data_dir('simdb')}/sim.db"
-    )
+def backup_local_db(config: SimDBSettings):
+    db_file = getattr(config.database, "file", None)
+    if db_file is None:
+        db_file = Path(f"{appdirs.user_data_dir('simdb')}/sim.db")
     if not db_file.exists():
         print("[warning]: No current database found, skipping backup.")
 

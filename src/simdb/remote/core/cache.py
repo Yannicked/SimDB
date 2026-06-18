@@ -3,12 +3,11 @@ import contextlib
 from flask import request
 from flask_caching import Cache
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 
-config = Config("app.cfg")
-config.load()
+config = SimDBSettings.load("app.cfg")
 cache_options = {
-    "CACHE_" + k.upper(): v for (k, v) in config.get_section("cache", {}).items()
+    "CACHE_" + k.upper(): v for (k, v) in getattr(config, "cache", {}).items()
 }
 
 cache = Cache(config=cache_options)

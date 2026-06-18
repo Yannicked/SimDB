@@ -22,7 +22,7 @@ pass_api = click.make_pass_decorator(RemoteAPI)
 if TYPE_CHECKING or "sphinx" in sys.modules:
     from click import Context
 
-    from simdb.config import Config
+    from simdb.config import SimDBSettings
 
 
 class RemoteGroup(click.Group):
@@ -102,7 +102,7 @@ def is_empty(value) -> bool:
 @click.option("--password", help="Password used to authenticate with the remote.")
 @click.argument("name", required=False)
 def remote(
-    config: "Config",
+    config: "SimDBSettings",
     ctx: "Context",
     username: Optional[str],
     password: Optional[str],
@@ -159,7 +159,7 @@ def remote_config():
 
 @remote_config.command("default", cls=remote_command_cls("config"))
 @pass_config
-def config_default(config: "Config"):
+def config_default(config: "SimDBSettings"):
     """
     Print the default remote.
     """
@@ -168,26 +168,23 @@ def config_default(config: "Config"):
 
 @remote_config.command("list", cls=remote_command_cls("config"))
 @pass_config
-def config_list(config: "Config"):
+def config_list(config: "SimDBSettings"):
     """
     List available remotes.
     """
-    r = re.compile(r"remote\.(.*)\.url: (.*)")
-    for option in config.list_options():
-        m = r.match(option)
-        if m:
-            options = {
-                "firewall": config.get_option(f"remote.{m[1]}.firewall", default=None),
-                "username": config.get_option(f"remote.{m[1]}.username", default=None),
-            }
-            options_str = ", ".join(
-                f"{k}: {v}" for k, v in options.items() if v is not None
-            )
-            click.echo(
-                f"{m[1]}: {m[2]}"
-                + (f" [{options_str}]" if options_str else "")
-                + (" (default)" if m[1] == config.default_remote else "")
-            )
+    for name, remote in config.remotes.items():
+        options = {
+            "firewall": remote.firewall,
+            "username": remote.username,
+        }
+        options_str = ", ".join(
+            f"{k}: {v}" for k, v in options.items() if v is not None
+        )
+        click.echo(
+            f"{name}: {remote.url}"
+            + (f" [{options_str}]" if options_str else "")
+            + (" (default)" if name == config.default_remote else "")
+        )
 
 
 @remote_config.command("new", cls=remote_command_cls("config"))
@@ -206,7 +203,7 @@ def config_list(config: "Config"):
     help="Set the new remote as the default.",
 )
 def config_new(
-    config: "Config",
+    config: "SimDBSettings",
     name: str,
     url: str,
     firewall: Optional[str],
@@ -216,11 +213,13 @@ def config_new(
     """
     Add a new remote.
     """
-    config.set_option(f"remote.{name}.url", url)
-    if firewall is not None:
-        config.set_option(f"remote.{name}.firewall", firewall)
-    if username is not None:
-        config.set_option(f"remote.{name}.username", username)
+    from simdb.config import RemoteSettings
+    config.remotes[name] = RemoteSettings(
+        url=url,
+        firewall=firewall,
+        username=username or "",
+        default=default,
+    )
     if default:
         config.default_remote = name
     config.save()
@@ -229,18 +228,21 @@ def config_new(
 @remote_config.command("delete", cls=remote_command_cls("config"))
 @pass_config
 @click.argument("name", required=True)
-def config_delete(config: "Config", name: str):
+def config_delete(config: "SimDBSettings", name: str):
     """
     Delete a remote.
     """
-    config.delete_section(f"remote.{name}")
-    config.save()
+    if name in config.remotes:
+        del config.remotes[name]
+        config.save()
+    else:
+        raise KeyError(f"Remote '{name}' not found.")
 
 
 @remote_config.command("set-default", cls=remote_command_cls("config"))
 @pass_config
 @click.argument("name", required=True)
-def config_set_default(config: "Config", name: str):
+def config_set_default(config: "SimDBSettings", name: str):
     """
     Set a remote as default.
     """
@@ -250,7 +252,7 @@ def config_set_default(config: "Config", name: str):
 
 @remote_config.command("get-default", cls=remote_command_cls("config"))
 @pass_config
-def config_get_default(config: "Config"):
+def config_get_default(config: "SimDBSettings"):
     """
     Get the name of the default remote.
     """
@@ -262,11 +264,14 @@ def config_get_default(config: "Config"):
 @click.argument("name", required=True)
 @click.argument("option", required=True)
 @click.argument("value", required=True)
-def config_set_option(config: "Config", name: str, option: str, value: str):
+def config_set_option(config: "SimDBSettings", name: str, option: str, value: str):
     """
     Set a configuration option for a given remote.
     """
-    config.set_option(f"remote.{name}.{option}", value)
+    if name not in config.remotes:
+        raise KeyError(f"Remote '{name}' not found.")
+    norm_option = option.replace("-", "_")
+    setattr(config.remotes[name], norm_option, value)
     config.save()
 
 
@@ -295,11 +300,11 @@ def list_watchers(api: RemoteAPI, sim_id: str):
 @pass_config
 @click.argument("sim_id")
 @click.option("-u", "--user", help="Name of the user to remove as a watcher.")
-def remove_watcher(config: "Config", api: RemoteAPI, sim_id: str, user: str):
+def remove_watcher(config: "SimDBSettings", api: RemoteAPI, sim_id: str, user: str):
     """Remove a user from list of watchers on a simulation with given SIM_ID (UUID or
     alias)."""
     if not user:
-        user = config.get_string_option("user.name")
+        user = config.user.name
     if not user:
         raise click.ClickException(
             "User not provided and user.name not found in config."
@@ -322,7 +327,7 @@ def remove_watcher(config: "Config", api: RemoteAPI, sim_id: str, user: str):
     show_default=True,
 )
 def add_watcher(
-    config: "Config",
+    config: "SimDBSettings",
     api: RemoteAPI,
     sim_id: str,
     user: Optional[str],
@@ -331,13 +336,13 @@ def add_watcher(
 ):
     "Register a user as a watcher for a simulation with given SIM_ID (UUID or alias)."
     if not user:
-        user = config.get_string_option("user.name", default=None)
+        user = config.user.name
     if not user:
         raise click.ClickException(
             "User not provided and user.name not found in config."
         )
     if not email:
-        email = config.get_string_option("user.email", default=None)
+        email = config.user.email
     if not email:
         raise click.ClickException(
             "Email not provided and user.email not found in config."
@@ -391,7 +396,7 @@ def remote_show_validation_schema(api: RemoteAPI, depth: int):
     default=False,
 )
 def remote_list(
-    config: "Config", api: RemoteAPI, meta: List[str], limit: int, show_uuid: bool
+    config: "SimDBSettings", api: RemoteAPI, meta: List[str], limit: int, show_uuid: bool
 ):
     """List simulations available on remote."""
     check_meta_args(meta)
@@ -462,7 +467,7 @@ def remote_trace(api: RemoteAPI, sim_id: str):
     default=False,
 )
 def remote_query(
-    config: "Config",
+    config: "SimDBSettings",
     api: RemoteAPI,
     constraints: List[str],
     meta: Tuple[str],
@@ -543,12 +548,12 @@ def token():
 @token.command("new", cls=remote_command_cls("token"))
 @pass_api
 @pass_config
-def token_new(config: "Config", api: RemoteAPI):
+def token_new(config: "SimDBSettings", api: RemoteAPI):
     """
     Create a new token for the given remote.
     """
     token = api.get_token()
-    config.set_option(f"remote.{api.remote}.token", token)
+    config.remotes[api.remote].token = token
     config.save()
     click.echo(f"Token added for remote {api.remote}.")
 
@@ -556,12 +561,12 @@ def token_new(config: "Config", api: RemoteAPI):
 @token.command("delete", cls=remote_command_cls("token"))
 @pass_api
 @pass_config
-def token_delete(config: "Config", api: RemoteAPI):
+def token_delete(config: "SimDBSettings", api: RemoteAPI):
     """
     Delete the existing token for the given remote.
     """
     try:
-        config.delete_option(f"remote.{api.remote}.token")
+        config.remotes[api.remote].token = ""
         config.save()
         click.echo(f"Token for remote {api.remote} deleted.")
     except KeyError:

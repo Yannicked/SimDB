@@ -10,7 +10,7 @@ import semantic_version
 from dateutil import parser
 from imas import DBEntry
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 from simdb.uri import URI
 
 
@@ -300,7 +300,7 @@ def imas_files(uri: URI) -> List[Path]:
         raise ValueError(f"Unknown IMAS backend {backend}")
 
 
-def convert_uri(uri: URI, path: Path, config: Config) -> URI:
+def convert_uri(uri: URI, path: Path, config: SimDBSettings) -> URI:
     """
     Converts a local IMAS URI to a remote access IMAS URI based on the
     server.imas_remote_host configuration option.
@@ -312,13 +312,13 @@ def convert_uri(uri: URI, path: Path, config: Config) -> URI:
     @param config: Config to read the server.imas_remote_host and
                    server.imas_remote_port options from
     """
-    host = config.get_option("server.imas_remote_host", default=None)
+    host = config.server.imas_remote_host
     if host is None:
         raise ValueError(
             "Cannot process IMAS data as server.imas_remote_host configuration option "
             "not set"
         )
-    port = config.get_option("server.imas_remote_port", default=None)
+    port = config.server.imas_remote_port
     backend = uri.path
     if port is None:
         return URI(f"imas://{host}/uda?path={path}&backend={backend}")

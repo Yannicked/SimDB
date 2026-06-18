@@ -2,9 +2,9 @@ from typing import Iterable
 
 import click
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 
-pass_config = click.make_pass_decorator(Config)
+pass_config = click.make_pass_decorator(SimDBSettings)
 
 
 def check_meta_args(args: Iterable[str]):

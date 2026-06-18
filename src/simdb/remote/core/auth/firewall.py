@@ -2,7 +2,7 @@ from typing import Optional
 
 from flask import Request
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 
 from ._authenticator import Authenticator
 from ._exceptions import AuthenticationError
@@ -12,13 +12,9 @@ from ._user import User
 class FirewallAuthenticator(Authenticator):
     Name = "Firewall"
 
-    def authenticate(self, config: Config, request: Request) -> Optional[User]:
-        firewall_user = config.get_string_option(
-            "authentication.firewall_user", default=None
-        )
-        firewall_email = config.get_string_option(
-            "authentication.firewall_email", default=None
-        )
+    def authenticate(self, config: SimDBSettings, request: Request) -> Optional[User]:
+        firewall_user = config.authentication.firewall_user
+        firewall_email = config.authentication.firewall_email
 
         if not firewall_user:
             raise AuthenticationError(

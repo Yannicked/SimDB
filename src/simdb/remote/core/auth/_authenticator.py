@@ -3,7 +3,7 @@ from typing import ClassVar, Dict, Optional, Type
 
 from flask import Request
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 
 from ._exceptions import AuthenticationError
 from ._user import User
@@ -20,7 +20,7 @@ class Authenticator(abc.ABC):
     @abc.abstractmethod
     def authenticate(
         self,
-        config: Config,
+        config: SimDBSettings,
         request: Request,
     ) -> Optional[User]:
         """

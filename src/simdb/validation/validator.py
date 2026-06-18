@@ -6,7 +6,7 @@ import cerberus
 import numpy as np
 import yaml
 
-from simdb.config import Config, ConfigError
+from simdb.config import ConfigError, SimDBSettings
 from simdb.database.models.simulation import Simulation
 
 ValidatorBase = cast(Any, cerberus.Validator)
@@ -120,7 +120,7 @@ class CustomValidator(ValidatorBase):
 
 def _load_schema(path: Path):
     if not path.exists():
-        return [{}]
+        return {}
 
     # load schema from file
     with path.open() as file:
@@ -139,13 +139,11 @@ class Validator:
 
     @classmethod
     def validation_schemas(
-        cls, config: Config, simulation: Optional[Simulation], path=None
+        cls, config: SimDBSettings, simulation: Optional[Simulation], path=None
     ) -> List[Dict]:
         root = Path(
             str(
-                config.get_option(
-                    "validation.path", default=str(config.config_directory)
-                )
+                config.validation.path or config.user.config_path.parent
             )
         )
 
@@ -159,8 +157,9 @@ class Validator:
         # simulationhas metadata matching the given test. If matching, adding the
         # "path" in this section to the paths.
         if simulation is not None:
+            extra_sections = config.__pydantic_extra__ or {}
             sections = [
-                sec for sec in config.sections() if sec.startswith("validation")
+                sec for sec in extra_sections if sec.startswith("validation")
             ]
             for section in sections:
                 if section == "validation":
@@ -171,7 +170,8 @@ class Validator:
                     value = match.group(2)
                     for meta in simulation.find_meta(key):
                         if meta.value == value:
-                            path = config.get_section(section).get("path", "")
+                            sec_dict = extra_sections.get(section, {})
+                            path = sec_dict.get("path", "")
                             if path:
                                 paths.append(path)
                 elif section != "validation":

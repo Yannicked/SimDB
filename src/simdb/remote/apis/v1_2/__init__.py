@@ -40,21 +40,17 @@ class StagingDirectory(Resource):
     @requires_auth()
     @pydantic_validate(api)
     def get(self, sim_hex: str, user: User) -> StagingDirectoryResponse:
-        upload_dir = current_app.simdb_config.get_string_option(
-            "server.user_upload_folder", default=None
-        )
+        upload_dir = current_app.simdb_config.server.user_upload_folder
         user_folder = True
         if upload_dir is None:
-            upload_dir = current_app.simdb_config.get_string_option(
-                "server.upload_folder"
-            )
+            upload_dir = current_app.simdb_config.server.upload_folder
             user_folder = False
 
         if not sim_hex:
             return StagingDirectoryResponse(staging_dir=Path(upload_dir))
 
         staging_dir = (
-            Path(current_app.simdb_config.get_string_option("server.upload_folder"))
+            Path(current_app.simdb_config.server.upload_folder)
             / sim_hex
         )
         staging_dir.mkdir(parents=True, exist_ok=True)

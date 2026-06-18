@@ -6,7 +6,7 @@ from flask import Flask, jsonify, request
 from flask_compress import Compress
 from flask_cors import CORS
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 from simdb.database.database import check_migrations, run_migrations
 from simdb.json import CustomDecoder, CustomEncoder
 
@@ -19,13 +19,12 @@ compress = Compress()
 
 
 def create_app(
-    config: Optional[Config] = None, testing=False, debug=False, profile=False
+    config: Optional[SimDBSettings] = None, testing=False, debug=False, profile=False
 ):
     if config is None:
         config_file = os.environ.get("SIMDB_CONFIG_FILE", default="app.cfg")
-        config = Config(config_file)
-        config.load()
-    flask_options = {k.upper(): v for (k, v) in config.get_section("flask", {}).items()}
+        config = SimDBSettings.load(config_file)
+    flask_options = {k.upper(): v for (k, v) in config.flask.model_dump().items()}
 
     app = cast(SimDBApp, Flask(__name__))
     CORS(app, resources={r"/*": {"origins": "*"}})
@@ -49,7 +48,7 @@ def create_app(
         endpoints = []
         for ver in blueprints:
             endpoints.append(f"{request.url}{ver}")
-        authentication_types = config.get_string_option("authentication.type").split(
+        authentication_types = (config.authentication.type or "").split(
             ","
         )
         authenticators = [

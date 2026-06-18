@@ -3,7 +3,7 @@ from typing import List
 
 from email_validator import validate_email
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 
 
 class EmailServer:
@@ -12,11 +12,11 @@ class EmailServer:
     _user: str
     _password: str
 
-    def __init__(self, config: Config):
-        self._server = config.get_string_option("email.server")
-        self._port = int(config.get_option("email.port"))
-        self._user = config.get_string_option("email.user")
-        self._password = config.get_string_option("email.password")
+    def __init__(self, config: SimDBSettings):
+        self._server = config.email.server or ""
+        self._port = config.email.port or 25
+        self._user = config.email.user or ""
+        self._password = config.email.password or ""
 
     def send_message(self, subject: str, body: str, to_addresses: List[str]):
         server = smtplib.SMTP(self._server, self._port)

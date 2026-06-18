@@ -32,12 +32,10 @@ def _verify_file(
     common_root: Optional[Path],
     ids_list: Optional[list] = None,
 ):
-    if current_app.simdb_config.get_option(
-        "development.disable_checksum", default=False
-    ):
+    if current_app.simdb_config.development.disable_checksum:
         return
     staging_dir = (
-        Path(current_app.simdb_config.get_string_option("server.upload_folder"))
+        current_app.simdb_config.server.upload_folder
         / sim_uuid.hex
     )
     if sim_file.type == DataObject.Type.FILE:
@@ -87,7 +85,7 @@ def _stage_file_from_chunks(
     common_root: Optional[Path],
 ) -> None:
     staging_dir = (
-        Path(current_app.simdb_config.get_string_option("server.upload_folder"))
+        current_app.simdb_config.server.upload_folder
         / sim_uuid.hex
     )
     staging_dir.mkdir(parents=True, exist_ok=True)

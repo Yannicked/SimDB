@@ -6,7 +6,7 @@ from keycloak import (
     KeycloakOpenID,
 )
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 
 from ._authenticator import Authenticator
 from ._exceptions import AuthenticationError
@@ -17,10 +17,10 @@ class KeyCloakAuthenticator(Authenticator):
     TOKEN_HEADER_NAME = "KeyCloak-Token"
     Name = "KeyCloak"
 
-    def authenticate(self, config: Config, request: Request) -> Optional[User]:
-        server_url = config.get_string_option("authentication.server_url")
-        realm_name = config.get_string_option("authentication.realm_name")
-        client_id = config.get_string_option("authentication.client_id")
+    def authenticate(self, config: SimDBSettings, request: Request) -> Optional[User]:
+        server_url = config.authentication.server_url
+        realm_name = config.authentication.realm_name
+        client_id = config.authentication.client_id
 
         token = request.headers.get(KeyCloakAuthenticator.TOKEN_HEADER_NAME, "")
 

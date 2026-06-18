@@ -10,7 +10,7 @@ from sqlalchemy import types as sql_types
 from simdb import uri as urilib
 from simdb.checksum import sha1_checksum
 from simdb.cli.manifest import DataObject
-from simdb.config.config import Config
+from simdb.config import SimDBSettings
 from simdb.docstrings import inherit_docstrings
 from simdb.imas.checksum import checksum as imas_checksum
 from simdb.imas.utils import imas_files, imas_timestamp
@@ -41,7 +41,7 @@ class File(Base):
         uri: urilib.URI,
         ids_list: Optional[list] = None,
         perform_integrity_check: bool = True,
-        config: Optional[Config] = None,
+        config: Optional[SimDBSettings] = None,
     ) -> None:
         self.uuid = uuid.uuid1()
         self.uri = uri
@@ -74,7 +74,7 @@ class File(Base):
         return result
 
     def generate_checksum(self, config, ids_list: list):
-        if config and config.get_option("development.disable_checksum", default=False):
+        if config and config.development.disable_checksum:
             return ""
         elif self.type == DataObject.Type.IMAS:
             checksum = imas_checksum(self.uri, ids_list)

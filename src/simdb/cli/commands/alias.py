@@ -13,7 +13,7 @@ pass_api = click.make_pass_decorator(RemoteAPI)
 if TYPE_CHECKING or "sphinx" in sys.modules:
     from click import Context
 
-    from simdb.config import Config
+    from simdb.config import SimDBSettings
 
 
 class AliasCommand(click.Command):
@@ -48,7 +48,7 @@ def is_empty(value) -> bool:
 @click.option("--username", help="Username used to authenticate with the remote.")
 @click.option("--password", help="Password used to authenticate with the remote.")
 @click.argument("remote", required=False)
-def alias(config: "Config", ctx: "Context", remote, username, password):
+def alias(config: "SimDBSettings", ctx: "Context", remote, username, password):
     """Query remote and local aliases."""
     if not ctx.invoked_subcommand and not any(is_empty(i) for i in ctx.params.values()):
         click.echo(ctx.get_help())
@@ -60,7 +60,7 @@ def alias(config: "Config", ctx: "Context", remote, username, password):
 @pass_api
 @pass_config
 @click.argument("alias")
-def alias_make_unique(config: "Config", api: RemoteAPI, alias: str):
+def alias_make_unique(config: "SimDBSettings", api: RemoteAPI, alias: str):
     "Make the given alias unique, checking locally stored simulations and the remote."
 
     trans = str.maketrans("#/()=,*%", "________")
@@ -85,7 +85,7 @@ def alias_make_unique(config: "Config", api: RemoteAPI, alias: str):
 @pass_api
 @pass_config
 @click.argument("alias")
-def alias_search(config: "Config", api: RemoteAPI, alias: str):
+def alias_search(config: "SimDBSettings", api: RemoteAPI, alias: str):
     """Search the REMOTE for all aliases that contain the given VALUE."""
     simulations = api.list_simulations()
 
@@ -101,7 +101,7 @@ def alias_search(config: "Config", api: RemoteAPI, alias: str):
 @pass_api
 @pass_config
 @click.option("--local", help="Only list the local aliases.", is_flag=True)
-def alias_list(config: "Config", api: RemoteAPI, local: bool):
+def alias_list(config: "SimDBSettings", api: RemoteAPI, local: bool):
     """List aliases from the local database and the REMOTE (if specified)."""
 
     if not local:

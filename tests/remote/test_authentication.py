@@ -5,7 +5,7 @@ from unittest import mock
 
 import pytest
 
-from simdb.config import Config
+from simdb.config import SimDBSettings, RoleSettings
 
 has_easyad = importlib.util.find_spec("easyad") is not None
 has_flask = importlib.util.find_spec("flask") is not None
@@ -18,17 +18,15 @@ if TYPE_CHECKING:
     from flask import Request
 
 
-@mock.patch("simdb.config.Config.get_option")
 @pytest.mark.skipif(not has_flask, reason="requires flask library")
-def test_check_role(get_string_option):
+def test_check_role():
     app = Flask("test")
-    config = Config()
+    config = SimDBSettings()
+    config.roles["test_role"] = RoleSettings(users='user1,"user2", user3')
     app.simdb_config = config  # type: ignore
     with app.app_context():  # type: ignore
-        get_string_option.return_value = 'user1,"user2", user3'
         ok = check_role(config, User("user1", ""), "test_role")
         assert ok
-        get_string_option.assert_called_with("role.test_role.users", "")
         ok = check_role(config, User("user4", ""), None)
         assert ok
         ok = check_role(config, User("user4", ""), "test_role")
@@ -36,18 +34,15 @@ def test_check_role(get_string_option):
 
 
 @mock.patch("simdb.remote.core.auth.active_directory.EasyAD")
-@mock.patch("simdb.config.Config.get_option")
 @pytest.mark.skipif(not has_easyad, reason="requires easyad library")
 @pytest.mark.skipif(not has_flask, reason="requires flask library")
-def test_check_auth(get_option, easy_ad):
-    config = Config()
-    get_option.side_effect = lambda name, default=None: {
-        "server.admin_password": "abc123",
-        "authentication.type": "ActiveDirectory",
-        "authentication.ad_server": "test.server",
-        "authentication.ad_domain": "test.domain",
-        "authentication.ad_cert": "test.cert",
-    }.get(name, default)
+def test_check_auth(easy_ad):
+    config = SimDBSettings()
+    config.server.admin_password = "abc123"
+    config.authentication.type = "ActiveDirectory"
+    config.authentication.ad_server = "test.server"
+    config.authentication.ad_domain = "test.domain"
+    config.authentication.ad_cert = "test.cert"
 
     class request:
         class authorization:
@@ -60,7 +55,6 @@ def test_check_auth(get_option, easy_ad):
     request.authorization.password = "abc123"
     ok = check_auth(config, cast(Request, request))
     assert ok
-    get_option.assert_called_once_with("server.admin_password")
 
     def auth(user, password, **kwargs):
         if user == "user" and password == "password":

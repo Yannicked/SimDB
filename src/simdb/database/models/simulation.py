@@ -35,7 +35,7 @@ if "sphinx" in sys.modules:
 import re
 
 from simdb.cli.manifest import DataObject, Manifest
-from simdb.config.config import Config
+from simdb.config import SimDBSettings
 from simdb.docstrings import inherit_docstrings
 from simdb.imas.metadata import load_metadata
 from simdb.imas.utils import (
@@ -158,7 +158,7 @@ class Simulation(Base):
         self._metadata = meta_dict
 
     def __init__(
-        self, manifest: Union[Manifest, None], config: Optional[Config] = None
+        self, manifest: Union[Manifest, None], config: Optional[SimDBSettings] = None
     ) -> None:
         """
         Initialise a new Simulation object using the provided Manifest.

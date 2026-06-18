@@ -5,7 +5,7 @@ from typing import TextIO
 import click
 
 from simdb import __version__
-from simdb.config import Config
+from simdb.config import SimDBSettings
 
 from .commands.alias import alias
 from .commands.config import config
@@ -54,8 +54,7 @@ class AliasCommandGroup(click.Group):
 @click.pass_context
 def cli(ctx, debug: bool, verbose: bool, config_file: TextIO):
     if not ctx.obj:
-        ctx.obj = Config()
-        ctx.obj.load(config_file)
+        ctx.obj = SimDBSettings.load(config_file)
         ctx.obj.debug = debug
         ctx.obj.verbose = verbose
     global g_debug

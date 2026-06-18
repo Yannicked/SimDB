@@ -32,7 +32,7 @@ import requests
 from requests.auth import AuthBase
 from semantic_version import Version
 
-from simdb.config import Config
+from simdb.config import SimDBSettings
 from simdb.database.models import Simulation
 from simdb.imas.utils import imas_files
 from simdb.json import CustomDecoder, CustomEncoder
@@ -167,7 +167,7 @@ class RemoteAPI:
         remote: Optional[str],
         username: Optional[str],
         password: Optional[str],
-        config: Config,
+        config: SimDBSettings,
         use_token: Optional[bool] = None,
     ) -> None:
         """
@@ -184,7 +184,7 @@ class RemoteAPI:
         @param use_token: override the default behaviour of only looking for a token if
                           username and password are not provided.
         """
-        self._config: Config = config
+        self._config: SimDBSettings = config
         if not remote:
             remote = config.default_remote
         if not remote:
@@ -192,26 +192,24 @@ class RemoteAPI:
                 "Remote name not provided and no default remote found in config."
             )
         self._remote = remote
-        try:
-            self._url: str = config.get_string_option(f"remote.{remote}.url")
-        except KeyError:
+        if remote not in config.remotes:
             raise ValueError(
                 f"Remote '{remote}' not found. Use `simdb remote config add` to add it."
-            ) from None
+            )
+        remote_settings = config.remotes[remote]
+        self._url = remote_settings.url
 
         self._api_url: str = f"{self._url}/v{config.api_version}/"
-        self._firewall: Optional[str] = config.get_string_option(
-            f"remote.{remote}.firewall", default=None
-        )
+        self._firewall: Optional[str] = remote_settings.firewall
 
         if not username:
-            username = config.get_string_option(f"remote.{remote}.username", default="")
+            username = remote_settings.username
 
         if use_token is not None:
             self._use_token = use_token
         else:
-            token = config.get_option(f"remote.{remote}.token", default="")
-            self._use_token = token or (not username and not password)
+            token = remote_settings.token
+            self._use_token = bool(token) or (not username and not password)
 
         if password and not username:
             raise ValueError(
@@ -238,7 +236,7 @@ class RemoteAPI:
                     f"Password for user {username}", hide_input=True
                 )
 
-        self._token = config.get_option(f"remote.{remote}.token", default="")
+        self._token = config.remotes[remote].token or ""
         if self._server_auth != "None" and (self._use_token and not self._token):
             raise ValueError("No username or password given and no token found.")
 

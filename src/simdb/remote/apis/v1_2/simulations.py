@@ -89,12 +89,8 @@ def _validate(simulation, user) -> ValidationResult:
         _update_simulation_status(simulation, models_sim.Simulation.Status.FAILED, user)
         return ValidationResult(passed=False, error=str(err))
 
-    file_validator_type = current_app.simdb_config.get_string_option(
-        "file_validation.type", default=None
-    )
-    file_validator_options = current_app.simdb_config.get_section(
-        "file_validation", default={}
-    )
+    file_validator_type = getattr(current_app.simdb_config, "file_validation", {}).get("type", None)
+    file_validator_options = getattr(current_app.simdb_config, "file_validation", {})
     if file_validator_type not in [None, "none", ""]:
         validator_type, validator_options = find_file_validator(
             file_validator_type, file_validator_options
@@ -251,12 +247,12 @@ class SimulationList(Resource):
         common_root = find_common_root(sim_file_paths)
 
         config = current_app.simdb_config
-        copy_files = config.get_option("server.copy_files", default=True)
-        imas_remote_host = config.get_option("server.imas_remote_host", default=None)
+        copy_files = config.server.copy_files
+        imas_remote_host = config.server.imas_remote_host
 
         if copy_files or imas_remote_host:
             staging_dir = (
-                Path(config.get_string_option("server.upload_folder"))
+                config.server.upload_folder
                 / simulation.uuid.hex
             )
 
@@ -288,13 +284,9 @@ class SimulationList(Resource):
             ingested=simulation.uuid, error=None, validation=None
         )
 
-        error_on_fail = current_app.simdb_config.get_option(
-            "validation.error_on_fail", default=False
-        )
+        error_on_fail = current_app.simdb_config.validation.error_on_fail
 
-        if current_app.simdb_config.get_option(
-            "validation.auto_validate", default=False
-        ):
+        if current_app.simdb_config.validation.auto_validate:
             result.validation = _validate(simulation, user)
 
             if not result.validation.passed and error_on_fail:
@@ -308,9 +300,7 @@ class SimulationList(Resource):
                 "auto_validate=True."
             )
 
-        disable_replaces = config.get_option(
-            "development.disable_replaces", default=False
-        )
+        disable_replaces = config.development.disable_replaces
         replaces = simulation.find_meta("replaces")
 
         if not disable_replaces and replaces and replaces[0]:
@@ -381,7 +371,7 @@ class Simulation(Resource):
         files = [str(p) for p in simulation.file_paths()]
 
         upload_folder = Path(
-            current_app.simdb_config.get_string_option("server.upload_folder")
+            current_app.simdb_config.server.upload_folder
         )
 
         if simulation.alias:
@@ -487,7 +477,7 @@ class SimulationPackage(Resource):
                 return error("Simulation not found")
 
             staging_dir = (
-                Path(current_app.simdb_config.get_string_option("server.upload_folder"))
+                Path(current_app.simdb_config.server.upload_folder)
                 / simulation.uuid.hex
             )
 
