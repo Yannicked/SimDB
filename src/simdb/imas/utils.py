@@ -28,12 +28,22 @@ class SimDBUrl(AnyUrl):
         cls,
         *,
         scheme: str,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
         path: Optional[str] = None,
         query: Optional[str] = None,
         fragment: Optional[str] = None,
         **kwargs,
     ) -> "SimDBUrl":
-        url_str = f"{scheme}:{path or ''}"
+        url_str = f"{scheme}:"
+
+        if host:
+            url_str += f"//{host}"
+            if port:
+                url_str += f":{port}"
+            url_str += "/"
+
+        url_str += path or ""
         if query:
             url_str += f"?{query}"
         if fragment:
@@ -203,6 +213,9 @@ def open_imas(uri: SimDBUrl) -> DBEntry:
     @return: the IMAS data entry object
     """
 
+    if not _is_al5():
+        return _open_legacy(uri)
+
     if uri.path is None:
         raise ValueError(f"invalid imas URI: {uri} - no path found in URI")
 
@@ -212,7 +225,7 @@ def open_imas(uri: SimDBUrl) -> DBEntry:
         qs = dict(uri.query_params())
         path = qs.get("path")
         if path is None:
-            raise ValueError("invalid imas URI: {uri} - no path found")
+            raise ValueError(f"invalid imas URI: {uri} - no path found")
         imas_uri = str(uri)
     else:
         raise ValueError(f"invalid imas URI: {uri} - invalid scheme")
@@ -355,7 +368,7 @@ def convert_uri(uri: SimDBUrl, path: Path, config: Config) -> SimDBUrl:
     return SimDBUrl.build(
         scheme="imas",
         host=host,
-        port=int(port),
+        port=None if port is None else int(port),
         path="uda",
         query=f"path={path}&backend={backend}",
     )

@@ -148,7 +148,11 @@ def simulation_info(config: Config, sim_id: str):
 def simulation_ingest(config: Config, manifest_file: str, alias: str):
     """Ingest a MANIFEST_FILE."""
 
-    manifest = Manifest.load_from_file(Path(manifest_file))
+    overrides = {}
+    if alias:
+        overrides["alias"] = alias
+
+    manifest = Manifest.load_from_file(Path(manifest_file), overrides=overrides)
 
     simulation = Simulation(manifest, config)
     if alias:

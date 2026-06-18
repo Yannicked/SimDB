@@ -62,6 +62,8 @@ def _get_data_object_type(data: dict):
     elif uri.scheme == "simdb":
         return DataType.UUID
 
+    raise ValueError(f"URI scheme ({uri.scheme}:) not recognized")
+
 
 class DataObject(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -190,57 +192,46 @@ class Manifest(BaseModel):
             self._metadata.update(metadata_item)
         return self
 
+    def _resolve_manifest_items(self, items, factory_cls, skip_glob_check):
+        resolved = []
+        for item in items:
+            if item.type == DataType.FILE and item.uri.path:
+                path_obj = Path(item.uri.path)
+
+                matches = list(path_obj.parent.glob(path_obj.name))
+
+                if not matches and skip_glob_check:
+                    matches = [path_obj]
+
+                if not matches:
+                    raise ValueError(f"No files found matching path {path_obj}")
+
+                for p in matches:
+                    resolved.append(
+                        factory_cls(
+                            uri=SimDBUrl.build(scheme="file", path=p.as_posix())
+                        )
+                    )
+            else:
+                resolved.append(item)
+        return resolved
+
     @model_validator(mode="after")
     def resolve_inputs_and_outputs(self, info) -> "Manifest":
         context = info.context or {}
         skip_glob_check = context.get("skip_glob_check", False)
-        base_path = context.get("base_path")
-        if not base_path:
-            context["base_path"] = (
-                self._path.absolute().parent if self._path != Path() else Path.cwd()
-            )
 
-        inputs = []
-        for i in self.inputs_raw:
-            if i.type == DataType.FILE:
-                if i.uri.path:
-                    source_path = Path(i.uri.path)
-                    if not skip_glob_check:
-                        names = [
-                            p.as_posix()
-                            for p in source_path.parent.glob(source_path.name)
-                        ]
-                        if not names:
-                            raise ValueError(
-                                f"No files found matching path {source_path}"
-                            )
-                    else:
-                        names = [source_path.as_posix()]
-                    for name in names:
-                        inputs.append(
-                            Source(uri=SimDBUrl.build(scheme="file", path=name))
-                        )
-            else:
-                inputs.append(i)
-        self._inputs = inputs
+        context.setdefault(
+            "base_path",
+            self._path.absolute().parent if self._path != Path() else Path.cwd(),
+        )
 
-        outputs = []
-        for i in self.outputs_raw:
-            if i.type == DataType.FILE:
-                if i.uri.path:
-                    sink_path = Path(i.uri.path)
-                    names = [
-                        p.as_posix() for p in sink_path.parent.glob(sink_path.name)
-                    ]
-                    if not names and skip_glob_check:
-                        names = [sink_path.as_posix()]
-                    for name in names:
-                        outputs.append(
-                            Sink(uri=SimDBUrl.build(scheme="file", path=name))
-                        )
-            else:
-                outputs.append(i)
-        self._outputs = outputs
+        self._inputs = self._resolve_manifest_items(
+            self.inputs_raw, Source, skip_glob_check
+        )
+        self._outputs = self._resolve_manifest_items(
+            self.outputs_raw, Sink, skip_glob_check
+        )
 
         return self
 
@@ -270,12 +261,17 @@ class Manifest(BaseModel):
         return model
 
     @classmethod
-    def load_from_file(cls, file_path: Path) -> "Manifest":
+    def load_from_file(
+        cls, file_path: Path, overrides: Optional[dict] = None
+    ) -> "Manifest":
         with file_path.open() as file:
             try:
                 raw_data = yaml.load(file, Loader=cls._get_loader())
             except yaml.YAMLError as err:
                 raise ValueError("badly formatted manifest") from err
+
+        if overrides:
+            raw_data.update(overrides)
 
         model = cls.model_validate(
             raw_data, context={"base_path": file_path.absolute().parent}
