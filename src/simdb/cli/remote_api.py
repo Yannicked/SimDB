@@ -26,15 +26,24 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, quote, urlparse
 
 import appdirs
 import click
 import requests
 from requests.auth import AuthBase
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
 from semantic_version import Version
 
 from simdb.checksum import calculate_checksum
+from simdb.cli.resumable_upload import resumable_upload
 from simdb.config import Config
 from simdb.database.models import Simulation
 from simdb.imas.utils import SimDBUrl, imas_files
@@ -317,6 +326,76 @@ def _expand_directories(
                 _file_data_for_partition(file, source, partitions, keep_uuid=keep_uuid)
             )
     return new_file_list
+
+
+def _expand_directories_http(
+    files: Iterable[FileData], sim_uuid: uuid.UUID, partitions: dict[str, str]
+) -> List[Tuple[FileData, Path, str]]:
+    """Expand directories / IMAS data into individual files for HTTP upload.
+
+    Returns ``(file_data, local_source_path, target)`` triples. Each file keeps
+    the same partition-relative layout that :func:`_expand_directories` produces
+    for ``push_local`` - so structure handling (IMAS directories stay grouped,
+    standalone files stay flat) is identical to local push. The layout is then
+    namespaced under ``<sim_uuid>/<scheme>/`` and assigned an ``http://`` URI so
+    the server stages it into the ``http`` partition; the server's existing copy
+    step strips the common root exactly as it does for local push.
+    """
+    result: List[Tuple[FileData, Path, str]] = []
+    for file in files:
+        file_uri = SimDBUrl(file.uri)
+        if file_uri.path is None:
+            raise ValueError("File has no associated path")
+        file_path = Path(file_uri.path)
+        if file_uri.scheme == "imas":
+            qs = dict(file_uri.query_params())
+            path = qs.get("path")
+            if path is None:
+                raise ValueError("IMAS uri has not path set")
+            file_path = Path(path)
+
+        if file_path.is_dir():
+            for sub_file in file_path.iterdir():
+                if sub_file.is_dir():
+                    raise ValueError("Nested directory found")
+                result.append(_make_http_entry(file, sub_file, sim_uuid, partitions))
+        else:
+            result.append(_make_http_entry(file, file_path, sim_uuid, partitions))
+    return result
+
+
+def _make_http_entry(
+    template: FileData,
+    local_path: Path,
+    sim_uuid: uuid.UUID,
+    partitions: dict[str, str],
+) -> Tuple[FileData, Path, str]:
+    """Build the HTTP upload entry for a single local file.
+
+    The relative path is taken from :func:`_find_partition_for_file` (the same
+    mapping ``push_local`` uses) and namespaced under ``<sim_uuid>/<scheme>/`` so
+    uploads from different partitions never collide on the server.
+    """
+    scheme, rel = _find_partition_for_file(local_path, partitions)
+    rel_posix = rel.as_posix().lstrip("/")
+    target = f"{sim_uuid.hex}/{scheme}/{rel_posix}"
+    new_uri = SimDBUrl.build(scheme="http", path=target, host="")
+    file_type = "IMAS" if _check_file_is_imas(local_path) else template.type
+    return (
+        FileData(
+            type=file_type,
+            uri=new_uri.encoded_string(),
+            checksum=calculate_checksum(local_path),
+            datetime=template.datetime,
+            usage=template.usage,
+            purpose=template.purpose,
+            sensitivity=template.sensitivity,
+            access=template.access,
+            embargo=template.embargo,
+        ),
+        local_path,
+        target,
+    )
 
 
 class RemoteAPI:
@@ -958,6 +1037,90 @@ class RemoteAPI:
             uploaded_by=str(uploaded_by) if uploaded_by is not None else None,
         )
         self.post("simulations", data=post_data.model_dump(mode="json"))
+
+    def _upload_files(
+        self,
+        files: List[Tuple[FileData, Path, str]],
+        upload_headers: Dict[str, str],
+    ):
+        """Upload the expanded files over resumable HTTP, showing two progress
+        bars: an overall bar across all bytes and a sub-bar for the current file.
+        """
+        total_bytes = sum(local_path.stat().st_size for _, local_path, _ in files)
+
+        with Progress(
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            DownloadColumn(),
+            TransferSpeedColumn(),
+            TimeRemainingColumn(),
+        ) as progress:
+            overall = progress.add_task("Overall", total=total_bytes)
+            file_task = progress.add_task("", total=0)
+            uploaded = 0
+            for _file_data, local_path, target in files:
+                size = local_path.stat().st_size
+                progress.reset(
+                    file_task, total=size, description=f"  {local_path.name}"
+                )
+                url = f"{self._url}/v1.3/upload/{quote(target)}"
+
+                def _on_progress(completed: int, _base: int = uploaded) -> None:
+                    progress.update(file_task, completed=completed)
+                    progress.update(overall, completed=_base + completed)
+
+                resumable_upload(
+                    url,
+                    local_path,
+                    auth=self._get_auth(),
+                    cookies=self._cookies,
+                    headers=upload_headers,
+                    progress=_on_progress,
+                )
+                uploaded += size
+                progress.update(file_task, completed=size)
+                progress.update(overall, completed=uploaded)
+
+    @try_request
+    def push_http_simulation(self, simulation: Simulation):
+        """Push a simulation by uploading its files over resumable HTTP.
+
+        Unlike :meth:`push_local_simulation` (which requires a filesystem shared
+        with the server), this uploads the file bytes to the server's ``http``
+        partition using a resumable protocol, then pushes the metadata.
+        """
+        sim_data = simulation.to_model(recurse=True)
+
+        partitions = cast(dict[str, str], self._config.get_section("partition"))
+        inputs = _expand_directories_http(
+            sim_data.inputs.root, simulation.uuid, partitions
+        )
+        outputs = _expand_directories_http(
+            sim_data.outputs.root, simulation.uuid, partitions
+        )
+
+        files = list(itertools.chain(inputs, outputs))
+        upload_headers = {"User-Agent": "it_script_basic"}
+        if files:
+            self._upload_files(files, upload_headers)
+
+        sim_data.inputs.root = [file_data for file_data, _, _ in inputs]
+        sim_data.outputs.root = [file_data for file_data, _, _ in outputs]
+
+        uploaded_by = str(simulation.meta_dict().get("uploaded_by", None))
+
+        headers = {"Content-type": "application/json", "User-Agent": "it_script_basic"}
+        post_data = SimulationPostData(
+            simulation=sim_data, add_watcher=False, uploaded_by=uploaded_by
+        ).model_dump_json()
+        res = requests.post(
+            f"{self._url}/v1.3/simulations",
+            data=post_data,
+            headers=headers,
+            auth=self._get_auth(),
+            cookies=self._cookies,
+        )
+        check_return(res)
 
     @versioned_method("v1.3")
     @try_request
