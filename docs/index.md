@@ -111,7 +111,6 @@ reference/python-api/index
 explanation/concepts
 explanation/architecture
 explanation/validation
-explanation/provenance
 explanation/glossary
 ```
 

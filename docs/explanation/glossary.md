@@ -46,10 +46,6 @@ Metadata
   Searchable key/value information attached to a simulation. See
   [Concepts](concepts.md#metadata).
 
-Provenance
-  A record of the platform and environment a simulation ran in. See
-  [Provenance](provenance.md).
-
 Remote
   A configured SimDB server that the client can push to and query. See
   [Configure remotes](../how-to/configure-remotes.md).

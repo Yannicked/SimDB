@@ -109,9 +109,3 @@ A **watcher** is a person who has asked to be notified about a simulation. They
 can subscribe to validation results, new revisions, obsolescence, or all
 events. Watchers are managed with `simdb remote watcher` and notified by email
 from the server.
-
-## Provenance
-
-**Provenance** captures the environment a simulation ran in (platform details
-and environment variables) so a run can be understood and reproduced later. See
-[Provenance](provenance.md).
