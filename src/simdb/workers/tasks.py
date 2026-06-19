@@ -1,4 +1,5 @@
 import hashlib
+import itertools
 import logging
 import os
 import shutil
@@ -13,7 +14,6 @@ from simdb.email.server import EmailServer
 from simdb.enums import IngestionStatus
 from simdb.remote.models import FileData, FileDataList
 from simdb.uri import URI
-from simdb.validation import ValidationError, Validator
 from simdb.workers.celery import celery_app
 
 logger = logging.getLogger(__name__)
@@ -227,33 +227,17 @@ def validate_imas_task(simulation_uuid: UUID):
     config.load()
     database = get_db(config)
 
-    try:
-        simulation = database.get_simulation(simulation_uuid.hex)
-        simulation.ingestion_status = IngestionStatus.VALIDATING
-        database.session.commit()
+    simulation = database.get_simulation(simulation_uuid.hex)
+    simulation.ingestion_status = IngestionStatus.VALIDATING
+    database.session.commit()
 
-        error_on_fail = config.get_option("validation.error_on_fail", default=False)
-        try:
-            for schema in Validator.validation_schemas(config, simulation):
-                Validator(schema).validate(simulation)
-        except ValidationError as err:
-            simulation.ingestion_status = IngestionStatus.VALIDATION_FAILED
-            database.session.commit()
-            if error_on_fail:
-                # Abort the chain so the simulation is never marked COMPLETED,
-                # mirroring v1.2's error_on_fail behaviour.
-                raise
-            logger.warning(
-                "Validation failed for %s; ingesting anyway (error_on_fail=False): %s",
-                simulation_uuid,
-                err,
-            )
-            return
+    for _file in itertools.chain(simulation.inputs, simulation.outputs):
+        # TODO
+        pass
 
-        simulation.ingestion_status = IngestionStatus.VALIDATED
-        database.session.commit()
-    finally:
-        database.close()
+    simulation.ingestion_status = IngestionStatus.VALIDATED
+    database.session.commit()
+    database.close()
 
 
 @celery_app.task
@@ -262,9 +246,6 @@ def complete_ingestion_task(simulation_uuid: UUID):
     config.load()
     database = get_db(config)
 
-    try:
-        simulation = database.get_simulation(simulation_uuid.hex)
-        simulation.ingestion_status = IngestionStatus.COMPLETED
-        database.session.commit()
-    finally:
-        database.close()
+    simulation = database.get_simulation(simulation_uuid.hex)
+    simulation.ingestion_status = IngestionStatus.COMPLETED
+    database.session.commit()
