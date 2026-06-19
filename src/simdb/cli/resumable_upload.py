@@ -18,6 +18,7 @@ from typing import Callable, Mapping, Optional, Tuple, Union
 
 import requests
 from requests.auth import AuthBase
+from requests.cookies import RequestsCookieJar
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,7 @@ def resumable_upload(
     path: Union[str, Path],
     *,
     auth: Optional[Union[AuthBase, Tuple[str, str]]] = None,
-    cookies: Optional[Mapping[str, str]] = None,
+    cookies: Optional[Union[Mapping[str, str], RequestsCookieJar]] = None,
     headers: Optional[Mapping[str, str]] = None,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     progress: Optional[Callable[[int], None]] = None,
@@ -161,8 +162,15 @@ def resumable_upload(
 
     with path.open("rb") as f:
         _send_chunks(
-            url, f, offset, total, chunk_size,
-            auth, cookies, headers, progress,
+            url,
+            f,
+            offset,
+            total,
+            chunk_size,
+            auth,
+            cookies,
+            headers,
+            progress,
         )
 
 

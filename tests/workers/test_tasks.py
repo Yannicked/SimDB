@@ -174,7 +174,7 @@ def task_environment(tmp_path):
     config.set_option("database.file", str(tmp_path / "test.db"))
     config.set_option("server.upload_folder", str(upload_dir))
     config.set_option("partition.data", str(partition_dir))
-    config.load = mock.MagicMock()
+    config.load = mock.MagicMock()  # ty: ignore[invalid-assignment]
 
     simulation_uuid = uuid1()
     mock_simulation = mock.MagicMock(uuid=simulation_uuid, inputs=[], outputs=[])
@@ -309,7 +309,7 @@ def test_cleanup_http_staging_task_removes_simulation_dir(tmp_path):
 
     config = Config()
     config.set_option("partition.http", str(partition_path))
-    config.load = mock.MagicMock()
+    config.load = mock.MagicMock()  # ty: ignore[invalid-assignment]
 
     with mock.patch("simdb.workers.tasks.Config", return_value=config):
         cleanup_http_staging_task(sim_uuid)
@@ -320,7 +320,7 @@ def test_cleanup_http_staging_task_removes_simulation_dir(tmp_path):
 
 def test_cleanup_http_staging_task_without_partition_is_noop(tmp_path):
     config = Config()
-    config.load = mock.MagicMock()
+    config.load = mock.MagicMock()  # ty: ignore[invalid-assignment]
 
     with mock.patch("simdb.workers.tasks.Config", return_value=config):
         # Should not raise even though partition.http is unset.

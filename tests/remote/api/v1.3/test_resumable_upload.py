@@ -306,7 +306,11 @@ def test_patch_content_digest_match_accepted(client, http_partition):
         f"/v1.3/upload/{target}", data=b"", headers={**HEADERS, "Upload-Complete": "?0"}
     )
     rv = _patch(
-        client, target, 0, b"hello", complete=False,
+        client,
+        target,
+        0,
+        b"hello",
+        complete=False,
         headers={**HEADERS, "Content-Digest": _digest(b"hello")},
     )
     assert rv.status_code == 204
@@ -320,7 +324,11 @@ def test_patch_content_digest_mismatch_rejected(client, http_partition):
     )
     # Digest of different bytes than the body -> 400 and nothing appended.
     rv = _patch(
-        client, target, 0, b"hello", complete=False,
+        client,
+        target,
+        0,
+        b"hello",
+        complete=False,
         headers={**HEADERS, "Content-Digest": _digest(b"goodbye")},
     )
     assert rv.status_code == 400
@@ -338,11 +346,19 @@ def test_multi_chunk_upload_finalizes(client, http_partition):
         f"/v1.3/upload/{target}", data=b"", headers={**HEADERS, "Upload-Complete": "?0"}
     )
     _patch(
-        client, target, 0, b"hello", complete=False,
+        client,
+        target,
+        0,
+        b"hello",
+        complete=False,
         headers={**HEADERS, "Content-Digest": _digest(b"hello")},
     )
     rv = _patch(
-        client, target, 5, b" world", complete=True,
+        client,
+        target,
+        5,
+        b" world",
+        complete=True,
         headers={**HEADERS, "Content-Digest": _digest(b" world")},
     )
     assert rv.status_code == 200
@@ -369,7 +385,11 @@ def test_unknown_digest_algorithm_ignored(client, http_partition):
         f"/v1.3/upload/{target}", data=b"", headers={**HEADERS, "Upload-Complete": "?0"}
     )
     rv = _patch(
-        client, target, 0, b"hello", complete=False,
+        client,
+        target,
+        0,
+        b"hello",
+        complete=False,
         headers={**HEADERS, "Content-Digest": "unixsum=:0061:"},
     )
     assert rv.status_code == 204
