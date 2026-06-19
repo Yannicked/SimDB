@@ -144,7 +144,7 @@ class File(Base):
             files = [FileInfo(path=self.uri.path, checksum=self.checksum)]
         else:
             files = [
-                FileInfo(path=path, checksum=sha1_checksum(URI(f"file:{path}")))
+                FileInfo(path=path, checksum=sha1_checksum(urilib.URI(f"file:{path}")))
                 for path in imas_files(self.uri)
             ]
         return FileGetDataResponse(
