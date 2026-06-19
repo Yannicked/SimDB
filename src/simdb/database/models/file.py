@@ -139,7 +139,12 @@ class File(Base):
             files = [FileInfo(path=Path(self.uri.path), checksum=self.checksum)]
         else:
             files = [
-                FileInfo(path=path, checksum=file_checksum(SimDBUrl(f"file:{path}")))
+                FileInfo(
+                    path=path,
+                    checksum=file_checksum(
+                        SimDBUrl.build(scheme="file", path=path.as_posix())
+                    ),
+                )
                 for path in imas_files(self.uri)
             ]
         return FileGetDataResponse(

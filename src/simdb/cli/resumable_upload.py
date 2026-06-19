@@ -244,7 +244,9 @@ def _send_chunks(
                     f"Upload failed after {_MAX_RETRIES} retries: {err}"
                 ) from err
             logger.warning("Upload chunk failed (%s), resuming from server offset", err)
-            offset = _query_offset(url, auth, cookies, headers)
+            server_offset = _query_offset(url, auth, cookies, headers)
+            if server_offset is not None:
+                offset = server_offset
             continue
 
         if resp.status_code == 409:
@@ -276,10 +278,19 @@ def _send_chunks(
             return
 
 
-def _query_offset(url: str, auth, cookies, headers) -> int:
-    resp = requests.head(
-        url, headers=_base_headers(headers), auth=auth, cookies=cookies
-    )
+def _query_offset(url: str, auth, cookies, headers) -> Optional[int]:
+    """Return the server's current offset, or ``None`` if it can't be determined.
+
+    A ``None`` result (failed/ambiguous HEAD, or a missing ``Upload-Offset``
+    header) means "unknown" - the caller must keep its current offset rather than
+    restart the upload.
+    """
+    try:
+        resp = requests.head(
+            url, headers=_base_headers(headers), auth=auth, cookies=cookies
+        )
+    except (requests.ConnectionError, requests.Timeout):
+        return None
     if resp.status_code in (200, 204):
-        return _header_int(resp, "Upload-Offset") or 0
-    return 0
+        return _header_int(resp, "Upload-Offset")
+    return None

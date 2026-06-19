@@ -50,6 +50,14 @@ def _max_append_size() -> int:
         return DEFAULT_MAX_APPEND_SIZE
 
 
+def _read_capped_body(limit: int) -> Optional[bytes]:
+    """Read the request body, capped at ``limit`` bytes."""
+    data = request.stream.read(limit + 1)
+    if len(data) > limit:
+        return None
+    return data
+
+
 def _bool_field(value: bool) -> str:
     return "?1" if value else "?0"
 
@@ -157,8 +165,8 @@ class ResumableUpload(Resource):
         final, partial = _resolve_target(target)
         partial.parent.mkdir(parents=True, exist_ok=True)
 
-        data = request.get_data() or b""
-        if len(data) > _max_append_size():
+        data = _read_capped_body(_max_append_size())
+        if data is None:
             return Response(status=413, headers=_headers(0, False))
         # Per-request integrity: reject before writing anything if the body does
         # not match the client's Content-Digest.
@@ -205,8 +213,8 @@ class ResumableUpload(Resource):
             # Offset mismatch - tell the client our current offset so it resyncs.
             return Response(status=409, headers=_headers(offset, False))
 
-        data = request.get_data() or b""
-        if len(data) > _max_append_size():
+        data = _read_capped_body(_max_append_size())
+        if data is None:
             return Response(status=413, headers=_headers(offset, False))
 
         # Per-request integrity: reject (without appending) if the body does not

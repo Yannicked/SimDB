@@ -118,13 +118,16 @@ class SimulationList(SimulationListV12):
         # The complete job will set simulation.ingestion_status = Completed
         complete = complete_ingestion_task.si(simulation.uuid)
 
-        chain = copy_files | complete
-
         # Files uploaded over HTTP are staged in the ``http`` partition; once
         # copied into the upload folder, remove those staged duplicates.
         all_files = [*body.simulation.inputs.root, *body.simulation.outputs.root]
-        if any(SimDBUrl(f.uri).scheme == "http" for f in all_files):
-            chain = chain | cleanup_http_staging_task.si(simulation.uuid)
+        if all(SimDBUrl(f.uri).scheme == "http" for f in all_files):
+            cleanup = cleanup_http_staging_task.si(simulation.uuid)
+            copy_files.link_error(cleanup)
+            complete.link_error(cleanup)
+            chain = copy_files | complete | cleanup
+        else:
+            chain = copy_files | complete
 
         try:
             _ = chain.apply_async()

@@ -24,7 +24,6 @@ from typing import (
     Optional,
     Tuple,
     Union,
-    cast,
 )
 from urllib.parse import ParseResult, quote, urlparse
 
@@ -40,13 +39,14 @@ from rich.progress import (
     TimeRemainingColumn,
     TransferSpeedColumn,
 )
+from netCDF4 import Dataset
 from semantic_version import Version
 
 from simdb.checksum import CHECKSUM_ALGORITHM, READ_CHUNK_SIZE, hash_file
 from simdb.cli.resumable_upload import resumable_upload
 from simdb.config import Config
 from simdb.database.models import Simulation
-from simdb.imas.utils import SimDBUrl, imas_files
+from simdb.imas.utils import SimDBUrl, imas_backend_for_directory, imas_files
 from simdb.json import CustomDecoder, CustomEncoder
 from simdb.remote import CLIENT_API_VERSIONS, APIConstants
 from simdb.remote.models import FileData, SimulationPostData
@@ -245,6 +245,29 @@ def _get_paths(file: "File") -> Iterable[Path]:
         return []
     else:
         return imas_files(file.uri)
+
+
+def _check_file_is_imas(file: Path) -> bool:
+    # NetCDF is identified by the IMAS "Conventions" attribute
+    if file.suffix == ".nc":
+        try:
+            with Dataset(file, "r") as ds:
+                if getattr(ds, "Conventions", None) == "IMAS":
+                    return True
+        except OSError:
+            # Not a readable NetCDF file; fall back to the directory heuristics
+            pass
+
+    try:
+        imas_backend_for_directory(file.parent)
+    except ValueError:
+        return False
+    return True
+
+
+def _partition_roots(config: Config) -> dict[str, str]:
+    section = config.get_section("partition", default={})
+    return {k: str(v) for k, v in section.items()}
 
 
 def _find_partition_for_file(
@@ -1051,9 +1074,7 @@ class RemoteAPI:
     def push_local_simulation(self, simulation: Simulation, add_watcher: bool = False):
         sim_data = simulation.to_model(recurse=True)
 
-        partitions = cast(
-            Dict[str, str], self._config.get_section("partition", default={})
-        )
+        partitions = _partition_roots(self._config)
         sim_data.inputs.root = _expand_directories(sim_data.inputs.root, partitions)
         sim_data.outputs.root = _expand_directories(sim_data.outputs.root, partitions)
 
@@ -1119,7 +1140,7 @@ class RemoteAPI:
         """
         sim_data = simulation.to_model(recurse=True)
 
-        partitions = cast(dict[str, str], self._config.get_section("partition"))
+        partitions = _partition_roots(self._config)
         inputs = _expand_directories_http(
             sim_data.inputs.root, simulation.uuid, partitions
         )
