@@ -1174,6 +1174,7 @@ dependencies = [
     { name = "rich" },
     { name = "semantic-version" },
     { name = "sqlalchemy" },
+    { name = "xxhash" },
 ]
 
 [package.optional-dependencies]
@@ -1286,6 +1287,7 @@ requires-dist = [
     { name = "sphinx-autodoc-typehints", marker = "extra == 'build-docs'", specifier = ">=1.12.0" },
     { name = "sphinx-immaterial", marker = "extra == 'build-docs'", specifier = ">=0.11.14" },
     { name = "sqlalchemy", specifier = ">=1.2.12,<2.0" },
+    { name = "xxhash", specifier = ">=3.7.0" },
 ]
 provides-extras = ["server", "auth-ad", "auth-keycloak", "auth-ldap", "auth", "imas-validator", "build-docs", "postgres", "all"]
 

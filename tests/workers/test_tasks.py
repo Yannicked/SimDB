@@ -1,16 +1,18 @@
+import hashlib
 from datetime import datetime, timezone
 from unittest import mock
 from uuid import uuid1
 
 import pytest
 
-from simdb.checksum import calculate_checksum
+from simdb.checksum import hash_file
 from simdb.config import Config
 from simdb.enums import IngestionStatus
 from simdb.imas.utils import SimDBUrl
 from simdb.remote.models import FileData
 from simdb.workers import tasks as simdb_tasks
 from simdb.workers.tasks import (
+    _checksum_matches,
     _copy_files,
     _create_file_from_data,
     _get_imas_identifier_path,
@@ -150,6 +152,15 @@ def test_create_file_from_data_raises_on_checksum_mismatch(tmp_path):
         _create_file_from_data(file_data, config, data_file)
 
 
+def test_checksum_matches_uses_sha1(tmp_path):
+    data_file = tmp_path / "testfile.txt"
+    content = b"content"
+    data_file.write_bytes(content)
+
+    assert _checksum_matches(data_file, hashlib.sha1(content).hexdigest())
+    assert not _checksum_matches(data_file, hashlib.sha1(b"other").hexdigest())
+
+
 @pytest.fixture
 def task_environment(tmp_path):
     """Set up Config, mocked DB, and directory layout for copy_files_task tests."""
@@ -190,7 +201,7 @@ def test_copy_files_task_copies_inputs_and_marks_copied(task_environment):
 
     input_files = [
         _make_file_data(
-            f"data:/{source_file.name}", checksum=calculate_checksum(source_file)
+            f"data:/{source_file.name}", checksum=hash_file(source_file)
         )
     ]
 
@@ -250,14 +261,14 @@ def test_copy_files_task_http_keeps_imas_folder_flattens_sibling(task_environmen
     output_files = [
         _make_file_data(
             f"http://{sim_hex}/data/subdir/test_hdf5/master.h5",
-            checksum=_calculate_checksum(master),
+            checksum=hash_file(master),
         ),
         _make_file_data(
             f"http://{sim_hex}/data/subdir/test_hdf5/0001.h5",
-            checksum=_calculate_checksum(extra),
+            checksum=hash_file(extra),
         ),
         _make_file_data(
-            f"http://{sim_hex}/data/subdir/test.nc", checksum=_calculate_checksum(nc)
+            f"http://{sim_hex}/data/subdir/test.nc", checksum=hash_file(nc)
         ),
     ]
 

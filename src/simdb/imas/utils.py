@@ -103,10 +103,11 @@ def list_idss(entry: DBEntry) -> List[str]:
     for ids_name in entry.factory.ids_names():
         occurrences = entry.list_all_occurrences(ids_name)
         if occurrences and len(occurrences) > 0:
-            for occurrence in range(len(occurrences)):
+            for occurrence in occurrences:
                 if occurrence > 0:
                     idss.append(ids_name + "_" + str(occurrence))
-            idss.append(ids_name)
+                else:
+                    idss.append(ids_name)
     return idss
 
 

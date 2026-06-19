@@ -1,5 +1,6 @@
 """Tests for the HTTP push client helpers and CLI command."""
 
+import hashlib
 import uuid
 from datetime import datetime, timezone
 from unittest import mock
@@ -7,7 +8,7 @@ from unittest import mock
 from click.testing import CliRunner
 from utils import config_test_file
 
-from simdb.cli.remote_api import _expand_directories_http
+from simdb.cli.remote_api import _compute_checksums, _expand_directories_http
 from simdb.cli.simdb import cli
 from simdb.imas.utils import SimDBUrl
 from simdb.remote.models import FileData
@@ -43,7 +44,23 @@ def test_expand_directories_http_uses_partition_relative_paths(tmp_path):
     assert parsed.host == sim_uuid.hex
     assert parsed.path == "/data/subdir/file.txt"
     assert file_data.type == "FILE"
-    assert file_data.checksum != "ignored"
+    assert file_data.checksum == ""
+
+
+def test_compute_checksums_populates_sha1(tmp_path):
+    f1 = tmp_path / "a.txt"
+    f1.write_bytes(b"hello")
+    f2 = tmp_path / "b.txt"
+    f2.write_bytes(b"world!!")
+
+    fd1 = _file_data(f1)
+    fd2 = _file_data(f2)
+    files = [(fd1, f1, "a"), (fd2, f2, "b")]
+
+    _compute_checksums(files)
+
+    assert fd1.checksum == hashlib.sha1(b"hello").hexdigest()
+    assert fd2.checksum == hashlib.sha1(b"world!!").hexdigest()
 
 
 def test_expand_directories_http_keeps_imas_directory(tmp_path):

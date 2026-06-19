@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Iterable, List
 from uuid import UUID
 
-from simdb.checksum import calculate_checksum
+from simdb.checksum import hash_file
 from simdb.config import Config
 from simdb.database.database import get_db
 from simdb.database.models import File
@@ -113,6 +113,12 @@ def _copy_files(
         shutil.copy2(source, destination)
 
 
+def _checksum_matches(path: Path, expected: str) -> bool:
+    """Whether ``path`` matches ``expected``."""
+    return hash_file(path) == expected
+
+
+
 def _get_imas_identifier_path(path: Path) -> Path:
     if path.suffix == ".nc":
         return path
@@ -125,8 +131,7 @@ def _create_file_from_data(
     uri = SimDBUrl(data.uri)
     path = _resolve_uri_to_path(uri, config)
 
-    checksum = calculate_checksum(path)
-    if data.checksum != checksum:
+    if not _checksum_matches(path, data.checksum):
         raise ValueError("Hash of file does not match provided checksum")
 
     file = File.from_data_model(data)
@@ -154,8 +159,7 @@ def _create_files_from_data_list(
             seen_imas_paths.add(imas_path)
             file = _create_file_from_data(file_data, config, imas_path)
         else:
-            checksum = calculate_checksum(path)
-            if file_data.checksum != checksum:
+            if not _checksum_matches(path, file_data.checksum):
                 raise ValueError("Hash of file does not match provided checksum")
             file = File.from_data_model(file_data)
             file.uri = SimDBUrl.build(scheme="file", path=path.as_posix())

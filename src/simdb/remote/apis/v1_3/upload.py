@@ -13,7 +13,10 @@ bytes are written to ``<target>.partial`` and atomically renamed to ``<target>``
 when the upload completes. The current offset is simply the size of that file.
 """
 
+import base64
+import binascii
 import contextlib
+import hashlib
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -34,6 +37,7 @@ PARTIAL_SUFFIX = ".partial"
 #: clients via the ``Upload-Limit`` header. Overridable with the
 #: ``server.max_append_size`` config option.
 DEFAULT_MAX_APPEND_SIZE = 8 * 1024 * 1024
+_DIGEST_ALGORITHMS = {"sha-256": "sha256", "sha-512": "sha512"}
 
 
 def _max_append_size() -> int:
@@ -59,6 +63,47 @@ def _parse_bool_field(value: Optional[str]) -> Optional[bool]:
     if value == "?0":
         return False
     return None
+
+
+def _parse_digest_header(value: Optional[str]) -> dict:
+    """Parse an RFC 9530 digest structured-field dictionary into ``{algo: bytes}``.
+
+    Members are ``algo=:base64:`` items; only the algorithms in
+    :data:`_DIGEST_ALGORITHMS` are kept. Unparseable members are skipped. Commas
+    are safe separators here because base64 never contains them.
+    """
+    digests: dict = {}
+    if not value:
+        return digests
+    for member in value.split(","):
+        member = member.strip()
+        if "=" not in member:
+            continue
+        key, _, raw = member.partition("=")
+        key = key.strip().lower()
+        if key not in _DIGEST_ALGORITHMS:
+            continue
+        raw = raw.strip()
+        if len(raw) >= 2 and raw.startswith(":") and raw.endswith(":"):
+            raw = raw[1:-1]
+        try:
+            digests[key] = base64.b64decode(raw, validate=True)
+        except (binascii.Error, ValueError):
+            continue
+    return digests
+
+
+def _digest_matches(value: Optional[str], data: bytes) -> bool:
+    """Return whether the digest header ``value`` matches ``data``.
+
+    Passes when no recognised algorithm is present (nothing to verify) and when
+    every recognised algorithm's digest matches; fails on any mismatch.
+    """
+    provided = _parse_digest_header(value)
+    return all(
+        hashlib.new(_DIGEST_ALGORITHMS[algo], data).digest() == expected
+        for algo, expected in provided.items()
+    )
 
 
 def _partition_base() -> Path:
@@ -115,6 +160,10 @@ class ResumableUpload(Resource):
         data = request.get_data() or b""
         if len(data) > _max_append_size():
             return Response(status=413, headers=_headers(0, False))
+        # Per-request integrity: reject before writing anything if the body does
+        # not match the client's Content-Digest.
+        if not _digest_matches(request.headers.get("Content-Digest"), data):
+            return Response(status=400, headers=_headers(0, False))
         with partial.open("wb") as f:
             f.write(data)
         offset = len(data)
@@ -159,6 +208,12 @@ class ResumableUpload(Resource):
         data = request.get_data() or b""
         if len(data) > _max_append_size():
             return Response(status=413, headers=_headers(offset, False))
+
+        # Per-request integrity: reject (without appending) if the body does not
+        # match the client's Content-Digest. Offset is left unchanged so the
+        # client can safely retry the same chunk.
+        if not _digest_matches(request.headers.get("Content-Digest"), data):
+            return Response(status=400, headers=_headers(offset, False))
 
         partial.parent.mkdir(parents=True, exist_ok=True)
         with partial.open("ab") as f:

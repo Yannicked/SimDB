@@ -1,5 +1,7 @@
 """Tests for the resumable HTTP upload endpoint (/v1.3/upload/<target>)."""
 
+import base64
+import hashlib
 import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -11,6 +13,12 @@ from conftest import HEADERS
 from simdb.cli import resumable_upload as ru
 
 INTEROP_HEADER = "Upload-Draft-Interop-Version"
+
+
+def _digest(data):
+    """RFC 9530 ``sha-256`` digest structured-field value for ``data``."""
+    encoded = base64.b64encode(hashlib.sha256(data).digest()).decode("ascii")
+    return f"sha-256=:{encoded}:"
 
 
 @pytest.fixture
@@ -270,3 +278,98 @@ def test_client_respects_server_append_limit(
     )
 
     assert (http_partition / sim_hex / "big.bin").read_bytes() == payload
+
+
+def test_resumable_upload_completes_multi_chunk(client, http_partition, monkeypatch):
+    head, post, patch = _flask_transport(client)
+    monkeypatch.setattr(ru.requests, "head", head)
+    monkeypatch.setattr(ru.requests, "post", post)
+    monkeypatch.setattr(ru.requests, "patch", patch)
+
+    sim_hex = uuid.uuid4().hex
+    src = http_partition.parent / "reuse.bin"
+    payload = b"0123456789" * 100
+    src.write_bytes(payload)
+
+    # The file is uploaded across several chunks and assembled on the server.
+    ru.resumable_upload(
+        f"http://localhost/v1.3/upload/{sim_hex}/reuse.bin",
+        src,
+        chunk_size=256,
+    )
+    assert (http_partition / sim_hex / "reuse.bin").read_bytes() == payload
+
+
+def test_patch_content_digest_match_accepted(client, http_partition):
+    target = f"{uuid.uuid4().hex}/file.txt"
+    client.post(
+        f"/v1.3/upload/{target}", data=b"", headers={**HEADERS, "Upload-Complete": "?0"}
+    )
+    rv = _patch(
+        client, target, 0, b"hello", complete=False,
+        headers={**HEADERS, "Content-Digest": _digest(b"hello")},
+    )
+    assert rv.status_code == 204
+    assert rv.headers["Upload-Offset"] == "5"
+
+
+def test_patch_content_digest_mismatch_rejected(client, http_partition):
+    target = f"{uuid.uuid4().hex}/file.txt"
+    client.post(
+        f"/v1.3/upload/{target}", data=b"", headers={**HEADERS, "Upload-Complete": "?0"}
+    )
+    # Digest of different bytes than the body -> 400 and nothing appended.
+    rv = _patch(
+        client, target, 0, b"hello", complete=False,
+        headers={**HEADERS, "Content-Digest": _digest(b"goodbye")},
+    )
+    assert rv.status_code == 400
+    assert rv.headers["Upload-Offset"] == "0"
+    assert not (http_partition / target).exists()
+    # The partial exists (created empty by POST) but the rejected body was not
+    # appended.
+    assert (http_partition / (target + ".partial")).read_bytes() == b""
+
+
+def test_multi_chunk_upload_finalizes(client, http_partition):
+    sim_hex = uuid.uuid4().hex
+    target = f"{sim_hex}/file.txt"
+    client.post(
+        f"/v1.3/upload/{target}", data=b"", headers={**HEADERS, "Upload-Complete": "?0"}
+    )
+    _patch(
+        client, target, 0, b"hello", complete=False,
+        headers={**HEADERS, "Content-Digest": _digest(b"hello")},
+    )
+    rv = _patch(
+        client, target, 5, b" world", complete=True,
+        headers={**HEADERS, "Content-Digest": _digest(b" world")},
+    )
+    assert rv.status_code == 200
+    assert (http_partition / sim_hex / "file.txt").read_bytes() == b"hello world"
+
+
+def test_post_content_digest_mismatch_rejected(client, http_partition):
+    sim_hex = uuid.uuid4().hex
+    target = f"{sim_hex}/file.txt"
+    rv = client.post(
+        f"/v1.3/upload/{target}",
+        data=b"hello",
+        headers={**HEADERS, "Upload-Complete": "?0", "Content-Digest": _digest(b"x")},
+    )
+    assert rv.status_code == 400
+    assert not (http_partition / sim_hex / "file.txt.partial").exists()
+
+
+def test_unknown_digest_algorithm_ignored(client, http_partition):
+    # A digest using an algorithm the server cannot recompute is ignored rather
+    # than rejected, so the upload still succeeds.
+    target = f"{uuid.uuid4().hex}/file.txt"
+    client.post(
+        f"/v1.3/upload/{target}", data=b"", headers={**HEADERS, "Upload-Complete": "?0"}
+    )
+    rv = _patch(
+        client, target, 0, b"hello", complete=False,
+        headers={**HEADERS, "Content-Digest": "unixsum=:0061:"},
+    )
+    assert rv.status_code == 204

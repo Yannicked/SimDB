@@ -42,7 +42,7 @@ from rich.progress import (
 )
 from semantic_version import Version
 
-from simdb.checksum import calculate_checksum
+from simdb.checksum import CHECKSUM_ALGORITHM, READ_CHUNK_SIZE, hash_file
 from simdb.cli.resumable_upload import resumable_upload
 from simdb.config import Config
 from simdb.database.models import Simulation
@@ -280,7 +280,7 @@ def _file_data_for_partition(
     new_uri = SimDBUrl.build(scheme=partition, path=partition_path.as_posix())
     update: Dict[str, Any] = {
         "uri": new_uri.encoded_string(),
-        "checksum": calculate_checksum(source),
+        "checksum": hash_file(source),
     }
     if not keep_uuid:
         update["uuid"] = uuid.uuid1()
@@ -375,6 +375,10 @@ def _make_http_entry(
     The relative path is taken from :func:`_find_partition_for_file` (the same
     mapping ``push_local`` uses) and namespaced under ``<sim_uuid>/<scheme>/`` so
     uploads from different partitions never collide on the server.
+
+    The checksum is left empty here and filled in later by
+    :func:`_compute_checksums`, so that hashing (a full read of every file) can be
+    reported with a progress bar instead of stalling silently before the upload.
     """
     scheme, rel = _find_partition_for_file(local_path, partitions)
     rel_posix = rel.as_posix().lstrip("/")
@@ -385,7 +389,7 @@ def _make_http_entry(
         FileData(
             type=file_type,
             uri=new_uri.encoded_string(),
-            checksum=calculate_checksum(local_path),
+            checksum="",
             datetime=template.datetime,
             usage=template.usage,
             purpose=template.purpose,
@@ -396,6 +400,30 @@ def _make_http_entry(
         local_path,
         target,
     )
+
+
+def _compute_checksums(files: List[Tuple[FileData, Path, str]]) -> None:
+    """Compute and store the SHA-1 checksum of each file, reporting progress.
+
+    Hashing reads every file in full and is the main delay before the upload
+    starts, so surface it with a byte-level progress bar (mirroring the upload
+    bars). The computed checksum is stored as the catalog checksum.
+    """
+    total_bytes = sum(local_path.stat().st_size for _, local_path, _ in files)
+    with Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        DownloadColumn(),
+        TransferSpeedColumn(),
+        TimeRemainingColumn(),
+    ) as progress:
+        task = progress.add_task("Calculating checksums", total=total_bytes)
+        for file_data, local_path, _target in files:
+            progress.update(task, description=f"Hashing {local_path.name}")
+            file_data.checksum = hash_file(
+                local_path, progress=lambda n: progress.advance(task, n)
+            )
+        progress.update(task, description="Calculated checksums")
 
 
 class RemoteAPI:
@@ -1102,6 +1130,7 @@ class RemoteAPI:
         files = list(itertools.chain(inputs, outputs))
         upload_headers = {"User-Agent": "it_script_basic"}
         if files:
+            _compute_checksums(files)
             self._upload_files(files, upload_headers)
 
         sim_data.inputs.root = [file_data for file_data, _, _ in inputs]
@@ -1330,7 +1359,7 @@ class RemoteAPI:
         response = self.get(f"file/download/{uuid.hex}/{index}", stream=True)
 
         to_path.parent.mkdir(parents=True, exist_ok=True)
-        sha1 = hashlib.sha1()
+        digest = hashlib.new(CHECKSUM_ALGORITHM)
 
         with to_path.open("wb") as f:
             total_length = response.headers.get("content-length")
@@ -1339,8 +1368,8 @@ class RemoteAPI:
             else:
                 downloaded = 0
                 total_length = int(total_length)
-                for data in response.iter_content(chunk_size=4096):
-                    sha1.update(data)
+                for data in response.iter_content(chunk_size=READ_CHUNK_SIZE):
+                    digest.update(data)
                     downloaded += len(data)
                     f.write(data)
                     done = int(50 * downloaded / total_length)
@@ -1356,7 +1385,7 @@ class RemoteAPI:
                     )
                 print("\r", file=out_stream, end="", flush=True)
 
-        if sha1.hexdigest() != checksum:
+        if digest.hexdigest() != checksum:
             raise APIError(f"Checksum failed for file {from_path}")
 
     @versioned_method("v1.2", "v1.3")

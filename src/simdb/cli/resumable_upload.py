@@ -1,8 +1,7 @@
 """Client for the IETF "Resumable Uploads for HTTP" protocol.
 
 This is a small, dependency-free (uses ``requests``, already a dependency)
-implementation of draft-ietf-httpbis-resumable-upload-11 (interop version 8) -
-the same protocol implemented by https://github.com/Yannicked/pyrufh.
+implementation of draft-ietf-httpbis-resumable-upload-11 (interop version 8)
 
 The single public entry point :func:`resumable_upload` uploads a local file to a
 server endpoint that speaks the same protocol. The upload resource is identified
@@ -11,6 +10,8 @@ re-invoking :func:`resumable_upload` with the same arguments - the client asks
 the server (via ``HEAD``) how many bytes it already has and continues from there.
 """
 
+import base64
+import hashlib
 import logging
 from pathlib import Path
 from typing import Callable, Mapping, Optional, Tuple, Union
@@ -25,6 +26,8 @@ INTEROP_VERSION = "8"
 INTEROP_HEADER = "Upload-Draft-Interop-Version"
 #: Content type used for the body of append (``PATCH``) requests.
 PARTIAL_UPLOAD_CONTENT_TYPE = "application/partial-upload"
+DIGEST_ALGORITHM = "sha-256"
+_HASHLIB_NAME = "sha256"
 #: Default size of a single ``PATCH`` chunk (kept below the 10 MB request cap
 #: enforced on the ITER network, see ``RemoteAPI.push_simulation``).
 DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024
@@ -52,6 +55,21 @@ def _parse_bool_field(value: Optional[str]) -> Optional[bool]:
     if value == "?0":
         return False
     return None
+
+
+def _format_digest(digest: bytes) -> str:
+    """Render a raw digest as an RFC 9530 structured-field dictionary value.
+
+    The single member uses :data:`DIGEST_ALGORITHM` as its key and the digest as
+    a base64-encoded byte sequence, e.g. ``sha-256=:47DEQpj8HBSa...:``.
+    """
+    encoded = base64.b64encode(digest).decode("ascii")
+    return f"{DIGEST_ALGORITHM}=:{encoded}:"
+
+
+def _content_digest(data: bytes) -> str:
+    """``Content-Digest`` value for the bytes of a single request body."""
+    return _format_digest(hashlib.new(_HASHLIB_NAME, data).digest())
 
 
 def _header_int(resp: "requests.Response", name: str) -> Optional[int]:
@@ -143,7 +161,8 @@ def resumable_upload(
 
     with path.open("rb") as f:
         _send_chunks(
-            url, f, offset, total, chunk_size, auth, cookies, headers, progress
+            url, f, offset, total, chunk_size,
+            auth, cookies, headers, progress,
         )
 
 
@@ -204,6 +223,7 @@ def _send_chunks(
         patch_headers["Content-Type"] = PARTIAL_UPLOAD_CONTENT_TYPE
         patch_headers["Upload-Offset"] = str(offset)
         patch_headers["Upload-Complete"] = _bool_field(complete)
+        patch_headers["Content-Digest"] = _content_digest(chunk)
 
         try:
             resp = requests.patch(
