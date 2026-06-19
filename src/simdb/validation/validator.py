@@ -139,13 +139,6 @@ def _load_schema(path: Union[Path, str]):
                 f"Failed to read validation schema from file {path}"
             ) from err
 
-    # Check _redirect stub and resolve file to the stub file's directory
-    if isinstance(schema, dict) and "_redirect" in schema:
-        target = Path(schema["_redirect"])
-        if not target.is_absolute():
-            target = path.parent / target
-        return _load_schema(target)
-
     return schema
 
 
@@ -157,7 +150,7 @@ class Validator:
     def validation_schemas(
         cls, config: Config, simulation: Optional[Simulation], path=None
     ) -> List[Dict]:
-        root = Path(
+        configured_path = Path(
             str(
                 config.get_option(
                     "validation.path", default=str(config.config_directory)
@@ -165,11 +158,19 @@ class Validator:
             )
         )
 
+        if not configured_path.is_file():
+            raise ConfigError(
+                f"validation.path '{configured_path}' is not a valid file. "
+                "Set validation.path to the full path of your validation "
+                "schema YAML file."
+            )
+        default_schema_path = configured_path
+
         paths = []
         if path:
             paths.append(path)
         else:
-            paths.append(root / "validation-schema.yaml")
+            paths.append(default_schema_path)
 
         # Look for config sections like [validation "key=value"] and see if the
         # simulationhas metadata matching the given test. If matching, adding the
