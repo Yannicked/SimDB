@@ -22,6 +22,7 @@ from simdb.remote.models import (
 from simdb.workers.tasks import (
     complete_ingestion_task,
     copy_files_task,
+    validate_imas_task,
 )
 
 api = Namespace("simulations", path="/")
@@ -91,7 +92,18 @@ class SimulationList(Resource):
         # The complete job will set simulation.ingestion_status = Completed
         complete = complete_ingestion_task.si(simulation.uuid)
 
-        _ = (copy_files | complete).apply_async()
+        # Honor validation.auto_validate (as v1/v1.1/v1.2 do): when enabled, run
+        # validation between copy and complete so a failing simulation is not
+        # silently marked completed. error_on_fail is enforced inside the task.
+        if current_app.simdb_config.get_option(
+            "validation.auto_validate", default=False
+        ):
+            validate = validate_imas_task.si(simulation.uuid)
+            chain = copy_files | validate | complete
+        else:
+            chain = copy_files | complete
+
+        _ = chain.apply_async()
 
         result = SimulationPostResponse(ingested=simulation.uuid)
 
