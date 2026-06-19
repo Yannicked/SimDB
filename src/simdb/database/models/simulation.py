@@ -361,19 +361,14 @@ class Simulation(Base):
             outputs = checked_get(data, "outputs", list)
             simulation.outputs = [File.from_data(el) for el in outputs]
         if "metadata" in data:
-            metadata = data.get("metadata")
-            if isinstance(metadata, list):
-                meta_dict = {}
-                for el in metadata:
-                    if not isinstance(el, dict):
-                        raise Exception(
-                            "corrupted metadata element - expected dictionary"
-                        )
-                    if "element" in el and "value" in el:
-                        meta_dict[el["element"]] = el["value"]
-                simulation._set_metadata_dict(meta_dict)
-            elif isinstance(metadata, dict):
-                simulation._set_metadata_dict(metadata)
+            metadata = checked_get(data, "metadata", list)
+            meta_dict = {}
+            for el in metadata:
+                if not isinstance(el, dict):
+                    raise Exception("corrupted metadata element - expected dictionary")
+                if "element" in el and "value" in el:
+                    meta_dict[el["element"]] = el["value"]
+            simulation._set_metadata_dict(meta_dict)
         return simulation
 
     @classmethod

@@ -22,10 +22,7 @@ def _custom_hook(obj: Dict[str, str]) -> Any:
             return uuid.UUID(obj["hex"])
         elif obj["_type"] == "numpy.ndarray":
             np_bytes = base64.decodebytes(obj["bytes"].encode())
-            arr = np.frombuffer(np_bytes, dtype=obj["dtype"])
-            if "shape" in obj:
-                arr = arr.reshape(obj["shape"])
-            return arr
+            return np.frombuffer(np_bytes, dtype=obj["dtype"])
         else:
             obj_type = obj["_type"]
             raise ValueError(f"Unknown type to deserialise {obj_type}.")
@@ -52,16 +49,4 @@ class CustomEncoder(json.JSONEncoder):
             return {"_type": "uuid.UUID", "hex": o.hex}
         elif isinstance(o, enum.Enum):
             return o.value
-        elif isinstance(o, np.ndarray):
-            encoded_bytes = base64.b64encode(o.data).decode()
-            return {
-                "_type": "numpy.ndarray",
-                "dtype": o.dtype.name,
-                "shape": o.shape,
-                "bytes": encoded_bytes,
-            }
-        elif isinstance(o, np.integer):
-            return int(o)
-        elif isinstance(o, np.floating):
-            return float(o)
         return super().default(o)
