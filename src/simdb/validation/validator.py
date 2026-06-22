@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import cerberus
 import numpy as np
@@ -8,6 +8,8 @@ import yaml
 
 from simdb.config import Config, ConfigError
 from simdb.database.models.simulation import Simulation
+
+ValidatorBase = cast(Any, cerberus.Validator)
 
 
 class TestParameters:
@@ -22,8 +24,8 @@ class ValidationError(Exception):
     pass
 
 
-class CustomValidator(cerberus.Validator):  # type: ignore
-    types_mapping = cerberus.Validator.types_mapping.copy()  # type: ignore
+class CustomValidator(ValidatorBase):
+    types_mapping = cast(Any, cerberus.Validator).types_mapping.copy()
     types_mapping["numpy"] = cerberus.TypeDefinition("numpy", (np.ndarray,), ())
 
     def _validate_exists(self, check_exists, field, value):
@@ -32,13 +34,6 @@ class CustomValidator(cerberus.Validator):  # type: ignore
              'check_with': 'type'}"""
         if check_exists and not Path(value).exists():
             self._error(field, "File must exist")
-
-    def _validate_checksum(self, check_checksum, field, value):
-        """The rule's arguments are validated against this schema:
-        {'type': ['string'],
-             'check_with': 'type'}"""
-        if False:
-            self._error(field, "File checksum must be valid")
 
     def _validate_min_value(self, min_value, field, value):
         """The rule's arguments are validated against this schema:

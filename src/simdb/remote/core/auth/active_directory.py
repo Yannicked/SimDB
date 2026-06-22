@@ -1,6 +1,6 @@
 from typing import Optional
 
-from easyad import EasyAD
+from easyad import EasyAD  # type: ignore[import]
 from flask import Request
 
 from simdb.config import Config

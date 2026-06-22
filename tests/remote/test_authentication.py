@@ -1,5 +1,6 @@
 import importlib
-from typing import ClassVar
+import importlib.util
+from typing import TYPE_CHECKING, ClassVar, cast
 from unittest import mock
 
 import pytest
@@ -9,9 +10,12 @@ from simdb.config import Config
 has_easyad = importlib.util.find_spec("easyad") is not None
 has_flask = importlib.util.find_spec("flask") is not None
 if has_flask:
-    from flask import Flask
+    from flask import Flask, Request
 
     from simdb.remote.core.auth import User, check_auth, check_role
+
+if TYPE_CHECKING:
+    from flask import Request
 
 
 @mock.patch("simdb.config.Config.get_option")
@@ -19,8 +23,8 @@ if has_flask:
 def test_check_role(get_string_option):
     app = Flask("test")
     config = Config()
-    app.simdb_config = config
-    with app.app_context():
+    app.simdb_config = config  # type: ignore
+    with app.app_context():  # type: ignore
         get_string_option.return_value = 'user1,"user2", user3'
         ok = check_role(config, User("user1", ""), "test_role")
         assert ok
@@ -54,7 +58,7 @@ def test_check_auth(get_option, easy_ad):
 
     request.authorization.username = "admin"
     request.authorization.password = "abc123"
-    ok = check_auth(config, request)
+    ok = check_auth(config, cast(Request, request))
     assert ok
     get_option.assert_called_once_with("server.admin_password")
 
@@ -66,7 +70,7 @@ def test_check_auth(get_option, easy_ad):
     easy_ad.return_value.authenticate_user.side_effect = auth
     request.authorization.username = "user"
     request.authorization.password = "password"
-    ok = check_auth(config, request)
+    ok = check_auth(config, cast(Request, request))
     assert ok
     easy_ad.assert_called_with(
         {
@@ -81,5 +85,5 @@ def test_check_auth(get_option, easy_ad):
     request.authorization.username = "user"
     request.authorization.password = "wrong"
     request.headers = {"Authorization": ""}
-    ok = check_auth(config, request)
+    ok = check_auth(config, cast(Request, request))
     assert not ok

@@ -135,12 +135,12 @@ class Config:
         self._load_environmental_vars()
 
         # Import configuration options from files defined by environment variables
-        path = self.get_string_option("user.config-path", default="")
+        path = self.get_string_option("user.config.path", default="")
         if path:
             self._user_config_path = Path(path)
             self._user_config_dir = self._user_config_path.parent
 
-        path = self.get_string_option("site.config-path", default="")
+        path = self.get_string_option("site.config.path", default="")
         if path:
             self._site_config_path = Path(path)
             self._site_config_dir = self._site_config_path.parent
@@ -229,9 +229,11 @@ class Config:
         the users configuration directory.
         """
         self._user_config_dir.mkdir(parents=True, exist_ok=True)
-        with self._user_config_path.open("w") as file:
+        fd = os.open(
+            self._user_config_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600
+        )
+        with os.fdopen(fd, "w") as file:
             self._parser.write(file)
-        self._user_config_path.chmod(0o600)
 
     def sections(self) -> List[str]:
         """

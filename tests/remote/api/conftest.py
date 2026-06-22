@@ -1,5 +1,6 @@
 import base64
 import importlib
+import importlib.util
 import os
 import shutil
 import tempfile
@@ -34,7 +35,7 @@ for _ in range(100):
 @pytest.fixture(scope="function")
 def client():
     if not has_flask:
-        pytest.skip("Flask not installed")
+        pytest.skip("Flask not installed")  # type: ignore
     config = Config()
     config.load()
     db_fd, db_file = tempfile.mkstemp()
@@ -66,7 +67,7 @@ def client():
 @pytest.fixture(scope="function")
 def client_copy_files():
     if not has_flask:
-        pytest.skip("Flask not installed")
+        pytest.skip("Flask not installed")  # type: ignore
     config = Config()
     config.load()
     db_fd, db_file = tempfile.mkstemp()
