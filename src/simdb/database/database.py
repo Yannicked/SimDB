@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Tuple, cast
 
 import appdirs
 import sqlalchemy.orm
-from sqlalchemy import String, Text, asc, create_engine, desc, func, or_, text
+from sqlalchemy import String, Text, asc, create_engine, desc, func, or_, select, text
 from sqlalchemy import cast as sql_cast
 from sqlalchemy import or_ as sql_or
 from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
@@ -50,7 +50,7 @@ if TYPING:
         def commit(self):
             pass
 
-        def delete(self, obj: Base):
+        def delete(self, instance: Base):
             pass
 
         def add(self, obj: Base, *args, **kwargs):
@@ -320,7 +320,7 @@ class Database:
             for name in meta_keys:
                 if name in ("alias", "uuid"):
                     continue
-                names_filters.append(m_b.c.element.ilike(name))  # type: ignore
+                names_filters.append(m_b.c.element.ilike(name))
             if names_filters:
                 query = query.filter(or_(*names_filters))
 
@@ -403,7 +403,7 @@ class Database:
                     query = query.filter(Simulation.alias.ilike(f"%{value}%"))
                 elif name == "uuid":
                     query = query.filter(
-                        func.REPLACE(cast(Simulation.uuid, String), "-", "").ilike(
+                        func.REPLACE(sql_cast(Simulation.uuid, String), "-", "").ilike(
                             "%{}%".format(value.replace("-", ""))
                         )
                     )
@@ -411,10 +411,9 @@ class Database:
                 if name == "alias":
                     query = query.filter(Simulation.alias.notilike(f"%{value}%"))
                 elif name == "uuid":
+                    uuid_col = func.REPLACE(sql_cast(Simulation.uuid, String), "-", "")
                     query = query.filter(
-                        func.REPLACE(cast(Simulation.uuid, String), "-", "").notilike(
-                            "%{}%".format(value.replace("-", ""))
-                        )
+                        uuid_col.notilike("%{}%".format(value.replace("-", "")))
                     )
             elif query_type == QueryType.GT:
                 if name == "creation_date":
@@ -537,11 +536,11 @@ class Database:
             query = (
                 self.session.query(s_b, m_b)
                 .outerjoin(Simulation.meta)
-                .filter(s_b.c.id.in_(sim_ids))  # type: ignore
+                .filter(s_b.c.id.in_(sim_ids))
             )
-            query = query.filter(m_b.c.element.in_(meta_keys))  # type: ignore
+            query = query.filter(m_b.c.element.in_(meta_keys))
         else:
-            query = self.session.query(s_b).filter(s_b.c.id.in_(sim_ids))  # type: ignore
+            query = self.session.query(s_b).filter(s_b.c.id.in_(sim_ids))
 
         if sort_query is not None:
             query = query.join(sort_query, Simulation.id == sort_query.c.id).order_by(
@@ -562,10 +561,10 @@ class Database:
 
     def get_simulation_parents(self, simulation: "Simulation") -> List[dict]:
         subquery = (
-            self.session.query(File.checksum)
-            .filter(File.checksum != "")
-            .filter(File.input_for.contains(simulation))
-            .subquery()
+            select(File.checksum)
+            .where(File.checksum != "")
+            .where(File.input_for.contains(simulation))
+            .correlate(None)
         )
         query = (
             self.session.query(Simulation.uuid, Simulation.alias)
@@ -580,10 +579,10 @@ class Database:
         self, simulation: "Simulation"
     ) -> List[SimulationReference]:
         subquery = (
-            self.session.query(File.checksum)
-            .filter(File.checksum != "")
-            .filter(File.input_for.contains(simulation))
-            .subquery()
+            select(File.checksum)
+            .where(File.checksum != "")
+            .where(File.input_for.contains(simulation))
+            .correlate(None)
         )
         query = (
             self.session.query(Simulation.uuid, Simulation.alias)
@@ -596,10 +595,10 @@ class Database:
 
     def get_simulation_children(self, simulation: "Simulation") -> List[dict]:
         subquery = (
-            self.session.query(File.checksum)
-            .filter(File.checksum != "")
-            .filter(File.output_of.contains(simulation))
-            .subquery()
+            select(File.checksum)
+            .where(File.checksum != "")
+            .where(File.output_of.contains(simulation))
+            .correlate(None)
         )
         query = (
             self.session.query(Simulation.uuid, Simulation.alias)
@@ -614,10 +613,10 @@ class Database:
         self, simulation: "Simulation"
     ) -> List[SimulationReference]:
         subquery = (
-            self.session.query(File.checksum)
-            .filter(File.checksum != "")
-            .filter(File.output_of.contains(simulation))
-            .subquery()
+            select(File.checksum)
+            .where(File.checksum != "")
+            .where(File.output_of.contains(simulation))
+            .correlate(None)
         )
         query = (
             self.session.query(Simulation.uuid, Simulation.alias)
@@ -673,7 +672,7 @@ class Database:
         self.session.commit()
 
     def list_watchers(self, sim_ref: str) -> List["Watcher"]:
-        return self._find_simulation(sim_ref).watchers
+        return list(self._find_simulation(sim_ref).watchers)
 
     def list_metadata_keys(self) -> List[dict]:
         if self.engine.dialect.name == "postgresql":

@@ -78,7 +78,7 @@ class URI(sql_types.TypeDecorator):
             return value
         return urilib.URI(value)
 
-    def process_literal_param(self, value, dialect) -> Optional[urilib.URI]:
+    def process_literal_param(self, value, dialect):
         return self.process_result_value(value, dialect)
 
 
@@ -99,10 +99,12 @@ class ChoiceType(sql_types.TypeDecorator):
             raise TypeError("Values in choices dict must be unique")
         super().__init__(**kw)
 
-    def process_bind_param(self, value: str, dialect):
+    def process_bind_param(self, value: Optional[str], dialect):
         return self._choices_inverse[self._enum_type(value)]
 
-    def process_result_value(self, value: str, dialect):
+    def process_result_value(self, value: Optional[str], dialect):
+        if value is None:
+            return None
         return self._choices[value]
 
     def process_literal_param(self, value, dialect):

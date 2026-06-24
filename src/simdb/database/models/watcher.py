@@ -1,9 +1,8 @@
 from typing import Any, Dict, Final
 
 from email_validator import validate_email
-from sqlalchemy import Column
 from sqlalchemy import types as sql_types
-from sqlalchemy.orm import validates
+from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from simdb.docstrings import inherit_docstrings
 from simdb.notifications import Notification
@@ -28,11 +27,12 @@ class Watcher(Base):
     }
 
     __tablename__ = "watchers"
-    id = Column(sql_types.Integer, primary_key=True)
-    username = Column(sql_types.String(250))
-    email = Column(sql_types.String(1000), nullable=False)
-    notification = Column(
-        ChoiceType(choices=NOTIFICATION_CHOICES, length=1, enum_type=Notification)
+    id: Mapped[int] = mapped_column(sql_types.Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(sql_types.String(250), nullable=True)
+    email: Mapped[str] = mapped_column(sql_types.String(1000), nullable=False)
+    notification: Mapped[Notification] = mapped_column(
+        ChoiceType(choices=NOTIFICATION_CHOICES, length=1, enum_type=Notification),
+        nullable=True,
     )
 
     @validates("email")

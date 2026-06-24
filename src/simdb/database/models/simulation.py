@@ -4,10 +4,12 @@ import uuid
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import datetime
+from datetime import datetime as datetime_
 from enum import Enum
 from getpass import getuser
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
+from uuid import UUID as PyUUID
 
 from simdb.remote.models import (
     FileDataList,
@@ -22,7 +24,7 @@ if sys.version_info < (3, 11):
 
 from sqlalchemy import Column, ForeignKey, Table
 from sqlalchemy import types as sql_types
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import DynamicMapped, Mapped, mapped_column, relationship
 
 if "sphinx" in sys.modules:
     # Patch to allow sphix doc generation
@@ -103,20 +105,22 @@ class Simulation(Base):
         DELETED = "deleted"
 
     __tablename__ = "simulations"
-    id = Column(sql_types.Integer, primary_key=True)
-    uuid = Column(UUID, nullable=False, unique=True, index=True)
-    alias = Column(sql_types.String(250), nullable=True, unique=True, index=True)
-    datetime = Column(sql_types.DateTime, nullable=False)
-    inputs: List["File"] = relationship(
+    id: Mapped[int] = mapped_column(sql_types.Integer, primary_key=True)
+    uuid: Mapped[PyUUID] = mapped_column(UUID, nullable=False, unique=True, index=True)
+    alias: Mapped[Optional[str]] = mapped_column(
+        sql_types.String(250), nullable=True, unique=True, index=True
+    )
+    datetime: Mapped[datetime_] = mapped_column(sql_types.DateTime, nullable=False)
+    inputs: Mapped[List["File"]] = relationship(
         "File", secondary=simulation_input_files, backref="input_for"
     )
-    outputs: List["File"] = relationship(
+    outputs: Mapped[List["File"]] = relationship(
         "File", secondary=simulation_output_files, backref="output_of"
     )
-    meta: List["MetaData"] = relationship(
+    meta: Mapped[List["MetaData"]] = relationship(
         "MetaData", lazy="raise", cascade="all, delete-orphan"
     )
-    watchers: List["Watcher"] = relationship(
+    watchers: DynamicMapped["Watcher"] = relationship(
         "Watcher", secondary=simulation_watchers, lazy="dynamic"
     )
 
@@ -270,7 +274,7 @@ class Simulation(Base):
     def remove_meta(self, name: str) -> None:
         self.meta = [m for m in self.meta if m.element != name]
 
-    def set_meta(self, name: str, value: str) -> None:
+    def set_meta(self, name: str, value: Any) -> None:
         for m in self.meta:
             if m.element == name:
                 m.value = value

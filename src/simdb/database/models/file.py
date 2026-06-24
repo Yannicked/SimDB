@@ -1,11 +1,12 @@
 import uuid
 from datetime import datetime as datetime_
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, cast
+from uuid import UUID as PyUUID
 
 from dateutil import parser as date_parser
-from sqlalchemy import Column
 from sqlalchemy import types as sql_types
+from sqlalchemy.orm import Mapped, mapped_column
 
 from simdb import uri as urilib
 from simdb.checksum import sha1_checksum
@@ -28,12 +29,14 @@ class File(Base):
     """
 
     __tablename__ = "files"
-    id = Column(sql_types.Integer, primary_key=True)
-    uuid = Column(UUID, nullable=False, unique=True, index=True)
-    uri: urilib.URI = Column(URI(1024), nullable=True)
-    checksum = Column(sql_types.String(64), nullable=True)
-    type = Column(sql_types.Enum(DataObject.Type), nullable=True)
-    datetime = Column(sql_types.DateTime, nullable=False)
+    id: Mapped[int] = mapped_column(sql_types.Integer, primary_key=True)
+    uuid: Mapped[PyUUID] = mapped_column(UUID, nullable=False, unique=True, index=True)
+    uri: Mapped[urilib.URI] = mapped_column(URI(1024), nullable=True)
+    checksum: Mapped[str] = mapped_column(sql_types.String(64), nullable=True)
+    type: Mapped[DataObject.Type] = mapped_column(
+        sql_types.Enum(DataObject.Type), nullable=True
+    )
+    datetime: Mapped[datetime_] = mapped_column(sql_types.DateTime, nullable=False)
 
     def __init__(
         self,
@@ -118,7 +121,7 @@ class File(Base):
         file.datetime = data.datetime
         return file
 
-    def data(self, recurse: bool = False) -> Dict[str, str]:
+    def data(self, recurse: bool = False) -> Dict[str, Any]:
         data = {
             "uuid": self.uuid,
             "uri": str(self.uri),
@@ -130,7 +133,7 @@ class File(Base):
 
     def to_model(self) -> FileData:
         return FileData(
-            type=self.type.name,
+            type=cast(Any, self.type.name),
             uri=str(self.uri),
             uuid=self.uuid,
             checksum=self.checksum,
@@ -144,11 +147,11 @@ class File(Base):
             files = [FileInfo(path=self.uri.path, checksum=self.checksum)]
         else:
             files = [
-                FileInfo(path=path, checksum=sha1_checksum(URI(f"file:{path}")))
+                FileInfo(path=path, checksum=sha1_checksum(urilib.URI(f"file:{path}")))
                 for path in imas_files(self.uri)
             ]
         return FileGetDataResponse(
-            type=self.type.name,
+            type=cast(Any, self.type.name),
             uri=str(self.uri),
             uuid=self.uuid,
             checksum=self.checksum,
