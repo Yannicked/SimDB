@@ -899,9 +899,8 @@ def get_db(config: Config) -> Database:
         )
     elif db_type == "sqlite":
         db_dir = appdirs.user_data_dir("simdb")
-        file = Path(config.get_string_option("database.file", default=None)) or Path(
-            db_dir, "remote.db"
-        )
+        file_str = config.get_string_option("database.file", default=None)
+        file = Path(file_str) if file_str else Path(db_dir, "remote.db")
         file.parent.mkdir(parents=True, exist_ok=True)
         return Database(Database.DBMS.SQLITE, file=file)
     else:

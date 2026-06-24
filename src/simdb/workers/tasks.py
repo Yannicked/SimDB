@@ -227,17 +227,19 @@ def validate_imas_task(simulation_uuid: UUID):
     config.load()
     database = get_db(config)
 
-    simulation = database.get_simulation(simulation_uuid.hex)
-    simulation.ingestion_status = IngestionStatus.VALIDATING
-    database.session.commit()
+    try:
+        simulation = database.get_simulation(simulation_uuid.hex)
+        simulation.ingestion_status = IngestionStatus.VALIDATING
+        database.session.commit()
 
-    for _file in itertools.chain(simulation.inputs, simulation.outputs):
-        # TODO
-        pass
+        for _file in itertools.chain(simulation.inputs, simulation.outputs):
+            # TODO
+            pass
 
-    simulation.ingestion_status = IngestionStatus.VALIDATED
-    database.session.commit()
-    database.close()
+        simulation.ingestion_status = IngestionStatus.VALIDATED
+        database.session.commit()
+    finally:
+        database.close()
 
 
 @celery_app.task
@@ -246,7 +248,9 @@ def complete_ingestion_task(simulation_uuid: UUID):
     config.load()
     database = get_db(config)
 
-    simulation = database.get_simulation(simulation_uuid.hex)
-    simulation.ingestion_status = IngestionStatus.COMPLETED
-    database.session.commit()
-    database.close()
+    try:
+        simulation = database.get_simulation(simulation_uuid.hex)
+        simulation.ingestion_status = IngestionStatus.COMPLETED
+        database.session.commit()
+    finally:
+        database.close()

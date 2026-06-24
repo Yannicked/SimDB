@@ -282,7 +282,7 @@ def imas_files(uri: URI) -> List[Path]:
     """
 
     # Early exit for NetCDF files
-    if uri.scheme == "file" and uri.path and uri.path.suffix == "nc":
+    if uri.scheme == "file" and uri.path and uri.path.suffix == ".nc":
         return [uri.path]
 
     backend = str(uri.path)
