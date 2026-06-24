@@ -5,7 +5,9 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, List, Optional, Tuple, Type
 
+import appdirs
 import click
+from rich.prompt import Confirm
 
 from simdb.cli.manifest import InvalidAlias, Manifest
 from simdb.cli.remote_api import RemoteAPI, RemoteError
@@ -114,11 +116,33 @@ def simulation_modify(
 
 @simulation.command("delete")
 @pass_config
-@click.argument("sim_id")
-def simulation_delete(config: Config, sim_id: str):
-    """Delete the ingested simulation with given SIM_ID (UUID or alias)."""
+@click.argument("sim_id", required=False)
+@click.option(
+    "--all",
+    "delete_all",
+    is_flag=True,
+    help="Reset the local database, deleting all simulations.",
+)
+def simulation_delete(config: Config, sim_id: Optional[str], delete_all: bool):
+    """Delete the ingested simulation with given SIM_ID (UUID or alias).
+
+    Use --all to reset the local database and delete all simulations."""
+    if delete_all and Confirm.ask(
+        "This will delete all locally stored simulation entries, are you sure?"
+    ):
+        db_file = Path(
+            config.get_string_option("db.file", default=None)
+            or f"{appdirs.user_data_dir('simdb')}/sim.db"
+        )
+        db_file.unlink(missing_ok=True)
+        click.echo("Local database reset.")
+        return
 
     db = get_local_db(config)
+
+    if sim_id is None:
+        raise click.ClickException("Either SIM_ID or --all must be provided.")
+
     sim = db.delete_simulation(sim_id)
 
     click.echo(f"Simulation {sim.uuid.hex} deleted.")
