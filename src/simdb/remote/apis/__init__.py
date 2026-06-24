@@ -44,6 +44,12 @@ def register(api, version, namespaces):
         config = setup_state.app.simdb_config
         db_type = config.get_option("database.type")
 
+        # Each blueprint registration runs this hook, so dispose any database
+        # created by a previously-registered blueprint to avoid leaking engines.
+        existing_db = getattr(setup_state.app, "db", None)
+        if existing_db is not None:
+            existing_db.close()
+
         if db_type == "postgres":
             args = config.get_section("database")
             setup_state.app.db = Database(

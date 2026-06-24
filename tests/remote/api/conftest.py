@@ -58,6 +58,7 @@ def client():
     with app.test_client() as client:
         yield client
 
+    app.db.close()
     os.close(db_fd)
     Path(app.simdb_config.get_option("database.file")).unlink()
     shutil.rmtree(upload_dir)
@@ -88,6 +89,7 @@ def client_copy_files():
     with app.test_client() as client:
         yield client
 
+    app.db.close()
     os.close(db_fd)
     Path(app.simdb_config.get_option("database.file")).unlink()
     shutil.rmtree(upload_dir)
