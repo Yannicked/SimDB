@@ -47,7 +47,7 @@ result_backend = redis://localhost:6379/0
 Start a Celery worker using the built-in CLI:
 
 ```bash
-simdb_celery worker
+simdb_worker
 ```
 
 ### Worker with beat scheduler
@@ -56,10 +56,10 @@ For periodic tasks (e.g. cleanup, reports), run both the worker and beat:
 
 ```bash
 # Terminal 1: worker
-simdb_celery worker
+simdb_worker
 
 # Terminal 2: beat scheduler
-simdb_celery beat
+simdb_beat
 ```
 
 ### Flower monitoring

@@ -2,12 +2,12 @@ from enum import Enum
 
 
 class IngestionStatus(str, Enum):
-    QUEUED = "queued"
-    COPYING = "copying"
-    COPIED = "copied"
-    VALIDATING = "validating"
-    VALIDATED = "validated"
-    COMPLETED = "completed"
+    QUEUED = "QUEUED"
+    COPYING = "COPYING"
+    COPIED = "COPIED"
+    VALIDATING = "VALIDATING"
+    VALIDATED = "VALIDATED"
+    COMPLETED = "COMPLETED"
 
-    COPY_FAILED = "copy_failed"
-    VALIDATION_FAILED = "validation_failed"
+    COPY_FAILED = "COPY_FAILED"
+    VALIDATION_FAILED = "VALIDATION_FAILED"

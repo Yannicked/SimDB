@@ -249,3 +249,4 @@ def complete_ingestion_task(simulation_uuid: UUID):
     simulation = database.get_simulation(simulation_uuid.hex)
     simulation.ingestion_status = IngestionStatus.COMPLETED
     database.session.commit()
+    database.close()

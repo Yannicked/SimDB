@@ -54,10 +54,10 @@ To run actual background workers during development:
 
 ```bash
 # Worker
-simdb_celery worker
+simdb_worker
 
 # Beat scheduler (if needed)
-simdb_celery beat
+simdb_beat
 ```
 
 See the [Celery documentation](celery.md) for full details.
