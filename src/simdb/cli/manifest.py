@@ -46,9 +46,7 @@ class DataType(Enum):
     IMAS = auto()
 
 
-def _get_data_object_type(data: dict):
-    uri: SimDBUrl = data["uri"]
-
+def _get_data_object_type(uri: SimDBUrl) -> "DataType":
     if uri.scheme == "imas":
         return DataType.IMAS
     elif uri.scheme == "file":
@@ -70,7 +68,12 @@ class DataObject(BaseModel):
 
     uri: ManifestUrl = Field()
 
-    _type: DataType = PrivateAttr(default_factory=_get_data_object_type)
+    _type: DataType = PrivateAttr(default=DataType.UNKNOWN)
+
+    @model_validator(mode="after")
+    def _resolve_type(self) -> "DataObject":
+        self._type = _get_data_object_type(self.uri)
+        return self
 
     @property
     def name(self) -> str:
