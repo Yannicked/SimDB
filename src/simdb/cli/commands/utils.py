@@ -62,18 +62,17 @@ def _build_array_body(data: list, shape: Tuple[int, ...]) -> str:
     if len(shape) == 1:
         return f"[{_fmt_row(data)}]"
 
-    if len(shape) == 2:
-        rows = data if len(data) <= 8 else [*data[:3], ..., *data[-3:]]
-        lines = []
-        for row in rows:
-            if row is ...:
-                lines.append(" ...")
-            else:
-                lines.append(f" [{_fmt_row(row)}]")
-        inner = "\n".join(lines)
-        return f"[\n{inner}\n]"
+    if len(shape) == 2:                                                                                                                                                                                                                                                                                                                       
+          if len(data) <= 8:
+              rows = data
+              lines = [f" [{_fmt_row(row)}]" for row in rows]
+          else:
+              lines = [f" [{_fmt_row(row)}]" for row in data[:3]]
+              lines.append(" ...")
+              lines += [f" [{_fmt_row(row)}]" for row in data[-3:]]
+          return f"[\n{'\n'.join(lines)}\n]"
 
-    return f"<{len(shape)}-D array, shape {shape}>"
+      return f"<{len(shape)}-D array, shape {shape}>"
 
 
 def _iter_numeric(data: Any) -> Iterable[float]:
