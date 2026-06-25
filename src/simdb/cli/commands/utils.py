@@ -1,8 +1,8 @@
-import plotext
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple, TypeVar
 
 import click
+import plotext
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
