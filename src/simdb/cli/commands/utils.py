@@ -1,4 +1,4 @@
-import importlib
+import plotext
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple, TypeVar
 
@@ -171,12 +171,6 @@ def show_quantity_textual_plot(
         print_quantity(q, label=label)
         return
 
-    try:
-        plotext = importlib.import_module("plotext")
-    except ImportError:
-        print_quantity(q, label=label)
-        return
-
     y_values = [float(value) for value in data]
     shape = _get_shape(data)
     x_values = None
@@ -211,6 +205,7 @@ def show_quantity_textual_plot(
         stats=stats,
         shape=shape,
     )
+    print_quantity(q, label=label)
 
 
 def print_quantity(q: dict, label: str = "", show_stats: bool = True) -> None:

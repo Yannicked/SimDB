@@ -2799,7 +2799,7 @@ requires-dist = [
     { name = "myst-parser", marker = "extra == 'build-docs'", specifier = ">=0.18.0" },
     { name = "nbsphinx", marker = "extra == 'build-docs'", specifier = ">=0.8.0" },
     { name = "numpy", specifier = ">=1.14" },
-    { name = "plotext", specifier = ">=5.3.2" },
+    { name = "plotext", specifier = "==5.3.2" },
     { name = "psycopg2-binary", marker = "extra == 'postgres'", specifier = ">=2.8.0" },
     { name = "pydantic", specifier = ">=2.10.6" },
     { name = "pyjwt", specifier = ">=1.4.0" },
