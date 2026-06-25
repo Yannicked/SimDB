@@ -581,6 +581,6 @@ class ErrorResponse(BaseModel):
 
 
 class SimulationStatusResponse(BaseModel):
-    """Response from te get simulation status endpoint."""
+    """Response from the get simulation status endpoint."""
 
     status: IngestionStatus
