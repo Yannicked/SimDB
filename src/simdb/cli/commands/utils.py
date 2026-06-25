@@ -80,7 +80,7 @@ def _iter_numeric(data: Any) -> Iterable[float]:
     if isinstance(data, list):
         for item in data:
             yield from _iter_numeric(item)
-    elif isinstance(data, (int, float)) and data is not None:
+    elif _is_numeric(data):
         yield float(data)
 
 
