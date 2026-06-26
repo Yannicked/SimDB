@@ -31,3 +31,8 @@ src/simdb/_version.py
 *.egg-info
 *.egg
 *.whl
+.simdb-instances/
+_study
+.serena
+myenv
+testpulse
