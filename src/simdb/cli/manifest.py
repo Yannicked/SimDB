@@ -512,15 +512,16 @@ class Manifest:
         # convert manifest version 1 metadata to format expected by version 2+
         metadata = {}
         metdata_list = []
-        for entry in self._data["metadata"]:
-            if "values" in entry:
-                values = entry.pop("values")
-                for k, v in values.items():
-                    metadata[k] = v
-                    metdata_list.append({k: v})
-        self._data["metadata"] = metdata_list
-        self._metadata = metadata
-        self._data["manifest_version"] = 2
+        if isinstance(self._data, dict):
+            for entry in self._data["metadata"]:
+                if "values" in entry:
+                    values = entry.pop("values")
+                    for k, v in values.items():
+                        metadata[k] = v
+                        metdata_list.append({k: v})
+            self._data["metadata"] = metdata_list
+            self._metadata = metadata
+            self._data["manifest_version"] = 2
 
     @classmethod
     def _convert_files(cls, files: List[Dict[str, str]]) -> List[Dict[str, "URI"]]:
