@@ -1,11 +1,13 @@
 # import datetime
-import re
-import os
-import urllib
-from enum import Enum, auto
-from typing import Iterable, Union, Dict, List, Tuple, Optional, TextIO, Type
 import glob
+import os
+import re
+import urllib
+import warnings
+from enum import Enum, auto
 from pathlib import Path
+from typing import Dict, Iterable, List, Optional, TextIO, Tuple, Type, Union
+
 import numpy as np
 import yaml
 
@@ -232,7 +234,9 @@ class DataObjectValidator(ListValuesValidator):
                 if uri.scheme not in ("uda", "file", "imas"):
                     raise InvalidManifest(f"unknown uri scheme: {uri.scheme}")
                 if str(uri) in seen_uris:
-                    raise InvalidManifest(f"Duplicate URI found in {self.section_name}: {uri}")
+                    raise InvalidManifest(
+                        f"Duplicate URI found in {self.section_name}: {uri}"
+                    )
                 seen_uris.add(str(uri))
 
 
@@ -281,6 +285,7 @@ class AliasValidator(ManifestValidator):
         if urllib.parse.quote(value) != value:
             raise InvalidAlias(f"illegal characters in alias: {value}")
 
+
 # class CreationDateValidator(ManifestValidator):
 #     """
 #     Validator for simulation CreationDate.
@@ -288,11 +293,11 @@ class AliasValidator(ManifestValidator):
 
 #     def __init__(self, version: int):
 #         super().__init__(version)
-    
+
 #     def validate(self, value):
 #         if not isinstance(value, str):
 #             raise InvalidManifest("CreationDate must be a string")
-        
+
 #         # Validate the datetime format
 #         try:
 #             datetime.datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
@@ -307,6 +312,7 @@ class DescriptionValidator(ManifestValidator):
 
     pass
 
+
 class ResponsibleValidator(ManifestValidator):
     """
     Validator for simulation Responsible.
@@ -314,14 +320,17 @@ class ResponsibleValidator(ManifestValidator):
 
     pass
 
-def ndarray_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode) -> np.ndarray:
+
+def ndarray_constructor(
+    loader: yaml.SafeLoader, node: yaml.nodes.MappingNode
+) -> np.ndarray:
     mapping = loader.construct_mapping(node, deep=True)
-    return np.array(mapping['data'], mapping.get('dtype', None))
+    return np.array(mapping["data"], mapping.get("dtype", None))
 
 
 def get_loader() -> Type[yaml.SafeLoader]:
     loader = yaml.SafeLoader
-    loader.add_constructor('!ndarray', ndarray_constructor)
+    loader.add_constructor("!ndarray", ndarray_constructor)
     return loader
 
 
@@ -334,13 +343,13 @@ class MetaDataValidator(ListValuesValidator):
 
     def __init__(self, version: int) -> None:
         section_name = "metadata"
-        expected_keys = ()
+        # expected_keys = () # never used
         required_keys = ("machine", "code", "description")
         super().__init__(version, section_name, required_keys)
 
     def validate(self, values: Union[list, dict]) -> None:
         super().validate(values)
-        
+
         for item in values:
             name = next(iter(item))
             for char in MetaDataValidator.forbidden_characters:
@@ -416,7 +425,11 @@ class Manifest:
     def inputs(self) -> Iterable[Source]:
         sources = []
         base_path = self._path.absolute().parent
-        if isinstance(self._data, dict) and "inputs" in self._data and self._data["inputs"]:
+        if (
+            isinstance(self._data, dict)
+            and "inputs" in self._data
+            and self._data["inputs"]
+        ):
             for i in self._data["inputs"]:
                 source = Source(base_path, i["uri"])
                 if source.type == DataObject.Type.FILE:
@@ -457,7 +470,7 @@ class Manifest:
         if isinstance(self._data, dict):
             return self._data.get("responsible_name", None)
         return None
-     
+
     @property
     def version(self) -> int:
         if isinstance(self._data, dict):
@@ -508,6 +521,20 @@ class Manifest:
                             new_codes.append(v)
                     value["codes"] = new_codes
 
+    def _convert_v1_metadata(self) -> None:
+        # convert manifest version 1 metadata to format expected by version 2+
+        metadata = {}
+        metdata_list = []
+        for entry in self._data["metadata"]:
+            if "values" in entry:
+                values = entry.pop("values")
+                for k, v in values.items():
+                    metadata[k] = v
+                    metdata_list.append({k: v})
+        self._data["metadata"] = metdata_list
+        self._metadata = metadata
+        self._data["manifest_version"] = 2
+
     @classmethod
     def _convert_files(cls, files: List[Dict[str, str]]) -> List[Dict[str, "URI"]]:
         from ..uri import URI
@@ -542,7 +569,7 @@ class Manifest:
                 raise InvalidManifest("badly formatted manifest - " + str(err))
 
         if isinstance(self._data, dict) and "metadata" in self._data:
-            metadata = self._data["metadata"] or []
+            # metadata = self._data["metadata"] or [] # never used
             self._metadata["metadata"] = self._data["metadata"]
             # for item in metadata:
             #     if "path" in item:
@@ -552,7 +579,7 @@ class Manifest:
             #         self._load_metadata(file_path, path)
             #     elif "summary" in item:
             #         self._metadata["summary"] = item["summary"]
-                    # _update_dict(self._metadata, item["values"])
+            # _update_dict(self._metadata, item["values"])
 
     def save(self, out_file: TextIO) -> None:
         """
@@ -578,11 +605,25 @@ class Manifest:
                 "badly formatted manifest - top level sections must be keys not a list"
             )
 
-        if "manifest_version" not in self._data.keys():
-            print("warning: no version given in manifest, assuming version 2.")
+        if "manifest_version" not in self._data:
+            if "version" in self._data and self._data["version"] == 1:
+                warnings.warn(
+                    "Found 'version' field for manifest version 1, please update "
+                    "to 'manifest_version'",
+                    DeprecationWarning,
+                    stacklevel=1,
+                )
+                self._data["manifest_version"] = self._data.pop("version")
+            else:
+                warnings.warn(
+                    "No version given in manifest, assuming version 2.", stacklevel=1
+                )
 
-        version = self.version
-        
+        if self.manifest_version == 1:
+            self._convert_v1_metadata()
+
+        version = self.manifest_version
+
         if version == 2:
             section_validators = {
                 "manifest_version": VersionValidator(version),
@@ -599,11 +640,13 @@ class Manifest:
             if section not in section_validators.keys():
                 raise InvalidManifest(f"Unknown manifest section found {section}.")
 
-        required_sections = ("manifest_version", "outputs", "inputs") 
+        required_sections = ("manifest_version", "outputs", "inputs")
         for section in required_sections:
             if section not in self._data.keys():
-                raise InvalidManifest(f"Required manifest section \'{section}\' not found.")
+                raise InvalidManifest(
+                    f"Required manifest section '{section}' not found."
+                )
 
         for name, values in self._data.items():
-            section_validators[name].validate(values)        
+            section_validators[name].validate(values)
         self._convert_version()
