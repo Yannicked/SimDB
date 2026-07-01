@@ -73,10 +73,34 @@ outputs:
     assert Path(inputs[0].uri.path) == input_file
 
 
-def test_invalid_manifest_version(tmp_path):
-    # version must be 2
+def test_version_1_manifest_is_converted_to_version_2(tmp_path):
+    # Version 1 manifests are upgraded to version 2 with a deprecation warning.
     manifest_yaml = """\
 manifest_version: 1
+alias: legacy-alias
+inputs: []
+outputs: []
+metadata:
+  - values:
+      machine: ITER
+      code: METIS
+"""
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(manifest_yaml)
+
+    with pytest.warns(DeprecationWarning, match="version 1 is deprecated"):
+        manifest = Manifest.load_from_file(manifest_file)
+
+    assert manifest.manifest_version == 2
+    assert manifest.alias == "legacy-alias"
+    # v1 "values" metadata is flattened into v2 name/value pairs.
+    assert manifest.metadata == {"machine": "ITER", "code": "METIS"}
+
+
+def test_unknown_manifest_version_is_rejected(tmp_path):
+    # Only versions 1 (converted) and 2 are supported.
+    manifest_yaml = """\
+manifest_version: 3
 inputs: []
 outputs: []
 """

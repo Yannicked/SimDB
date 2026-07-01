@@ -123,6 +123,53 @@ class Sink(DataObject):
     pass
 
 
+def _convert_v1_metadata(metadata: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Flatten version 1 ``values`` metadata entries into version 2 name/value pairs.
+
+    Version 1 stores metadata as a list of ``{"values": {name: value, ...}}``
+    entries, whereas version 2 expects a list of single ``{name: value}`` pairs.
+    """
+    converted: List[Dict[str, Any]] = []
+    for entry in metadata:
+        values = entry.get("values", {})
+        for name, value in values.items():
+            converted.append({name: value})
+    return converted
+
+
+class ManifestV1(BaseModel):
+    """Manifest schema for version 1.
+
+    Only kept around to load legacy manifests and convert them to the current
+    (version 2) format via :meth:`to_v2_data`. Inputs and outputs are carried
+    through unchanged (both versions use the ``uri`` form) and are validated by
+    :class:`Manifest`; only the metadata layout differs between versions.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    manifest_version: Literal[1] = Field(default=1)
+    alias: Optional[str] = None
+    responsible_name: Optional[str] = None
+    inputs: List[Dict[str, Any]] = Field(default_factory=list)
+    outputs: List[Dict[str, Any]] = Field(default_factory=list)
+    metadata: List[Dict[str, Any]] = Field(default_factory=list)
+
+    def to_v2_data(self) -> Dict[str, Any]:
+        """Return the manifest as raw version 2 data ready for ``Manifest``."""
+        data: Dict[str, Any] = {
+            "manifest_version": 2,
+            "inputs": self.inputs,
+            "outputs": self.outputs,
+            "metadata": _convert_v1_metadata(self.metadata),
+        }
+        if self.alias is not None:
+            data["alias"] = self.alias
+        if self.responsible_name is not None:
+            data["responsible_name"] = self.responsible_name
+        return data
+
+
 class Manifest(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -141,7 +188,10 @@ class Manifest(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def check_deprecated_version(cls, data: Any) -> Any:
-        if isinstance(data, dict) and "version" in data:
+        if not isinstance(data, dict):
+            return data
+
+        if "version" in data:
             warnings.warn(
                 "The 'version' field is deprecated and will be removed "
                 "in a future version. Please use 'manifest_version' instead.",
@@ -150,6 +200,18 @@ class Manifest(BaseModel):
             )
             if "manifest_version" not in data:
                 data["manifest_version"] = data.pop("version")
+
+        # Accept legacy version 1 manifests by upgrading them to version 2.
+        if data.get("manifest_version") == 1:
+            warnings.warn(
+                "Manifest version 1 is deprecated and will be removed in a "
+                "future version. It has been converted to version 2 in memory; "
+                "please update the manifest to version 2.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+            data = ManifestV1.model_validate(data).to_v2_data()
+
         return data
 
     @field_validator("alias")

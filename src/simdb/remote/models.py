@@ -352,7 +352,7 @@ class SimulationListItem(BaseModel):
     """Alias of the simulation."""
     datetime: str
     """Creation timestamp."""
-    metadata: Optional[MetadataDataList] = None
+    metadata: MetadataDataList = MetadataDataList()
     """Simulation metadata."""
 
 
