@@ -291,19 +291,23 @@ def imas_files(uri: URI, ids_list: Optional[List[str]] = None) -> List[Path]:
             ids_list = list_idss(entry)
 
     if backend == "hdf5":
-        return [
-            p.absolute()
-            for p in path.glob("*.h5")
-            if p.stem in ids_list or p.stem == "master"
-        ]
+        return sorted(
+            [
+                p.absolute()
+                for p in path.glob("*.h5")
+                if p.stem in ids_list or p.stem == "master"
+            ]
+        )
     elif backend == "mdsplus":
-        return [
-            path / "ids_001.characteristics",
-            path / "ids_001.datafile",
-            path / "ids_001.tree",
-        ]
+        return sorted(
+            [
+                path / "ids_001.characteristics",
+                path / "ids_001.datafile",
+                path / "ids_001.tree",
+            ]
+        )
     elif backend == "ascii":
-        return [p.absolute() for p in path.glob("*.ids") if p.stem in ids_list]
+        return sorted([p.absolute() for p in path.glob("*.ids") if p.stem in ids_list])
     else:
         raise ValueError(f"Unknown IMAS backend {backend}")
 

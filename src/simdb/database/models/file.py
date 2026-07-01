@@ -8,7 +8,13 @@ from sqlalchemy import Column
 from sqlalchemy import types as sql_types
 
 from simdb import uri as urilib
-from simdb.checksum import checksum as calc_checksum
+from simdb.checksum import (
+    DEFAULT_CHECKSUM_ALGO,
+    ChecksumAlgo,
+)
+from simdb.checksum import (
+    checksum as calc_checksum,
+)
 from simdb.cli.manifest import DataObject
 from simdb.config.config import Config
 from simdb.docstrings import inherit_docstrings
@@ -31,6 +37,7 @@ class File(Base):
     uuid = Column(UUID, nullable=False, unique=True, index=True)
     uri: urilib.URI = Column(URI(1024), nullable=True)
     checksum = Column(sql_types.String(64), nullable=True)
+    checksum_algo = Column(sql_types.Enum(ChecksumAlgo), nullable=True)
     type = Column(sql_types.Enum(DataObject.Type), nullable=True)
     datetime = Column(sql_types.DateTime, nullable=False)
 
@@ -51,6 +58,7 @@ class File(Base):
             if type == DataObject.Type.IMAS and ids_list is None:
                 raise ValueError("IDS list is not set")
             self.checksum = self.generate_checksum(config, ids_list=ids_list or [])
+            self.checksum_algo = DEFAULT_CHECKSUM_ALGO
 
     def __str__(self):
         result = ""
@@ -102,6 +110,7 @@ class File(Base):
         )
         file.uuid = checked_get(data, "uuid", uuid.UUID)
         file.checksum = checked_get(data, "checksum", str)
+        file.checksum_algo = DEFAULT_CHECKSUM_ALGO
         file.datetime = date_parser.parse(checked_get(data, "datetime", str))
         return file
 
@@ -114,6 +123,7 @@ class File(Base):
         )
         file.uuid = data.uuid
         file.checksum = data.checksum
+        file.checksum_algo = DEFAULT_CHECKSUM_ALGO
         file.datetime = data.datetime
         return file
 

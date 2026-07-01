@@ -941,7 +941,7 @@ class RemoteAPI:
         response = self.get(f"file/download/{uuid.hex}/{index}", stream=True)
 
         to_path.parent.mkdir(parents=True, exist_ok=True)
-        sha1 = hashlib.sha1()
+        hash_obj = hashlib.sha1()
 
         with to_path.open("wb") as f:
             total_length = response.headers.get("content-length")
@@ -951,7 +951,7 @@ class RemoteAPI:
                 downloaded = 0
                 total_length = int(total_length)
                 for data in response.iter_content(chunk_size=4096):
-                    sha1.update(data)
+                    hash_obj.update(data)
                     downloaded += len(data)
                     f.write(data)
                     done = int(50 * downloaded / total_length)
@@ -967,7 +967,7 @@ class RemoteAPI:
                     )
                 print("\r", file=out_stream, end="", flush=True)
 
-        if sha1.hexdigest() != checksum:
+        if hash_obj.hexdigest() != checksum:
             raise APIError(f"Checksum failed for file {from_path}")
 
     @try_request

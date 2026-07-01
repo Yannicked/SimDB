@@ -1,4 +1,5 @@
 import hashlib
+from enum import Enum
 from pathlib import Path
 from typing import Iterable, List, Optional
 
@@ -9,8 +10,18 @@ from .uri import URI
 CHUNK_SIZE = 2**20
 
 
-def checksum_files(paths: Iterable[Path]):
-    hash_object = hashlib.sha256()
+class ChecksumAlgo(str, Enum):
+    sha1 = "sha1"
+    sha256 = "sha256"
+
+    unknown = "unknown"
+
+
+DEFAULT_CHECKSUM_ALGO = ChecksumAlgo.sha1
+
+
+def checksum_files(paths: Iterable[Path], algo=DEFAULT_CHECKSUM_ALGO):
+    hash_object = hashlib.new(algo)
 
     for path in sorted(paths):
         if not path.exists():
