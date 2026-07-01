@@ -612,6 +612,23 @@ class ImasDataQueryParams(BaseModel):
     path: str
     """Full IDS path including IDS name and optional occurrence."""
 
+    autoconvert: bool = False
+    """When ``True``, IMAS applies NBC path remapping at read time and returns
+    the IDS in the entry's factory DD version.  Useful when the stored and
+    factory versions share the same major version (e.g. both 3.x).  Defaults
+    to ``False`` so data is returned in its stored DD version."""
+
+    dd_convert: bool = False
+    """When ``True``, explicitly convert the loaded IDS using
+    :func:`imas.convert_ids` after reading.  The target DD version is
+    *dd_target_version* when provided, otherwise the entry's factory
+    version is used.  Defaults to ``False``."""
+
+    dd_target_version: Optional[str] = None
+    """Target DD version string (e.g. ``"3.42.0"``) to pass to
+    :func:`imas.convert_ids` when *dd_convert* is ``True``.  When omitted,
+    the conversion targets the entry's factory version."""
+
     @field_validator("path", mode="before")
     @classmethod
     def _strip_path(cls, v: Any) -> str:

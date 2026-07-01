@@ -3,12 +3,11 @@
 TODO: Temporary solution to retrieve data (for IBEX backend)
 """
 
-from typing import Annotated, Any, NamedTuple, Optional
+from typing import Annotated, Any, NamedTuple
 
+import imas
 import numpy as np
 from flask_restx import Namespace, Resource
-from imas import IDSFactory
-from imas.ids_convert import dd_version_map_from_factories
 from imas.ids_defs import EMPTY_FLOAT
 from imas.ids_primitive import IDSPrimitive
 
@@ -100,47 +99,51 @@ def _get_coordinates(node: IDSPrimitive, ids_name: str) -> list:
     return coords
 
 
-def _resolve_renamed_ids_path(
-    ids_obj: Any, ids_name: str, ids_path: str
-) -> Optional[str]:
-    """Return the stored DD path for a requested current-DD path, if renamed."""
-    if not ids_path:
-        return None
+def _get_ids_node(
+    entry,
+    ids_name: str,
+    occurrence: int,
+    ids_path: str,
+    autoconvert: bool = False,
+    dd_convert: bool = False,
+    dd_target_version: "str | None" = None,
+) -> IDSPrimitive:
+    """Return the :class:`IDSPrimitive` leaf node at *ids_path* inside *ids_name*.
 
-    stored_version = getattr(ids_obj, "_version", None) or getattr(
-        ids_obj, "_dd_version", None
-    )
-    if not stored_version:
-        return None
-
-    ddmap, _source_is_older = dd_version_map_from_factories(
-        ids_name,
-        IDSFactory(stored_version),
-        IDSFactory(),
-    )
-    return ddmap.new_to_old.path.get(ids_path)
-
-
-def _get_ids_node(entry, ids_name: str, occurrence: int, ids_path: str) -> IDSPrimitive:
-    """Return the :class:`IDSPrimitive` leaf node at *ids_path* inside *ids_name*."""
+    Args:
+        entry: Open IMAS data entry.
+        ids_name: Name of the IDS to read.
+        occurrence: Occurrence index of the IDS.
+        ids_path: Slash-separated path within the IDS to the leaf node.
+        autoconvert: Passed to :meth:`~imas.DBEntry.get`.  When ``True`` IMAS
+            automatically applies NBC path remapping at read time, returning
+            the IDS in the entry's factory version.  Useful when the stored
+            and factory versions share the same major version (e.g. both
+            3.x).  Defaults to ``False`` so data is returned in its stored
+            DD version.
+        dd_convert: When ``True``, explicitly convert the IDS using
+            :func:`imas.convert_ids` after reading.  The target version is
+            *dd_target_version* when given, otherwise the entry's factory
+            version.
+        dd_target_version: Target DD version string (e.g. ``"3.42.0"``)
+            for :func:`imas.convert_ids`.  Only used when *dd_convert* is
+            ``True``.  Falls back to ``entry.factory.version`` when ``None``.
+    """
     ids_obj = entry.get(
         ids_name,
         occurrence,
         lazy=True,
-        autoconvert=False,
+        autoconvert=autoconvert,
         ignore_unknown_dd_version=True,
     )
-    try:
-        node = ids_obj[ids_path] if ids_path else ids_obj
-    except (AttributeError, IndexError, KeyError) as exc:
-        renamed_path = _resolve_renamed_ids_path(ids_obj, ids_name, ids_path)
-        if not renamed_path:
-            raise exc
-        try:
-            node = ids_obj[renamed_path]
-        except (AttributeError, IndexError, KeyError):
-            raise exc from None
-
+    if dd_convert:
+        target_version = dd_target_version or entry.factory.version
+        ids_obj = entry.get(
+            ids_name,
+            occurrence,
+        )
+        ids_obj = imas.convert_ids(ids_obj, target_version)
+    node = ids_obj[ids_path] if ids_path else ids_obj
     if not isinstance(node, IDSPrimitive):
         raise ValueError(
             f"path does not point to a scalar/array leaf "
@@ -196,7 +199,15 @@ class SimulationImasData(Resource):
                 imas_uri.query.set("cache_mode", "none")
             entry = open_imas(imas_uri)
             with entry:
-                node = _get_ids_node(entry, ids_name, occurrence, ids_path)
+                node = _get_ids_node(
+                    entry,
+                    ids_name,
+                    occurrence,
+                    ids_path,
+                    autoconvert=params.autoconvert,
+                    dd_convert=params.dd_convert,
+                    dd_target_version=params.dd_target_version,
+                )
                 coordinates = _get_coordinates(node, ids_name)
                 field = QuantityData(
                     name=f"{ids_name}/{node._path}",
