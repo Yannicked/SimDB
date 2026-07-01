@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Optional
 
 import imas
 import imas.exception
@@ -272,7 +272,7 @@ def _get_path(uri: URI) -> Path:
     return path
 
 
-def imas_files(uri: URI) -> List[Path]:
+def imas_files(uri: URI, ids_list: Optional[List[str]] = None) -> List[Path]:
     """
     Return all the files associated with the given IMAS URI.
 
@@ -286,8 +286,16 @@ def imas_files(uri: URI) -> List[Path]:
 
     path = _get_path(uri)
 
+    if not ids_list:
+        with imas.DBEntry(str(uri), "r") as entry:
+            ids_list = list_idss(entry)
+
     if backend == "hdf5":
-        return [p.absolute() for p in path.glob("*.h5")]
+        return [
+            p.absolute()
+            for p in path.glob("*.h5")
+            if p.stem in ids_list or p.stem == "master"
+        ]
     elif backend == "mdsplus":
         return [
             path / "ids_001.characteristics",
@@ -295,7 +303,7 @@ def imas_files(uri: URI) -> List[Path]:
             path / "ids_001.tree",
         ]
     elif backend == "ascii":
-        return [p.absolute() for p in path.glob("*.ids")]
+        return [p.absolute() for p in path.glob("*.ids") if p.stem in ids_list]
     else:
         raise ValueError(f"Unknown IMAS backend {backend}")
 

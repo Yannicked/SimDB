@@ -8,11 +8,10 @@ from sqlalchemy import Column
 from sqlalchemy import types as sql_types
 
 from simdb import uri as urilib
-from simdb.checksum import sha1_checksum
+from simdb.checksum import checksum as calc_checksum
 from simdb.cli.manifest import DataObject
 from simdb.config.config import Config
 from simdb.docstrings import inherit_docstrings
-from simdb.imas.checksum import checksum as imas_checksum
 from simdb.imas.utils import imas_files, imas_timestamp
 from simdb.remote.models import FileData, FileGetDataResponse, FileInfo
 
@@ -51,7 +50,7 @@ class File(Base):
             self.datetime = self.get_creation_date()
             if type == DataObject.Type.IMAS and ids_list is None:
                 raise ValueError("IDS list is not set")
-            self.checksum = self.generate_checksum(config, ids_list or [])
+            self.checksum = self.generate_checksum(config, ids_list=ids_list or [])
 
     def __str__(self):
         result = ""
@@ -77,9 +76,9 @@ class File(Base):
         if config and config.get_option("development.disable_checksum", default=False):
             return ""
         elif self.type == DataObject.Type.IMAS:
-            checksum = imas_checksum(self.uri, ids_list)
+            checksum = calc_checksum(self.uri, ids_list)
         elif self.type == DataObject.Type.FILE:
-            checksum = sha1_checksum(self.uri)
+            checksum = calc_checksum(self.uri)
         else:
             raise NotImplementedError(f"Cannot generate checksum for type {self.type}.")
         return checksum
@@ -144,7 +143,7 @@ class File(Base):
             files = [FileInfo(path=self.uri.path, checksum=self.checksum)]
         else:
             files = [
-                FileInfo(path=path, checksum=sha1_checksum(URI(f"file:{path}")))
+                FileInfo(path=path, checksum=calc_checksum(URI(f"file:{path}")))
                 for path in imas_files(self.uri)
             ]
         return FileGetDataResponse(

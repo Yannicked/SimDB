@@ -1,27 +1,31 @@
 import hashlib
+from pathlib import Path
+from typing import Iterable, List, Optional
+
+from simdb.imas.utils import imas_files
 
 from .uri import URI
 
+CHUNK_SIZE = 2**20
 
-def sha1_checksum(uri: URI) -> str:
-    """Generate a SHA1 checksum from the given file.
 
-    :param uri: the URI of the file to checksum
-    :return: a string containing the hex representation of the computed SHA1 checksum
-    """
-    if uri.scheme != "file":
-        raise ValueError(f"invalid scheme for file checksum: {uri.scheme}")
-    if uri.path is None:
-        raise ValueError("Path is not set")
-    path = uri.path
+def checksum_files(paths: Iterable[Path]):
+    hash_object = hashlib.sha256()
 
-    if not path.exists():
-        raise ValueError("File does not exist")
-    if not path.is_file():
-        raise ValueError("File appears to be a directory")
+    for path in sorted(paths):
+        if not path.exists():
+            raise ValueError("File does not exist")
+        if not path.is_file():
+            raise ValueError("File appears to be a directory")
+        with path.open("rb") as file:
+            for chunk in iter(lambda: file.read(CHUNK_SIZE), b""):
+                hash_object.update(chunk)
 
-    sha1 = hashlib.sha1()
-    with path.open("rb") as file:
-        for chunk in iter(lambda: file.read(4096), b""):
-            sha1.update(chunk)
-    return sha1.hexdigest()
+    return hash_object.hexdigest()
+
+
+def checksum(uri: URI, ids_list: Optional[List[str]] = None):
+    if uri.scheme == "file" and uri.path is not None:
+        return checksum_files([uri.path])
+    if uri.scheme == "imas":
+        return checksum_files(imas_files(uri, ids_list))

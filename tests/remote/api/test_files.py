@@ -36,7 +36,7 @@ def create_simulation_with_file(
         for i in range(0, len(file_content), chunk_size)
     ]
     num_chunks = len(chunks)
-    test_checksum = hashlib.sha1(file_content).hexdigest()
+    test_checksum = hashlib.sha256(file_content).hexdigest()
 
     simulation_data = generate_simulation_data(
         alias=alias,

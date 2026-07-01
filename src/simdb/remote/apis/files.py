@@ -8,10 +8,9 @@ from flask import Response, jsonify, request, send_file
 from flask_restx import Namespace, Resource
 from werkzeug.datastructures import FileStorage
 
-from simdb.checksum import sha1_checksum
+from simdb.checksum import checksum as calc_checksum
 from simdb.cli.manifest import DataObject
 from simdb.database import DatabaseError, models
-from simdb.imas.checksum import checksum as imas_checksum
 from simdb.imas.utils import imas_files
 from simdb.remote.core.auth import User, requires_auth
 from simdb.remote.core.errors import error
@@ -50,7 +49,7 @@ def _verify_file(
         path = secure_path(sim_file.uri.path, common_root, staging_dir)
         if not path.exists():
             raise ValueError(f"file {path} does not exist")
-        checksum = sha1_checksum(URI(scheme="file", path=path))
+        checksum = calc_checksum(URI(scheme="file", path=path))
         if sim_file.checksum != checksum:
             raise ValueError(f"checksum failed for file {sim_file!r}")
     elif sim_file.type == DataObject.Type.IMAS:
@@ -66,7 +65,7 @@ def _verify_file(
             )
         else:
             uri.query.set("path", str(staging_dir))
-        checksum = imas_checksum(uri, ids_list or [])
+        checksum = calc_checksum(uri, ids_list)
         if sim_file.checksum != checksum:
             raise ValueError(f"checksum failed for simulation {sim_file.uri}")
 
