@@ -612,7 +612,7 @@ class ImasDataQueryParams(BaseModel):
     path: str
     """Full IDS path including IDS name and optional occurrence."""
 
-    dd_target_version: Optional[str] = None
+    dd_version: Optional[str] = None
     """When provided, explicitly convert the loaded IDS to this DD version
     string (e.g. ``"3.42.0"``) using :func:`imas.convert_ids` after
     reading.  When omitted, data is returned in its stored DD version."""

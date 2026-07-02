@@ -11,7 +11,9 @@ from flask_restx import Namespace, Resource
 from imas import IDSFactory
 from imas.ids_convert import dd_version_map_from_factories
 from imas.ids_defs import EMPTY_FLOAT
+from imas.ids_path import IDSPath
 from imas.ids_primitive import IDSPrimitive
+from imas.ids_toplevel import IDSToplevel
 
 from simdb.cli.manifest import DataObject
 from simdb.database import DatabaseError
@@ -122,12 +124,60 @@ def _resolve_renamed_ids_path(
     return ddmap.new_to_old.path.get(ids_path)
 
 
+def _copy_ids_properties(src_props: Any, dst_props: Any) -> None:
+    """Copy all populated scalar fields from *src_props* to *dst_props*."""
+    for field in src_props._children:
+        src_node = getattr(src_props, field)
+        if isinstance(src_node, IDSPrimitive) and src_node.has_value:
+            getattr(dst_props, field).value = src_node.value
+
+
+def _set_path_value(ids: IDSToplevel, node_path: Any, value: Any) -> None:
+    """Generic function to write *value* into *ids* at *node_path* considering
+    IDSStructArry.
+    """
+    p = IDSPath(str(node_path))
+    current: Any = ids
+
+    # allocate all intermediate nodes (structs and arrays) along the path
+    for part, idx in zip(p.parts[:-1], p.indices[:-1]):
+        child = getattr(current, part)
+        if idx is not None:
+            if len(child) <= idx:
+                child.resize(idx + 1)
+            current = child[idx]
+        else:
+            current = child
+    # set the value at the leaf node, allocating array if needed
+    last_part, last_idx = p.parts[-1], p.indices[-1]
+    if last_idx is not None:
+        child = getattr(current, last_part)
+        if len(child) <= last_idx:
+            child.resize(last_idx + 1)
+        child[last_idx].value = value
+    else:
+        getattr(current, last_part).value = value
+
+
+def _build_nonlazy_ids(
+    lazy_ids: Any,
+    ids_name: str,
+    resolved_node: IDSPrimitive,
+    stored_version: str,
+) -> IDSToplevel:
+    """Return a non-lazy IDS in *stored_version*"""
+    nonlazy: IDSToplevel = IDSFactory(stored_version).new(ids_name)
+    _copy_ids_properties(lazy_ids.ids_properties, nonlazy.ids_properties)
+    _set_path_value(nonlazy, resolved_node._path, resolved_node.value)
+    return nonlazy
+
+
 def _get_ids_node(
     entry,
     ids_name: str,
     occurrence: int,
     ids_path: str,
-    dd_target_version: "str | None" = None,
+    dd_version: "str | None" = None,
 ) -> IDSPrimitive:
     """Return the :class:`IDSPrimitive` leaf node at *ids_path* inside *ids_name*.
 
@@ -136,30 +186,44 @@ def _get_ids_node(
         ids_name: Name of the IDS to read.
         occurrence: Occurrence index of the IDS.
         ids_path: Slash-separated path within the IDS to the leaf node.
-        dd_target_version: When provided, explicitly convert the IDS to this
-            DD version string (e.g. ``"3.42.0"``) using
-            :func:`imas.convert_ids` after reading.  Requires eager loading
-            because :func:`imas.convert_ids` does not support lazy IDSs.
+        dd_version: When provided, convert the field value to this DD
+            version (e.g. ``"3.42.0"`` or ``"4.1.1"``) before returning.
     """
     ids_obj = entry.get(
         ids_name,
         occurrence,
-        lazy=dd_target_version is None,
+        lazy=True,
         autoconvert=False,
         ignore_unknown_dd_version=True,
     )
-    if dd_target_version is not None:
-        ids_obj = imas.convert_ids(ids_obj, dd_target_version)
     try:
         node = ids_obj[ids_path] if ids_path else ids_obj
     except (AttributeError, IndexError, KeyError) as exc:
         renamed_path = _resolve_renamed_ids_path(ids_obj, ids_name, ids_path)
         if not renamed_path:
             raise exc
+        if dd_version is None:
+            raise ValueError(
+                f"Path '{ids_path}' does not exist in the stored DD version "
+                f"({getattr(ids_obj, '_version', None) or getattr(ids_obj, '_dd_version', 'unknown')})"
+                f" but is known under the name '{renamed_path}' in that version. "
+                f"Pass dd_version to request an explicit DD conversion. "
+                f"Original error: {type(exc).__name__}: {exc}"
+            ) from exc
         try:
             node = ids_obj[renamed_path]
         except (AttributeError, IndexError, KeyError):
             raise exc from None
+
+    if dd_version is not None:
+        stored_version = (
+            getattr(ids_obj, "_version", None)
+            or getattr(ids_obj, "_dd_version", None)
+            or entry.factory.version
+        )
+        minimal = _build_nonlazy_ids(ids_obj, ids_name, node, stored_version)
+        converted = imas.convert_ids(minimal, dd_version)
+        node = converted[ids_path] if ids_path else converted
 
     if not isinstance(node, IDSPrimitive):
         raise ValueError(
@@ -221,7 +285,7 @@ class SimulationImasData(Resource):
                     ids_name,
                     occurrence,
                     ids_path,
-                    dd_target_version=params.dd_target_version,
+                    dd_version=params.dd_version,
                 )
                 coordinates = _get_coordinates(node, ids_name)
                 field = QuantityData(
