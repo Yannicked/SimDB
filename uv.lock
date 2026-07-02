@@ -2727,6 +2727,9 @@ dependencies = [
     { name = "distro" },
     { name = "email-validator" },
     { name = "imas-python" },
+    { name = "netcdf4", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "netcdf4", version = "1.7.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*' and platform_machine == 'ARM64' and sys_platform == 'win32'" },
+    { name = "netcdf4", version = "1.7.4", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.10' and platform_machine != 'ARM64') or (python_full_version >= '3.11' and platform_machine == 'ARM64' and sys_platform == 'win32') or (python_full_version >= '3.10' and sys_platform != 'win32')" },
     { name = "numpy", version = "1.24.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "numpy", version = "2.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*'" },
@@ -2744,9 +2747,6 @@ dependencies = [
     { name = "rich", version = "15.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "semantic-version" },
     { name = "sqlalchemy" },
-    { name = "urllib3", version = "2.2.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
-    { name = "urllib3", version = "2.6.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
-    { name = "urllib3", version = "2.7.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
 ]
 
 [package.optional-dependencies]
@@ -2869,6 +2869,7 @@ requires-dist = [
     { name = "imas-validator", marker = "extra == 'imas-validator'", specifier = ">=1.0.0" },
     { name = "myst-parser", marker = "extra == 'build-docs'", specifier = ">=0.18.0" },
     { name = "nbsphinx", marker = "extra == 'build-docs'", specifier = ">=0.8.0" },
+    { name = "netcdf4", specifier = ">=1.5" },
     { name = "numpy", specifier = ">=1.14" },
     { name = "psycopg2-binary", marker = "extra == 'postgres'", specifier = ">=2.8.0" },
     { name = "pydantic", specifier = ">=2.10.6" },
@@ -2887,7 +2888,6 @@ requires-dist = [
     { name = "sphinx-autodoc-typehints", marker = "extra == 'build-docs'", specifier = ">=1.12.0" },
     { name = "sphinx-immaterial", marker = "extra == 'build-docs'", specifier = ">=0.11.14" },
     { name = "sqlalchemy", specifier = ">=1.2.12,<2.0" },
-    { name = "urllib3", specifier = ">=1.26" },
 ]
 provides-extras = ["server", "auth-ad", "auth-keycloak", "auth-ldap", "auth", "imas-validator", "build-docs", "postgres", "all"]
 

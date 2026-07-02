@@ -4,7 +4,6 @@ import warnings
 from enum import Enum, auto
 from pathlib import Path
 from typing import Annotated, Any, Dict, Iterable, List, Literal, Optional, TextIO
-from uuid import UUID
 
 import numpy as np
 import yaml
@@ -34,9 +33,7 @@ def _expand_path(path: Path, base_path: Path) -> Path:
     return path
 
 
-ManifestUrl = Annotated[
-    SimDBUrl, UrlConstraints(allowed_schemes=["file", "imas", "simdb"])
-]
+ManifestUrl = Annotated[SimDBUrl, UrlConstraints(allowed_schemes=["file", "imas"])]
 
 
 class DataType(Enum):
@@ -57,8 +54,6 @@ def _get_data_object_type(uri: SimDBUrl) -> "DataType":
                 if getattr(ds, "Conventions", None) == "IMAS":
                     return DataType.IMAS
         return DataType.FILE
-    elif uri.scheme == "simdb":
-        return DataType.UUID
 
     raise ValueError(f"URI scheme ({uri.scheme}:) not recognized")
 
@@ -104,9 +99,6 @@ class DataObject(BaseModel):
                 scheme="file",
                 path=_expand_path(Path(v.path), base_path).as_posix(),
             )
-
-        elif v.scheme == "simdb":
-            _ = UUID(v.path)
 
         return v
 
