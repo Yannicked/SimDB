@@ -1,17 +1,14 @@
 import hashlib
 from pathlib import Path
 
-from simdb.uri import URI
+from simdb.imas.utils import SimDBUrl
 
 from .utils import imas_files, list_idss, open_imas
 
 IGNORED_FIELDS = ("data_dictionary", "access_layer", "access_layer_language")
 
 
-def checksum(uri: URI, ids_list: list) -> str:
-    if uri.scheme != "imas":
-        raise ValueError(f"invalid scheme for imas checksum: {uri.scheme}")
-
+def checksum(uri: SimDBUrl, ids_list: list) -> str:
     sha1 = hashlib.sha1()
 
     if not ids_list:
