@@ -132,16 +132,12 @@ def _get_ids_node(
     ids_obj = entry.get(
         ids_name,
         occurrence,
-        lazy=True,
+        lazy=not dd_convert,
         autoconvert=autoconvert,
         ignore_unknown_dd_version=True,
     )
     if dd_convert:
         target_version = dd_target_version or entry.factory.version
-        ids_obj = entry.get(
-            ids_name,
-            occurrence,
-        )
         ids_obj = imas.convert_ids(ids_obj, target_version)
     node = ids_obj[ids_path] if ids_path else ids_obj
     if not isinstance(node, IDSPrimitive):
