@@ -15,7 +15,7 @@ from imas.ids_path import IDSPath
 from imas.ids_primitive import IDSPrimitive
 from imas.ids_toplevel import IDSToplevel
 
-from simdb.cli.manifest import DataObject
+from simdb.cli.manifest import DataObject, DataType
 from simdb.database import DatabaseError
 from simdb.imas.utils import (
     ImasError,
@@ -249,7 +249,7 @@ def _get_simulation_and_imas_file(sim_id: str) -> _SimulationImasFile:
     except DatabaseError as exc:
         raise ResponseException(str(exc), 404) from exc
 
-    imas_outputs = [f for f in simulation.outputs if f.type == DataObject.Type.IMAS]
+    imas_outputs = [f for f in simulation.outputs if f.type == DataType.IMAS]
     if not imas_outputs:
         raise ResponseException(f"Simulation {sim_id} has no IMAS output files", 404)
 
