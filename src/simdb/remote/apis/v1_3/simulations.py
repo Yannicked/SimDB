@@ -6,6 +6,14 @@ from flask_restx import Namespace, Resource
 from simdb.database.models import metadata as models_meta
 from simdb.database.models import simulation as models_sim
 from simdb.enums import IngestionStatus
+from simdb.remote.apis.v1_2.simulations import (
+    Simulation,
+    SimulationMeta,
+    SimulationPackage,
+    SimulationTrace,
+    ValidateSimulation,
+)
+from simdb.remote.apis.v1_2.simulations import SimulationList as SimulationListV12
 from simdb.remote.core.auth import User, requires_auth
 from simdb.remote.core.cache import clear_cache
 from simdb.remote.core.pydantic_utils import (
@@ -25,6 +33,12 @@ from simdb.workers.tasks import (
 )
 
 api = Namespace("simulations", path="/")
+
+api.route("/simulation/<path:sim_id>")(Simulation)
+api.route("/simulation/metadata/<path:sim_id>")(SimulationMeta)
+api.route("/validate/<string:sim_id>")(ValidateSimulation)
+api.route("/trace/<path:sim_id>")(SimulationTrace)
+api.route("/simulation/package/<path:sim_id>")(SimulationPackage)
 
 
 def _set_alias(simulation: models_sim.Simulation, alias: Optional[str]):
@@ -53,7 +67,9 @@ def _set_alias(simulation: models_sim.Simulation, alias: Optional[str]):
 
 
 @api.route("/simulations")
-class SimulationList(Resource):
+class SimulationList(SimulationListV12):
+    # GET is inherited unchanged from v1.2; POST is replaced with
+    # asynchronous Celery-based ingestion.
     @requires_auth()
     @pydantic_validate(api)
     def post(

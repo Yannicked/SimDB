@@ -1,4 +1,3 @@
-from simdb.imas.utils import SimDBUrl
 from datetime import datetime, timezone
 from unittest import mock
 from uuid import uuid1
@@ -7,6 +6,7 @@ import pytest
 
 from simdb.config import Config
 from simdb.enums import IngestionStatus
+from simdb.imas.utils import SimDBUrl
 from simdb.remote.models import FileData
 from simdb.workers.tasks import (
     _calculate_checksum,

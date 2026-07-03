@@ -47,6 +47,10 @@ class DatabaseOutdatedError(DatabaseError):
     pass
 
 
+class SimulationIngestionInProgressError(DatabaseError):
+    pass
+
+
 def check_migrations(engine) -> str:
     """Check that the database is up-to-date with the latest Alembic migration.
 
@@ -430,6 +434,15 @@ class Database:
         :return: None
         """
         simulation = self._find_simulation(sim_ref)
+        if (
+            simulation.ingestion_status
+            and not simulation.ingestion_status.is_terminal()
+        ):
+            raise SimulationIngestionInProgressError(
+                f"Simulation {sim_ref} is still being ingested "
+                f"(status {simulation.ingestion_status.value}); "
+                f"retry once ingestion has finished"
+            )
         for file in simulation.inputs:
             self.session.delete(file)
         for file in simulation.outputs:

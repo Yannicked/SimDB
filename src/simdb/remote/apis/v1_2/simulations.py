@@ -10,7 +10,7 @@ from typing import Annotated, List, Optional, Tuple
 from flask import request, send_file
 from flask_restx import Namespace, Resource
 
-from simdb.database import DatabaseError
+from simdb.database import DatabaseError, SimulationIngestionInProgressError
 from simdb.database.models import simulation as models_sim
 from simdb.database.models import watcher as models_watcher
 from simdb.email.server import EmailServer
@@ -375,9 +375,12 @@ class Simulation(Resource):
         return SimulationPatchResponse()
 
     @requires_auth("admin")
-    @pydantic_validate(api)
+    @pydantic_validate(api, client_error_codes=(400, 409))
     def delete(self, sim_id: str, user: User) -> SimulationDeleteResponse:
-        simulation = current_app.db.delete_simulation(sim_id)
+        try:
+            simulation = current_app.db.delete_simulation(sim_id)
+        except SimulationIngestionInProgressError as err:
+            raise ResponseException(str(err), return_code=409) from None
         clear_cache()
 
         files = [str(p) for p in simulation.file_paths()]

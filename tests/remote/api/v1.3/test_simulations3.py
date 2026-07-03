@@ -1,5 +1,5 @@
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest import mock
 from uuid import UUID
 
@@ -9,7 +9,9 @@ from conftest import (
     generate_simulation_data,
 )
 
+from simdb.cli.manifest import Manifest
 from simdb.config import Config
+from simdb.database.models import Simulation
 from simdb.enums import IngestionStatus
 from simdb.remote.models import (
     FileData,
@@ -87,6 +89,42 @@ def generate_simulation_file(path) -> FileData:
         checksum=checksum,
         datetime=datetime.now(timezone.utc),
     )
+
+
+def test_delete_simulation_during_ingestion_v13(client):
+    """DELETE must be rejected with 409 while ingestion is in progress."""
+
+    simulation = Simulation(Manifest())
+    simulation.ingestion_status = IngestionStatus.QUEUED
+    with client.application.app_context():
+        client.application.db.insert_simulation(simulation)
+
+    rv = client.delete(f"/v1.3/simulation/{simulation.uuid.hex}", headers=HEADERS)
+
+    assert rv.status_code == 409
+    assert "still being ingested" in rv.json["error"]
+
+    with client.application.app_context():
+        assert client.application.db.get_simulation(simulation.uuid.hex) is not None
+
+
+def test_delete_simulation_after_ingestion_v13(client_with_task_mock, tmp_path):
+    """DELETE succeeds once ingestion has completed."""
+    client = client_with_task_mock
+    simulation_data = generate_simulation_data(
+        alias="test-delete-v13",
+        inputs=[generate_simulation_file(tmp_path)],
+        outputs=[generate_simulation_file(tmp_path)],
+    )
+
+    rv_post = post_simulation_v13(client, simulation_data)
+    assert rv_post.status_code == 200
+    sim_hex = SimulationPostResponse.model_validate(rv_post.json).ingested.hex
+
+    rv = client.delete(f"/v1.3/simulation/{sim_hex}", headers=HEADERS)
+
+    assert rv.status_code == 200
+    assert UUID(rv.json["deleted"]["simulation"]).hex == sim_hex
 
 
 def test_post_simulations_v13(client_with_task_mock, tmp_path):

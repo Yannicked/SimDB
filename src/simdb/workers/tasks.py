@@ -98,7 +98,9 @@ def _resolve_paths(files_data: list[FileData], config: Config) -> list[Path]:
     return [_resolve_uri_to_path(SimDBUrl(f.uri), config) for f in files_data]
 
 
-def _resolve_destination_path(source: Path, common_root: Path, dst_basepath: Path) -> Path:
+def _resolve_destination_path(
+    source: Path, common_root: Path, dst_basepath: Path
+) -> Path:
     return dst_basepath / source.relative_to(common_root)
 
 
