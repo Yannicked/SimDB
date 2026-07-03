@@ -7,13 +7,15 @@ from pathlib import Path
 from typing import Iterable, List
 from uuid import UUID
 
+from pydantic import AnyUrl
+
 from simdb.config import Config
 from simdb.database.database import get_db
 from simdb.database.models import File
 from simdb.email.server import EmailServer
 from simdb.enums import IngestionStatus
+from simdb.imas.utils import SimDBUrl
 from simdb.remote.models import FileData, FileDataList
-from simdb.uri import URI
 from simdb.workers.celery import celery_app
 
 logger = logging.getLogger(__name__)
@@ -38,22 +40,24 @@ def send_email_task(
     }
 
 
-def _imas_path_to_uri(imas_path: Path) -> URI:
+def _imas_path_to_uri(imas_path: Path) -> SimDBUrl:
     if imas_path.suffix == ".nc":
-        return URI(scheme="file", path=imas_path)
+        return SimDBUrl.build(scheme="file", path=imas_path.as_posix())
 
     children = set(imas_path.iterdir())
 
     if any(child.suffix == ".ids" for child in children):
-        u = URI(scheme="imas", path="ascii")
-        u.query.set("path", str(imas_path))
+        u = SimDBUrl.build(
+            scheme="imas", path="ascii", query=f"path={imas_path.as_posix()}"
+        )
         return u
 
     if any(child.suffix == ".h5" for child in children) and any(
         child.name == "master.h5" for child in children
     ):
-        u = URI(scheme="imas", path="hdf5")
-        u.query.set("path", str(imas_path))
+        u = SimDBUrl.build(
+            scheme="imas", path="hdf5", query=f"path={imas_path.as_posix()}"
+        )
         return u
 
     if {p.name for p in children} >= {
@@ -61,14 +65,15 @@ def _imas_path_to_uri(imas_path: Path) -> URI:
         "ids_001.characteristics",
         "ids_001.datafile",
     }:
-        u = URI(scheme="imas", path="mdsplus")
-        u.query.set("path", str(imas_path))
+        u = SimDBUrl.build(
+            scheme="imas", path="mdsplus", query=f"path={imas_path.as_posix()}"
+        )
         return u
 
     raise ValueError("IMAS backend could not be identified.")
 
 
-def _resolve_uri_to_path(uri: URI, config: Config) -> Path:
+def _resolve_uri_to_path(uri: AnyUrl, config: Config) -> Path:
     partition = uri.scheme
     if not partition:
         raise ValueError("Partition not given")
@@ -81,6 +86,7 @@ def _resolve_uri_to_path(uri: URI, config: Config) -> Path:
     path = uri.path
     if not path:
         raise ValueError("Path not given")
+    path = Path(path)
     path = path.relative_to(path.anchor)
     target = (partition_path / path).resolve()
     if not target.is_relative_to(partition_path):
@@ -89,10 +95,10 @@ def _resolve_uri_to_path(uri: URI, config: Config) -> Path:
 
 
 def _resolve_paths(files_data: list[FileData], config: Config) -> list[Path]:
-    return [_resolve_uri_to_path(URI(f.uri), config) for f in files_data]
+    return [_resolve_uri_to_path(SimDBUrl(f.uri), config) for f in files_data]
 
 
-def _resolve_destination_path(source: Path, common_root: Path, dst_basepath: Path):
+def _resolve_destination_path(source: Path, common_root: Path, dst_basepath: Path) -> Path:
     return dst_basepath / source.relative_to(common_root)
 
 
@@ -124,7 +130,7 @@ def _get_imas_identifier_path(path: Path) -> Path:
 def _create_file_from_data(
     data: FileData, config: Config, imas_identifier_path: Path
 ) -> File:
-    uri = URI(data.uri)
+    uri = SimDBUrl(data.uri)
     path = _resolve_uri_to_path(uri, config)
 
     checksum = _calculate_checksum(path)
@@ -144,7 +150,7 @@ def _create_files_from_data_list(
     files: list[File] = []
 
     for file_data in files_data:
-        uri = URI(file_data.uri)
+        uri = SimDBUrl(file_data.uri)
         path = _resolve_destination_path(
             _resolve_uri_to_path(uri, config), common_root, dst_basepath
         )
@@ -160,7 +166,7 @@ def _create_files_from_data_list(
             if file_data.checksum != checksum:
                 raise ValueError("Hash of file does not match provided checksum")
             file = File.from_data_model(file_data)
-            file.uri = URI(scheme="file", path=path)
+            file.uri = SimDBUrl.build(scheme="file", path=path.as_posix())
 
         files.append(file)
 
