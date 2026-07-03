@@ -182,7 +182,7 @@ def _deserialize_numpy(v: Any) -> Any:
 
 def _serialize_numpy(o: np.ndarray) -> dict:
     """Serialize numpy arrays to dict format for the web dashboard."""
-    encoded_bytes = base64.b64encode(o.data).decode()
+    encoded_bytes = base64.b64encode(o.tobytes()).decode()
     return {
         "_type": "numpy.ndarray",
         "dtype": o.dtype.name,
