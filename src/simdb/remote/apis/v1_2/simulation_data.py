@@ -15,7 +15,7 @@ from imas.ids_path import IDSPath
 from imas.ids_primitive import IDSPrimitive
 from imas.ids_toplevel import IDSToplevel
 
-from simdb.cli.manifest import DataObject, DataType
+from simdb.cli.manifest import DataType
 from simdb.database import DatabaseError
 from simdb.imas.utils import (
     ImasError,
@@ -282,15 +282,7 @@ class SimulationImasData(Resource):
             if imas_uri.host:
                 qs = dict(imas_uri.query_params())
                 if "cache_mode" not in qs:
-                    qs["cache_mode"] = "none"
-                    query_str = "&".join(f"{k}={v}" for k, v in qs.items())
-                    imas_uri = SimDBUrl.build(
-                        scheme=imas_uri.scheme or "imas",
-                        host=imas_uri.host,
-                        port=imas_uri.port,
-                        path=imas_uri.path or "",
-                        query=query_str,
-                    )
+                    imas_uri = SimDBUrl(str(imas_uri) + "&cache_mode=none")
             entry = open_imas(imas_uri)
             with entry:
                 node = _get_ids_node(
@@ -307,14 +299,18 @@ class SimulationImasData(Resource):
                     data=_to_python(node.value),
                 )
         except (ValueError, AttributeError, IndexError, KeyError) as exc:
-            raise ResponseException(f"Invalid IDS path '{params.path}': {exc}") from exc
+            raise ResponseException(
+                f"Invalid IDS path '{params.path}': {type(exc).__name__}: {exc}"
+            ) from exc
         except ImasError as exc:
-            raise ServerException(f"Failed to open IMAS data: {exc}") from exc
+            raise ServerException(
+                f"Failed to open IMAS data: {type(exc).__name__}: {exc}"
+            ) from exc
         except Exception as exc:
             msg = str(exc)
             if "is empty" in msg or "not found" in msg.lower():
-                raise ResponseException(msg, 404) from exc
-            raise ServerException(msg) from exc
+                raise ResponseException(f"{type(exc).__name__}: {msg}", 404) from exc
+            raise ServerException(f"{type(exc).__name__}: {msg}") from exc
 
         return ImasDataResponse(
             simulation=str(result.simulation.uuid),
