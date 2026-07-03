@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
 
 from simdb.enums import IngestionStatus
+from simdb.imas.utils import SimDBUrl
 from simdb.remote.models import (
     FileDataList,
     MetadataData,
@@ -33,9 +34,8 @@ if "sphinx" in sys.modules:
 
     ClauseElement.__bool__ = lambda self: True  # type: ignore
 
-import re
 
-from simdb.cli.manifest import DataObject, Manifest
+from simdb.cli.manifest import DataObject, DataType, Manifest
 from simdb.config.config import Config
 from simdb.docstrings import inherit_docstrings
 from simdb.imas.metadata import load_metadata
@@ -43,10 +43,10 @@ from simdb.imas.utils import (
     check_time,
     extract_ids_occurrence,
     get_path_for_legacy_uri,
+    is_legacy_imas_uri,
     list_idss,
     open_imas,
 )
-from simdb.uri import URI
 
 from .base import Base
 from .file import File
@@ -81,11 +81,10 @@ simulation_watchers = Table(
 
 
 def _update_legacy_uri(data_object: DataObject):
-    if data_object.uri is None:
-        raise ValueError("Data object uri is not set")
     path = get_path_for_legacy_uri(data_object.uri)
-    backend = data_object.uri.query.get("backend", default="hdf5")
-    return URI(f"imas:{backend}?path={path}")
+    qs = dict(data_object.uri.query_params())
+    backend = qs.get("backend", "hdf5")
+    return SimDBUrl.build(scheme="imas", path=backend, query=f"path={path}")
 
 
 class MetaDataWrapper:
@@ -195,9 +194,7 @@ class Simulation(Base):
         all_input_idss = []
 
         for input in manifest.inputs:
-            if input.uri is None:
-                raise ValueError("Source uri is not set")
-            if input.type == DataObject.Type.IMAS:
+            if input.type == DataType.IMAS:
                 entry = open_imas(input.uri)
                 idss = list_idss(entry)
 
@@ -210,7 +207,7 @@ class Simulation(Base):
                 entry.close()
 
             file = File(input.type, input.uri, all_input_idss, config=config)
-            if input.type == DataObject.Type.IMAS and "path" not in input.uri.query:
+            if input.type == DataType.IMAS and is_legacy_imas_uri(input.uri):
                 file.uri = _update_legacy_uri(input)
             self.inputs.append(file)
 
@@ -220,9 +217,7 @@ class Simulation(Base):
         all_output_idss = []
 
         for output in manifest.outputs:
-            if output.uri is None:
-                raise ValueError("Sink uri is not set")
-            if output.type == DataObject.Type.IMAS:
+            if output.type == DataType.IMAS:
                 entry = open_imas(output.uri)
                 idss = list_idss(entry)
                 for ids in idss:
@@ -233,14 +228,13 @@ class Simulation(Base):
 
                 meta = load_metadata(entry)
                 entry.close()
-                flattened_meta: Dict[str, str] = {}
-                flatten_dict(flattened_meta, meta)
+                flattened_meta = flatten_dict(meta)
 
                 for key, value in flattened_meta.items():
                     self.set_meta(key, value)
 
             file = File(output.type, output.uri, all_output_idss, config=config)
-            if output.type == DataObject.Type.IMAS and "path" not in output.uri.query:
+            if output.type == DataType.IMAS and is_legacy_imas_uri(output.uri):
                 file.uri = _update_legacy_uri(output)
 
             self.outputs.append(file)
@@ -248,12 +242,9 @@ class Simulation(Base):
         if all_output_idss:
             self.set_meta("ids", "[{}]".format(", ".join(all_output_idss)))
 
-        flattened_dict: Dict[str, str] = {}
-        flatten_dict(flattened_dict, manifest.metadata)
+        flattened_dict = flatten_dict(manifest.metadata)
 
         for key, value in flattened_dict.items():
-            if "metadata#" in key:
-                key = re.sub(r"^metadata#\d+\.?", "", key)
             self.set_meta(key, value)
         if not self.find_meta("status"):
             self.set_meta("status", Simulation.Status.NOT_VALIDATED.value)
@@ -333,18 +324,19 @@ class Simulation(Base):
     def file_paths(self) -> Set[Path]:
         def _get_path(file: File) -> Optional[Path]:
             if file.uri.scheme == "file":
-                if file.type == DataObject.Type.FILE:
-                    return file.uri.path
-                elif file.type == DataObject.Type.IMAS:
+                if file.type == DataType.FILE:
                     if file.uri.path is None:
                         raise ValueError("Data object path is not set")
-                    return file.uri.path.parent
+                    return Path(file.uri.path)
+                elif file.type == DataType.IMAS:
+                    if file.uri.path is None:
+                        raise ValueError("Data object path is not set")
+                    return Path(file.uri.path).parent
                 else:
                     raise ValueError(f"Unknown file type {file.type}")
             elif file.uri.scheme == "imas":
-                return (
-                    Path(file.uri.query["path"]) if "path" in file.uri.query else None
-                )
+                qs = dict(file.uri.query_params())
+                return Path(qs["path"]) if "path" in qs else None
             return None
 
         file_paths = set()

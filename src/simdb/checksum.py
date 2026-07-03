@@ -1,9 +1,10 @@
 import hashlib
+from pathlib import Path
 
-from .uri import URI
+from simdb.imas.utils import SimDBUrl
 
 
-def sha1_checksum(uri: URI) -> str:
+def sha1_checksum(uri: SimDBUrl) -> str:
     """Generate a SHA1 checksum from the given file.
 
     :param uri: the URI of the file to checksum
@@ -13,7 +14,7 @@ def sha1_checksum(uri: URI) -> str:
         raise ValueError(f"invalid scheme for file checksum: {uri.scheme}")
     if uri.path is None:
         raise ValueError("Path is not set")
-    path = uri.path
+    path = Path(uri.path)
 
     if not path.exists():
         raise ValueError("File does not exist")

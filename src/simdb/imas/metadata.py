@@ -6,6 +6,8 @@ import imas
 import imas.dd_zip
 import imas.ids_defs
 
+from simdb.remote.models import _array_to_range
+
 
 class MetricException(Exception):
     pass
@@ -129,7 +131,7 @@ def load_imas_metadata(ids_dist, entry) -> dict:
         ids = imas.convert_ids(ids, latest_dd_version)
         for node in imas.util.tree_iter(ids):
             metadata[extract_ids_path(str(node.coordinates)).replace("/", ".")] = (  # type: ignore
-                node.value  # type: ignore
+                _array_to_range(node.value)  # type: ignore
             )
     return metadata
 

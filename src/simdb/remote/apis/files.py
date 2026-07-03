@@ -9,10 +9,10 @@ from flask_restx import Namespace, Resource
 from werkzeug.datastructures import FileStorage
 
 from simdb.checksum import sha1_checksum
-from simdb.cli.manifest import DataObject
+from simdb.cli.manifest import DataType
 from simdb.database import DatabaseError, models
 from simdb.imas.checksum import checksum as imas_checksum
-from simdb.imas.utils import imas_files
+from simdb.imas.utils import SimDBUrl, imas_files
 from simdb.remote.core.auth import User, requires_auth
 from simdb.remote.core.errors import error
 from simdb.remote.core.path import find_common_root, secure_path
@@ -25,7 +25,6 @@ from simdb.remote.models import (
     FileRegistrationData,
     FileUploadData,
 )
-from simdb.uri import URI
 
 api = Namespace("files", path="/")
 
@@ -44,29 +43,32 @@ def _verify_file(
         Path(current_app.simdb_config.get_string_option("server.upload_folder"))
         / sim_uuid.hex
     )
-    if sim_file.type == DataObject.Type.FILE:
+    if sim_file.type == DataType.FILE:
         if sim_file.uri.path is None:
             raise ValueError("File does not have an associated path")
-        path = secure_path(sim_file.uri.path, common_root, staging_dir)
+        path = secure_path(Path(sim_file.uri.path), common_root, staging_dir)
         if not path.exists():
             raise ValueError(f"file {path} does not exist")
-        checksum = sha1_checksum(URI(scheme="file", path=path))
+        checksum = sha1_checksum(SimDBUrl.build(scheme="file", path=path.as_posix()))
         if sim_file.checksum != checksum:
             raise ValueError(f"checksum failed for file {sim_file!r}")
-    elif sim_file.type == DataObject.Type.IMAS:
+    elif sim_file.type == DataType.IMAS:
         uri = sim_file.uri
-        path_value = uri.query.get("path")
+        qs = dict(uri.query_params())
+        path_value = qs.get("path")
         if path_value is None:
             raise ValueError("The 'path' key is missing in the URI query")
         if common_root == Path("/"):
-            uri.query.set("path", str(staging_dir) + path_value)
+            path_value = str(staging_dir) + path_value
         elif common_root is not None and common_root == path_value:
-            uri.query.set(
-                "path", path_value.replace(str(common_root), str(staging_dir))
-            )
+            path_value = path_value.replace(str(common_root), str(staging_dir))
+
         else:
-            uri.query.set("path", str(staging_dir))
-        checksum = imas_checksum(uri, ids_list or [])
+            path_value = str(staging_dir)
+        new_uri = uri.build(
+            scheme=uri.scheme, path=uri.path, query=f"path={path_value}"
+        )
+        checksum = imas_checksum(new_uri, ids_list or [])
         if sim_file.checksum != checksum:
             raise ValueError(f"checksum failed for simulation {sim_file.uri}")
 
@@ -108,7 +110,7 @@ def _stage_file_from_chunks(
             found_files.append((file, sim_file))
 
     for file, sim_file in found_files:
-        path = secure_path(sim_file.uri.path, common_root, staging_dir)
+        path = secure_path(Path(sim_file.uri.path), common_root, staging_dir)
         path.parent.mkdir(parents=True, exist_ok=True)
         file_chunk_info = chunk_info.get(
             sim_file.uuid.hex, ChunkInfo(chunk_size=0, chunk=0, num_chunks=1)
@@ -130,13 +132,14 @@ def _process_simulation_data(body: FileRegistrationData) -> Response:
     simulation = models.Simulation.from_data_model(body.simulation)
     sim_file_paths = simulation.file_paths()
     common_root = find_common_root(sim_file_paths)
-    if body.obj_type == DataObject.Type.FILE:
+
+    if body.obj_type == DataType.FILE:
         for file in body.files:
             sim_file = _check_file_is_in_simulation(
                 simulation, file.file_uuid, file.file_type
             )
             _verify_file(simulation.uuid, sim_file, common_root)
-    elif body.obj_type == DataObject.Type.IMAS:
+    elif body.obj_type == DataType.IMAS:
         file = body.files[0]
         sim_files = (
             simulation.inputs if file.file_type == "input" else simulation.outputs
@@ -204,7 +207,7 @@ class NonIMASFileDownload(Resource):
     def get(self, file_uuid: str, user: Optional[User] = None):
         try:
             file: models.File = current_app.db.get_file(file_uuid)
-            if file.type != DataObject.Type.FILE:
+            if file.type != DataType.FILE:
                 return error("Invalid file type for download")
             if file.uri.path is None:
                 return error("File path is not set")
@@ -220,7 +223,7 @@ class FileDownload(Resource):
     def get(self, file_uuid: str, file_index: int, user: Optional[User] = None):
         try:
             file: models.File = current_app.db.get_file(file_uuid)
-            if file.type == DataObject.Type.FILE:
+            if file.type == DataType.FILE:
                 if file_index != 0:
                     return error(f"invalid file_index for file {file.uri}")
                 if file.uri.path is None:

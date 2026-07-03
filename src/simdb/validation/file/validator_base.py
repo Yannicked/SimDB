@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from simdb.uri import URI
+from simdb.imas.utils import SimDBUrl
 
 
 class FileValidatorBase(ABC):
@@ -26,7 +26,7 @@ class FileValidatorBase(ABC):
         """
 
     @abstractmethod
-    def validate_uri(self, uri: URI, validate_options):
+    def validate_uri(self, uri: SimDBUrl, validate_options):
         """
         Validate the given simulation output file.
         """
