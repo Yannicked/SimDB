@@ -19,6 +19,7 @@ from simdb.cli.manifest import DataObject
 from simdb.database import DatabaseError
 from simdb.imas.utils import (
     ImasError,
+    SimDBUrl,
     open_imas,
 )
 from simdb.remote.core.auth import User, requires_auth
@@ -30,7 +31,6 @@ from simdb.remote.core.pydantic_utils import (
 )
 from simdb.remote.core.typing import current_app
 from simdb.remote.models import ImasDataQueryParams, ImasDataResponse, QuantityData
-from simdb.uri import URI
 
 api = Namespace("data", path="/")
 
@@ -134,7 +134,7 @@ def _copy_ids_properties(src_props: Any, dst_props: Any) -> None:
 
 def _set_path_value(ids: IDSToplevel, node_path: Any, value: Any) -> None:
     """Generic function to write *value* into *ids* at *node_path* considering
-    IDSStructArry.
+    IDSStructArray.
     """
     p = IDSPath(str(node_path))
     current: Any = ids
@@ -142,7 +142,7 @@ def _set_path_value(ids: IDSToplevel, node_path: Any, value: Any) -> None:
     # allocate all intermediate nodes (structs and arrays) along the path
     for part, idx in zip(p.parts[:-1], p.indices[:-1]):
         child = getattr(current, part)
-        if idx is not None:
+        if isinstance(idx, int):
             if len(child) <= idx:
                 child.resize(idx + 1)
             current = child[idx]
@@ -150,7 +150,7 @@ def _set_path_value(ids: IDSToplevel, node_path: Any, value: Any) -> None:
             current = child
     # set the value at the leaf node, allocating array if needed
     last_part, last_idx = p.parts[-1], p.indices[-1]
-    if last_idx is not None:
+    if isinstance(last_idx, int):
         child = getattr(current, last_part)
         if len(child) <= last_idx:
             child.resize(last_idx + 1)
@@ -278,9 +278,19 @@ class SimulationImasData(Resource):
             raise ResponseException(str(exc)) from exc
 
         try:
-            imas_uri = URI(str(result.imas_file.uri))
-            if imas_uri.authority.host and "cache_mode" not in imas_uri.query:
-                imas_uri.query.set("cache_mode", "none")
+            imas_uri = SimDBUrl(str(result.imas_file.uri))
+            if imas_uri.host:
+                qs = dict(imas_uri.query_params())
+                if "cache_mode" not in qs:
+                    qs["cache_mode"] = "none"
+                    query_str = "&".join(f"{k}={v}" for k, v in qs.items())
+                    imas_uri = SimDBUrl.build(
+                        scheme=imas_uri.scheme or "imas",
+                        host=imas_uri.host,
+                        port=imas_uri.port,
+                        path=imas_uri.path or "",
+                        query=query_str,
+                    )
             entry = open_imas(imas_uri)
             with entry:
                 node = _get_ids_node(
