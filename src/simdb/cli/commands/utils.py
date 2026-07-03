@@ -190,10 +190,14 @@ def show_quantity_textual_plot(
 
     console_width = _RICH_CONSOLE.size.width
     plot_width = max(48, min(70, console_width - 12))
+    _, terminal_height = plotext.terminal_size()
+    plot_height = max(12, min(24, terminal_height - 8))
 
     plotext.clear_figure()
-    plotext.theme("clear")
-    plotext.plotsize(plot_width, 18)
+    plotext.canvas_color("default")
+    plotext.axes_color("default")
+    plotext.ticks_color("default")
+    plotext.plot_size(plot_width, plot_height)
     plotext.xlabel(xlabel)
     plotext.ylabel(_quantity_axis_label(q, fallback=label or "field"))
     plotext.plot(x_values, y_values, marker="braille", color="cyan")

@@ -1,5 +1,4 @@
 """Tests for the /simulation/<sim_id>/data endpoint helpers."""
-import tempfile
 
 import imas
 import pytest
@@ -10,7 +9,7 @@ from simdb.remote.apis.v1_2 import simulation_data
 
 @pytest.fixture
 def summary_entry(tmp_path):
-    """Write a minimal summary IDS to a temp HDF5 file and return a read-mode DBEntry."""
+    """Write a minimal summary IDS to HDF5, return a read-mode DBEntry."""
     uri = f"imas:hdf5?path={tmp_path}"
     with imas.DBEntry(uri, "x") as entry:
         summary = entry.factory.new("summary")
@@ -34,11 +33,14 @@ def test_get_ids_node_returns_correct_value(summary_entry):
 
 
 def test_get_ids_node_with_dd_version_returns_converted_value(summary_entry):
-    """When dd_version matches stored version, convert_ids round-trip preserves value."""
+    """convert_ids round-trip with matching dd_version preserves value."""
     with summary_entry as entry:
         stored_version = entry.factory.version
         node = simulation_data._get_ids_node(
-            entry, "summary", 0, "global_quantities/ip/value",
+            entry,
+            "summary",
+            0,
+            "global_quantities/ip/value",
             dd_version=stored_version,
         )
 
