@@ -203,9 +203,12 @@ def _get_ids_node(
         if not renamed_path:
             raise exc
         if dd_version is None:
+            _dd_version = getattr(ids_obj, "_version", None) or getattr(
+                ids_obj, "_dd_version", "unknown"
+            )
             raise ValueError(
                 f"Path '{ids_path}' does not exist in the stored DD version "
-                f"({getattr(ids_obj, '_version', None) or getattr(ids_obj, '_dd_version', 'unknown')})"
+                f"({_dd_version})"
                 f" but is known under the name '{renamed_path}' in that version. "
                 f"Pass dd_version to request an explicit DD conversion. "
                 f"Original error: {type(exc).__name__}: {exc}"
