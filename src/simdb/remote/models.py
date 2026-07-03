@@ -35,7 +35,7 @@ from pydantic import (
     RootModel as _RootModel,
 )
 
-from simdb.cli.manifest import DataObject
+from simdb.cli.manifest import DataType
 
 HexUUID = Annotated[UUID, PlainSerializer(lambda x: x.hex, return_type=str)]
 """UUID serialized as a hex string."""
@@ -527,7 +527,7 @@ class FileRegistrationData(BaseModel):
 
     simulation: SimulationData
     """The simulation the files belong to."""
-    obj_type: DataObject.Type
+    obj_type: DataType
     """The type of the data object being registered."""
     files: List[FileRegistrationItem]
     """List of file registration items."""

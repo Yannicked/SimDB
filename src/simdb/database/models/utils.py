@@ -1,22 +1,48 @@
 from collections import deque
-from typing import Any, Deque, Dict, List, Tuple, Type, Union
+from typing import Any, Deque, Dict, List, Tuple, Type, Union, cast
 
 FLATTEN_DICT_DELIM = "."
 
 
 def flatten_dict(
-    out_dict: Dict[str, Any],
-    in_dict: Dict[str, Union[Dict, List, Any]],
-    prefix: Tuple = (),
-):
-    for key, value in in_dict.items():
+    data: Dict[str, Any],
+    prefix: str = "",
+    delim: str = ".",
+) -> Dict[str, Any]:
+    """
+    Recursively flattens a nested dictionary, representing nested structures with keys
+    delimited by a string, and lists with index suffixes.
+
+    Example:
+        >>> flatten_dict({"a": {"b": 1}, "c": [2, {"d": 3}]})
+        {'a.b': 1, 'c#1': 2, 'c#2.d': 3}
+
+    :param data: The nested dictionary to flatten.
+    :param prefix: The prefix to prepend to keys.
+    :param delim: The delimiter string to separate keys.
+    :return: A flat dictionary.
+    """
+    result: Dict[str, Any] = {}
+
+    for key, value in data.items():
+        full_key = f"{prefix}{delim}{key}" if prefix else key
+
         if isinstance(value, dict):
-            flatten_dict(out_dict, value, (*prefix, key))
+            result.update(flatten_dict(value, full_key, delim))
         elif isinstance(value, list):
             for i, el in enumerate(value):
-                flatten_dict(out_dict, el, (*prefix, f"{key}#{i + 1}"))
+                if isinstance(el, dict):
+                    result.update(
+                        flatten_dict(
+                            cast(Dict[str, Any], el), f"{full_key}#{i + 1}", delim
+                        )
+                    )
+                else:
+                    result[f"{full_key}#{i + 1}"] = el
         else:
-            out_dict[FLATTEN_DICT_DELIM.join((*prefix, key))] = value
+            result[full_key] = value
+
+    return result
 
 
 def _parse_index(head: str) -> Tuple[bool, str, int]:

@@ -34,12 +34,11 @@ from semantic_version import Version
 
 from simdb.config import Config
 from simdb.database.models import Simulation
-from simdb.imas.utils import imas_files
+from simdb.imas.utils import SimDBUrl, imas_files
 from simdb.json import CustomDecoder, CustomEncoder
 from simdb.remote import APIConstants
-from simdb.uri import URI
 
-from .manifest import DataObject
+from .manifest import DataType
 
 if TYPE_CHECKING:
     from simdb.database.models import File, Simulation, Watcher
@@ -145,9 +144,9 @@ def check_return(res: "requests.Response") -> None:
 
 
 def _get_paths(file: "File") -> Iterable[Path]:
-    if file.type == DataObject.Type.FILE:
+    if file.type == DataType.FILE:
         if file.uri and file.uri.path:
-            return [file.uri.path]
+            return [Path(file.uri.path)]
         return []
     else:
         return imas_files(file.uri)
@@ -681,7 +680,7 @@ class RemoteAPI:
         sim_data: Dict[str, Any],
         chunk_size: int,
         out_stream: IO,
-        type: DataObject.Type,
+        type: DataType,
     ):
         msg = f"Uploading file {path} "
         print(msg, file=out_stream, end="")
@@ -695,12 +694,12 @@ class RemoteAPI:
         if num_chunks == 0:
             # empty file
             self._send_chunk(0, b"", chunk_size, uuid, file_type, sim_data)
-        if type == DataObject.Type.FILE:
+        if type == DataType.FILE:
             self.post(
                 "files",
                 data={
                     "simulation": sim_data,
-                    "obj_type": DataObject.Type.FILE,
+                    "obj_type": DataType.FILE,
                     "files": [
                         {
                             "chunks": num_chunks,
@@ -792,7 +791,7 @@ class RemoteAPI:
             copy_ids = options.get("copy_ids", True)
 
             for file in simulation.inputs:
-                if file.type == DataObject.Type.IMAS:
+                if file.type == DataType.IMAS:
                     if not copy_ids:
                         print(f"Skipping IDS data {file}", file=out_stream, flush=True)
                         continue
@@ -838,7 +837,7 @@ class RemoteAPI:
                 else:
                     if file.uri and file.uri.path:
                         self._push_file(
-                            file.uri.path,
+                            Path(file.uri.path),
                             file.uuid,
                             "input",
                             sim_data,
@@ -848,7 +847,7 @@ class RemoteAPI:
                         )
 
             for file in simulation.outputs:
-                if file.type == DataObject.Type.IMAS:
+                if file.type == DataType.IMAS:
                     if not copy_ids:
                         print(f"Skipping IDS data {file}", file=out_stream, flush=True)
                         continue
@@ -900,7 +899,7 @@ class RemoteAPI:
                 else:
                     if file.uri and file.uri.path:
                         self._push_file(
-                            file.uri.path,
+                            Path(file.uri.path),
                             file.uuid,
                             "output",
                             sim_data,
@@ -1005,24 +1004,28 @@ class RemoteAPI:
         for file in itertools.chain(simulation.inputs, simulation.outputs):
             info = self._get_file_info(file.uuid)
 
-            if file.type == DataObject.Type.FILE:
+            if file.type == DataType.FILE:
                 (path, checksum) = info[0]
                 rel_path = directory / path.relative_to(common_root)
                 self._pull_file(file.uuid, 0, checksum, path, rel_path, out_stream)
-                file.uri = URI(file.uri, path=rel_path.absolute())
-            elif file.type == DataObject.Type.IMAS:
+                file.uri = SimDBUrl.build(
+                    scheme="file", path=rel_path.absolute().as_posix()
+                )
+            elif file.type == DataType.IMAS:
                 for index, (path, checksum) in enumerate(info):
                     rel_path = directory / path.relative_to(common_root)
                     self._pull_file(
                         file.uuid, index, checksum, path, rel_path, out_stream
                     )
 
+                qs = dict(file.uri.query_params())
                 to_path = (
-                    directory
-                    / Path(file.uri.query.get("path")).relative_to(common_root)
+                    directory / Path(qs.get("path", "")).relative_to(common_root)
                 ).absolute()
-                backend = file.uri.query.get("backend")
-                file.uri = URI(f"imas:{backend}?path={to_path}")
+                backend = qs.get("backend")
+                file.uri = SimDBUrl.build(
+                    scheme="imas", path=backend, query=f"path={to_path}"
+                )
 
         return simulation
 

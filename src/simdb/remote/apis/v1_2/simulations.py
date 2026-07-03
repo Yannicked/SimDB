@@ -14,7 +14,7 @@ from simdb.database import DatabaseError
 from simdb.database.models import simulation as models_sim
 from simdb.database.models import watcher as models_watcher
 from simdb.email.server import EmailServer
-from simdb.imas.utils import convert_uri
+from simdb.imas.utils import SimDBUrl, convert_uri
 from simdb.query import QueryType, parse_query_arg
 from simdb.remote.core.alias import create_alias_dir
 from simdb.remote.core.auth import User, requires_auth
@@ -46,7 +46,6 @@ from simdb.remote.models import (
     StatusPatchData,
     ValidationResult,
 )
-from simdb.uri import URI
 from simdb.validation import ValidationError, Validator
 from simdb.validation.file import find_file_validator
 
@@ -266,22 +265,25 @@ class SimulationList(Resource):
                     and sim_file.uri.scheme == "file"
                     and sim_file.uri.path is not None
                 ):
-                    path = secure_path(sim_file.uri.path, common_root, staging_dir)
+                    path = secure_path(
+                        Path(sim_file.uri.path), common_root, staging_dir
+                    )
                     if not path.exists():
                         raise ResponseException(
                             f"simulation file {sim_file.uuid} not uploaded"
                         )
-                    sim_file.uri = URI(scheme="file", path=path)
+                    sim_file.uri = SimDBUrl.build(scheme="file", path=path.as_posix())
                 elif sim_file.uri.scheme == "imas":
+                    qs = dict(sim_file.uri.query_params())
                     if copy_files:
                         path = secure_path(
-                            Path(sim_file.uri.query["path"]),
+                            Path(qs["path"]),
                             common_root,
                             staging_dir,
                             is_file=common_root is not None,
                         )
                     else:
-                        path = Path(sim_file.uri.query["path"])
+                        path = Path(qs["path"])
                     sim_file.uri = convert_uri(sim_file.uri, path, config)
 
         result = SimulationPostResponse(
