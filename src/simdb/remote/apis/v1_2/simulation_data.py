@@ -1,7 +1,4 @@
-"""IMAS simulation data endpoint: /data.
-
-TODO: Temporary solution to retrieve data (for IBEX backend)
-"""
+"""IMAS simulation data endpoint: /data."""
 
 from typing import Annotated, Any, NamedTuple, Optional
 
