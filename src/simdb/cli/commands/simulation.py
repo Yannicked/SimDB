@@ -387,6 +387,10 @@ def simulation_query(
 @click.argument("ids_path")
 @click.option("--username", help="Username used to authenticate with the remote.")
 @click.option("--password", help="Password used to authenticate with the remote.")
+@click.option(
+    "--dd-version",
+    help="Convert IDS data to the requested Data Dictionary version, e.g. 4.1.1.",
+)
 def simulation_data(
     config: Config,
     remote: Optional[str],
@@ -394,6 +398,7 @@ def simulation_data(
     ids_path: str,
     username: Optional[str],
     password: Optional[str],
+    dd_version: Optional[str],
 ):
     """Fetch IDS field data for simulation SIM_ID (UUID or alias) from REMOTE.
 
@@ -409,7 +414,7 @@ def simulation_data(
     api = RemoteAPI(remote, username, password, config)
 
     try:
-        result = api.get_simulation_data(sim_id, ids_path)
+        result = api.get_simulation_data(sim_id, ids_path, dd_version=dd_version)
     except Exception as err:
         raise click.ClickException(str(err)) from err
 

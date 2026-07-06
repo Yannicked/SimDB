@@ -663,8 +663,13 @@ class RemoteAPI:
         return [data["value"] for data in res.json()]
 
     @try_request
-    def get_simulation_data(self, sim_id: str, path: str) -> Dict[str, Any]:
-        res = self.get(f"simulation/{sim_id}/data", params={"path": path})
+    def get_simulation_data(
+        self, sim_id: str, path: str, dd_version: Optional[str] = None
+    ) -> Dict[str, Any]:
+        params = {"path": path}
+        if dd_version is not None:
+            params["dd_version"] = dd_version
+        res = self.get(f"simulation/{sim_id}/data", params=params)
         return res.json()
 
     @try_request
