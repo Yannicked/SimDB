@@ -13,9 +13,19 @@ server {
         return 200 '{"deployment":"${SIMDB_DEPLOYMENT}","git_branch":"${SIMDB_GIT_BRANCH}","git_commit":"${SIMDB_GIT_COMMIT}","deployed_at":"${SIMDB_DEPLOYED_AT}"}';
     }
 
-    location ~ ^/(v1|v1\.1|v1\.2)/$ {
+    location = /v1/ {
         default_type application/json;
-        return 200 '{"api":"simdb","api_version":"$1","server_version":"0.0.0","endpoints":["$scheme://$http_host/$1/simulations","$scheme://$http_host/$1/files","$scheme://$http_host/$1/validation_schema","$scheme://$http_host/$1/metadata","$scheme://$http_host/$1/upload_options"],"documentation":"$scheme://$http_host/$1/docs"}';
+        return 200 '{"api":"simdb","api_version":"1","server_version":"0.0.0","authentication":"None","endpoints":["$scheme://$http_host/v1/simulations","$scheme://$http_host/v1/files","$scheme://$http_host/v1/validation_schema","$scheme://$http_host/v1/metadata","$scheme://$http_host/v1/upload_options"],"documentation":"$scheme://$http_host/v1/docs"}';
+    }
+
+    location = /v1.1/ {
+        default_type application/json;
+        return 200 '{"api":"simdb","api_version":"1.1","server_version":"0.0.0","authentication":"None","endpoints":["$scheme://$http_host/v1.1/simulations","$scheme://$http_host/v1.1/files","$scheme://$http_host/v1.1/validation_schema","$scheme://$http_host/v1.1/metadata","$scheme://$http_host/v1.1/upload_options"],"documentation":"$scheme://$http_host/v1.1/docs"}';
+    }
+
+    location = /v1.2/ {
+        default_type application/json;
+        return 200 '{"api":"simdb","api_version":"1.2","server_version":"0.0.0","authentication":"None","endpoints":["$scheme://$http_host/v1.2/simulations","$scheme://$http_host/v1.2/files","$scheme://$http_host/v1.2/validation_schema","$scheme://$http_host/v1.2/metadata","$scheme://$http_host/v1.2/upload_options"],"documentation":"$scheme://$http_host/v1.2/docs"}';
     }
 
     location / {
