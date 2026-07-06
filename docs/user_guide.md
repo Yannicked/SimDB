@@ -249,6 +249,44 @@ simdb remote token delete
 
 **Note:** All the commands in this section assume there is a default remote that has been set (see above) so omit the remote name in the command. If no default has been set then the remote name needs to be inserted into the command, i.e. `simdb remote <NAME> token new`.
 
+### Inspecting IDS data from a remote simulation
+
+Use `simdb simulation data` to read a single populated IDS field from the IMAS output attached to a remote simulation:
+
+```bash
+simdb simulation data [REMOTE] <SIM_ID> <IDS_PATH>
+```
+
+`REMOTE` is the configured remote name. If omitted, SimDB uses the default remote. `SIM_ID` can be either the simulation UUID or alias, for example `53301/2`. `IDS_PATH` has the form:
+
+```text
+ids_name[:occurrence]/path/to/field
+```
+
+For example, to read the 4.1.1 `li_3` value from the `summary` IDS on remote `pr-70`:
+
+```bash
+simdb simulation data pr-70 '53301/2' \
+  'summary:0/global_quantities/li_3/value' \
+  --dd-version 4.1.1
+```
+
+The optional `--dd-version` flag asks the server to convert the IDS to the requested IMAS Data Dictionary version before resolving the path. This is useful when a field was renamed between DD versions. For example, data stored with DD `3.42.0` may contain `global_quantities/li/value`, while DD `4.1.1` exposes the same quantity as `global_quantities/li_3/value`.
+
+The command prints the simulation UUID, requested path, occurrence, field value, units, and coordinates where available. One-dimensional numeric fields are shown with a terminal plot and a compact value/statistics panel.
+
+The corresponding REST endpoint is:
+
+```text
+GET /v1.2/simulation/{SIM_ID}/data?path={IDS_PATH}[&dd_version={DD_VERSION}]
+```
+
+For example:
+
+```bash
+curl 'http://<simdb-host>/v1.2/simulation/53301%2F2/data?path=summary%3A0%2Fglobal_quantities%2Fli_3%2Fvalue&dd_version=4.1.1'
+```
+
 ## Pushing simulations to a remote
 
 Once you have ingested your simulation locally and are happy with the metadata that has been stored alongside it, you may choose to push this simulation to a remote SimDB server to make it publicly available. You do this by:
