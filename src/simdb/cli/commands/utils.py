@@ -123,36 +123,16 @@ def _stats_table(stats: Dict[str, float]) -> Table:
     return table
 
 
-def _plot_stats_table(stats: Dict[str, float], shape: Tuple[int, ...]) -> Table:
-    table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
-    for key in ("n", "min", "max", "mean", "std", "median"):
-        table.add_column(key, justify="right")
-    table.add_row(
-        str(int(stats["n"])),
-        _fmt_val(stats["min"]),
-        _fmt_val(stats["max"]),
-        _fmt_val(stats["mean"]),
-        _fmt_val(stats["std"]),
-        _fmt_val(stats["median"]),
-    )
-    return table
-
-
 def _plot_panel(
     *,
     plot: Text,
     title: str,
     units: str,
-    stats: Optional[Dict[str, float]],
     shape: Tuple[int, ...],
 ) -> None:
-    content = plot
-    if stats:
-        content = Group(plot, _plot_stats_table(stats, shape))
-
     _RICH_CONSOLE.print(
         Panel(
-            content,
+            plot,
             title=f"[bold]{title}[/bold]  [dim]\\[{units}][/dim]",
             subtitle=f"shape {shape}",
         )
@@ -202,12 +182,10 @@ def show_quantity_textual_plot(
     plotext.ylabel(_quantity_axis_label(q, fallback=label or "field"))
     plotext.plot(x_values, y_values, marker="braille", color="cyan")
     plot = Text.from_ansi(plotext.build())
-    stats = _compute_stats(y_values)
     _plot_panel(
         plot=plot,
         title=title,
         units=units,
-        stats=stats,
         shape=shape,
     )
     print_quantity(q, label=label)
