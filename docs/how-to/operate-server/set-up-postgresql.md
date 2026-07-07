@@ -81,8 +81,12 @@ In `app.cfg`:
 type = postgres
 host = localhost
 port = 5432
-name = simdb
+user = simdb
+password = simdb
+db_name = simdb
 ```
+
+`user`, `password`, and `db_name` each default to `simdb` if omitted.
 
 The server also needs the PostgreSQL driver, installed by the `postgres`
 [extra](../../getting-started/installation.md#optional-extras)

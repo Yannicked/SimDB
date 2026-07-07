@@ -8,7 +8,7 @@ the [tutorial](../tutorials/first-simulation.md).
 
 - SimDB [installed](installation.md) (`simdb --version` works).
 
-## 1. Create a manifest
+## Step 1: create a manifest
 
 A [manifest](../reference/manifest-format.md) describes your simulation. Start
 from a template:
@@ -40,7 +40,7 @@ Check that it is well-formed:
 simdb manifest check manifest.yaml
 ```
 
-## 2. Ingest it locally
+## Step 2: ingest it locally
 
 ```bash
 simdb simulation ingest manifest.yaml
@@ -53,7 +53,7 @@ simdb simulation list
 simdb simulation info my-first-simulation
 ```
 
-## 3. Query locally
+## Step 3: query locally
 
 ```bash
 simdb simulation query code.name=JETTO
@@ -61,7 +61,7 @@ simdb simulation query code.name=JETTO
 
 See [query operators](../reference/query-operators.md) for the full syntax.
 
-## 4. Push to a server (optional)
+## Step 4: push to a server (optional)
 
 If you have access to a SimDB server, configure it once:
 
@@ -80,7 +80,7 @@ simdb simulation push my-first-simulation
 ITER users should follow [Connect to ITER](../how-to/connect-to-iter.md)
 instead, which covers the firewall and certificate setup.
 
-## Where to go next
+## Next steps
 
 - [Catalogue your first simulation](../tutorials/first-simulation.md) (tutorial)
 - [Create a manifest](../how-to/create-a-manifest.md) (how-to)

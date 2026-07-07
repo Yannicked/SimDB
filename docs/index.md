@@ -51,6 +51,7 @@ tutorials/push-to-remote
 :hidden:
 
 how-to/create-a-manifest
+how-to/capture-provenance
 how-to/ingest-and-manage
 how-to/query-simulations
 how-to/push-pull
@@ -70,6 +71,7 @@ how-to/use-the-dashboard
 how-to/operate-server/install-server
 how-to/operate-server/run-dev-server
 how-to/operate-server/run-with-docker
+how-to/operate-server/run-multiple-instances
 how-to/operate-server/run-behind-nginx-gunicorn
 how-to/operate-server/enable-ssl
 how-to/operate-server/set-up-postgresql

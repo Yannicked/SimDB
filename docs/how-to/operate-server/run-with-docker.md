@@ -52,9 +52,9 @@ imas_remote_host = localhost
 type = postgres
 host = postgres
 port = 5432
-username = simdb
+user = simdb
 password = simdb
-database = simdb
+db_name = simdb
 
 [validation]
 path = ./validation
@@ -113,11 +113,14 @@ docker compose --profile with_workers up --build
 
 They use the `[celery]` broker and result backend from `config/simdb.cfg`.
 
-## Building for a specific Python version
+## Testing against multiple Python versions
 
-`docker-compose-pyver.yml` and the `PYVER` build argument let you build against
-a chosen Python version, for example:
+The image accepts a `PYVER` build argument (the default is 3.12).
+`docker-compose-pyver.yml` extends the base setup to build the server against
+several Python versions at once, sharing one PostgreSQL and Redis instance. It
+publishes a `web-311` service (Python 3.11, on port 5001) and a `web-313`
+service (Python 3.13, on port 5003) alongside the default 3.12 service:
 
 ```bash
-PYVER=3.12 docker compose -f docker-compose-pyver.yml up --build
+docker compose -f docker-compose-pyver.yml up --build
 ```
