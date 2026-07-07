@@ -6,17 +6,15 @@ alias:
     - regex: '^/.*$'  # does not start with /
     - regex: '^.*/$'  # does not end with /
 
-device:
+machine:
   required: true
   type: string
 
-workflow:
+code:
   required: true
   type: dict
   schema:
     name:
       required: true
       type: string
-      allowed:
-        - CORSICA
-        - something
+

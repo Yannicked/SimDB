@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 from sqlalchemy import types as sql_types
 from sqlalchemy.dialects import postgresql
 
-from simdb import uri as urilib
+from simdb.imas.utils import SimDBUrl
 
 
 class UUID(sql_types.TypeDecorator):
@@ -64,21 +64,19 @@ class URI(sql_types.TypeDecorator):
 
     @property
     def python_type(self):
-        return urilib.URI
+        return SimDBUrl
 
-    def process_bind_param(self, value: Optional[urilib.URI], dialect) -> Optional[str]:
+    def process_bind_param(self, value: Optional[SimDBUrl], dialect) -> Optional[str]:
         if value is None:
             return value
         return str(value)
 
-    def process_result_value(
-        self, value: Optional[str], dialect
-    ) -> Optional[urilib.URI]:
+    def process_result_value(self, value: Optional[str], dialect) -> Optional[SimDBUrl]:
         if value is None:
             return value
-        return urilib.URI(value)
+        return SimDBUrl(value)
 
-    def process_literal_param(self, value, dialect) -> Optional[urilib.URI]:
+    def process_literal_param(self, value, dialect) -> Optional[SimDBUrl]:
         return self.process_result_value(value, dialect)
 
 

@@ -1,27 +1,30 @@
 import gzip
-import json
 import uuid
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 import magic
-from flask import Response, jsonify, request, send_file, stream_with_context
+from flask import Response, jsonify, request, send_file
 from flask_restx import Namespace, Resource
 from werkzeug.datastructures import FileStorage
 
 from simdb.checksum import sha1_checksum
-from simdb.cli.manifest import DataObject
+from simdb.cli.manifest import DataType
 from simdb.database import DatabaseError, models
 from simdb.imas.checksum import checksum as imas_checksum
-from simdb.imas.utils import imas_files
-from simdb.json import CustomDecoder
+from simdb.imas.utils import SimDBUrl, imas_files
 from simdb.remote.core.auth import User, requires_auth
 from simdb.remote.core.errors import error
 from simdb.remote.core.path import find_common_root, secure_path
 from simdb.remote.core.pydantic_utils import pydantic_validate
 from simdb.remote.core.typing import current_app
-from simdb.remote.models import FileDataList, FileGetDataResponse
-from simdb.uri import URI
+from simdb.remote.models import (
+    ChunkInfo,
+    FileDataList,
+    FileGetDataResponse,
+    FileRegistrationData,
+    FileUploadData,
+)
 
 api = Namespace("files", path="/")
 
@@ -40,38 +43,41 @@ def _verify_file(
         Path(current_app.simdb_config.get_string_option("server.upload_folder"))
         / sim_uuid.hex
     )
-    if sim_file.type == DataObject.Type.FILE:
+    if sim_file.type == DataType.FILE:
         if sim_file.uri.path is None:
             raise ValueError("File does not have an associated path")
-        path = secure_path(sim_file.uri.path, common_root, staging_dir)
+        path = secure_path(Path(sim_file.uri.path), common_root, staging_dir)
         if not path.exists():
             raise ValueError(f"file {path} does not exist")
-        checksum = sha1_checksum(URI(scheme="file", path=path))
+        checksum = sha1_checksum(SimDBUrl.build(scheme="file", path=path.as_posix()))
         if sim_file.checksum != checksum:
             raise ValueError(f"checksum failed for file {sim_file!r}")
-    elif sim_file.type == DataObject.Type.IMAS:
+    elif sim_file.type == DataType.IMAS:
         uri = sim_file.uri
-        path_value = uri.query.get("path")
+        qs = dict(uri.query_params())
+        path_value = qs.get("path")
         if path_value is None:
             raise ValueError("The 'path' key is missing in the URI query")
         if common_root == Path("/"):
-            uri.query.set("path", str(staging_dir) + path_value)
+            path_value = str(staging_dir) + path_value
         elif common_root is not None and common_root == path_value:
-            uri.query.set(
-                "path", path_value.replace(str(common_root), str(staging_dir))
-            )
+            path_value = path_value.replace(str(common_root), str(staging_dir))
+
         else:
-            uri.query.set("path", str(staging_dir))
-        checksum = imas_checksum(uri, ids_list or [])
+            path_value = str(staging_dir)
+        new_uri = uri.build(
+            scheme=uri.scheme, path=uri.path, query=f"path={path_value}"
+        )
+        checksum = imas_checksum(new_uri, ids_list or [])
         if sim_file.checksum != checksum:
             raise ValueError(f"checksum failed for simulation {sim_file.uri}")
 
 
 def _save_chunked_file(
-    file: FileStorage, chunk_info: Dict, path: Path, compressed: bool = True
+    file: FileStorage, chunk_info: ChunkInfo, path: Path, compressed: bool = True
 ):
     with path.open("r+b" if path.exists() else "wb") as file_out:
-        file_out.seek(chunk_info["chunk_size"] * chunk_info["chunk"])
+        file_out.seek(chunk_info.chunk_size * chunk_info.chunk)
         if compressed:
             with gzip.GzipFile(fileobj=file.stream, mode="rb") as gz_file:
                 file_out.write(gz_file.read())
@@ -81,7 +87,7 @@ def _save_chunked_file(
 
 def _stage_file_from_chunks(
     files: Iterable[FileStorage],
-    chunk_info: Dict,
+    chunk_info: Dict[str, ChunkInfo],
     sim_uuid: uuid.UUID,
     sim_files: List[models.File],
     common_root: Optional[Path],
@@ -104,10 +110,10 @@ def _stage_file_from_chunks(
             found_files.append((file, sim_file))
 
     for file, sim_file in found_files:
-        path = secure_path(sim_file.uri.path, common_root, staging_dir)
+        path = secure_path(Path(sim_file.uri.path), common_root, staging_dir)
         path.parent.mkdir(parents=True, exist_ok=True)
         file_chunk_info = chunk_info.get(
-            sim_file.uuid.hex, {"chunk_size": 0, "chunk": 0, "num_chunks": 1}
+            sim_file.uuid.hex, ChunkInfo(chunk_size=0, chunk=0, num_chunks=1)
         )
         _save_chunked_file(file, file_chunk_info, path)
 
@@ -122,39 +128,34 @@ def _check_file_is_in_simulation(
     return sim_file
 
 
-def _process_simulation_data(data: dict) -> Response:
-    simulation = models.Simulation.from_data(data["simulation"])
+def _process_simulation_data(body: FileRegistrationData) -> Response:
+    simulation = models.Simulation.from_data_model(body.simulation)
     sim_file_paths = simulation.file_paths()
     common_root = find_common_root(sim_file_paths)
-    if DataObject.Type(data["obj_type"]) == DataObject.Type.FILE:
-        for file in data["files"]:
+
+    if body.obj_type == DataType.FILE:
+        for file in body.files:
             sim_file = _check_file_is_in_simulation(
-                simulation, uuid.UUID(file["file_uuid"]), file["file_type"]
+                simulation, file.file_uuid, file.file_type
             )
             _verify_file(simulation.uuid, sim_file, common_root)
-    elif DataObject.Type(data["obj_type"]) == DataObject.Type.IMAS:
-        file = data["files"][0]
+    elif body.obj_type == DataType.IMAS:
+        file = body.files[0]
         sim_files = (
-            simulation.inputs if file["file_type"] == "input" else simulation.outputs
+            simulation.inputs if file.file_type == "input" else simulation.outputs
         )
-        sim_file = next(f for f in sim_files if f.uuid == uuid.UUID(file["file_uuid"]))
-        _verify_file(simulation.uuid, sim_file, common_root, file["ids_list"])
+        sim_file = next(f for f in sim_files if f.uuid == file.file_uuid)
+        _verify_file(simulation.uuid, sim_file, common_root, file.ids_list)
     else:
-        raise ValueError("Unsupported object type {}".format(data["obj_type"]))
+        raise ValueError(f"Unsupported object type {body.obj_type}")
 
     return jsonify({})
 
 
 def _handle_file_upload() -> Response:
-    data: dict = json.load(request.files["data"].stream, cls=CustomDecoder)
+    body = FileUploadData.model_validate_json(request.files["data"].stream.read())
 
-    if "simulation" not in data:
-        return error("Simulation data not provided")
-
-    simulation = models.Simulation.from_data(data["simulation"])
-
-    chunk_info = data.get("chunk_info", {})
-    file_type = data["file_type"]
+    simulation = models.Simulation.from_data_model(body.simulation)
 
     files = request.files.getlist("files")
     if not files:
@@ -163,8 +164,10 @@ def _handle_file_upload() -> Response:
     sim_file_paths = simulation.file_paths()
     common_root = find_common_root(sim_file_paths)
 
-    sim_files = simulation.inputs if file_type == "input" else simulation.outputs
-    _stage_file_from_chunks(files, chunk_info, simulation.uuid, sim_files, common_root)
+    sim_files = simulation.inputs if body.file_type == "input" else simulation.outputs
+    _stage_file_from_chunks(
+        files, body.chunk_info or {}, simulation.uuid, sim_files, common_root
+    )
 
     return jsonify({})
 
@@ -180,9 +183,9 @@ class FileList(Resource):
     @requires_auth()
     def post(self, user: User):
         try:
-            data = request.get_json()
-            if data:
-                return _process_simulation_data(data)
+            if request.is_json:
+                body = FileRegistrationData.model_validate_json(request.get_data())
+                return _process_simulation_data(body)
             return _handle_file_upload()
 
         except ValueError as err:
@@ -204,16 +207,12 @@ class NonIMASFileDownload(Resource):
     def get(self, file_uuid: str, user: Optional[User] = None):
         try:
             file: models.File = current_app.db.get_file(file_uuid)
-            if file.type != DataObject.Type.FILE:
+            if file.type != DataType.FILE:
                 return error("Invalid file type for download")
             if file.uri.path is None:
                 return error("File path is not set")
             mimetype = magic.from_file(file.uri.path, mime=True)
-            response = send_file(file.uri.path, mimetype=mimetype)
-            return Response(
-                stream_with_context(response.iter_content()),
-                content_type=response.headers["content-type"],
-            )
+            return send_file(file.uri.path, mimetype=mimetype)
         except DatabaseError as err:
             return error(str(err))
 
@@ -224,7 +223,7 @@ class FileDownload(Resource):
     def get(self, file_uuid: str, file_index: int, user: Optional[User] = None):
         try:
             file: models.File = current_app.db.get_file(file_uuid)
-            if file.type == DataObject.Type.FILE:
+            if file.type == DataType.FILE:
                 if file_index != 0:
                     return error(f"invalid file_index for file {file.uri}")
                 if file.uri.path is None:
