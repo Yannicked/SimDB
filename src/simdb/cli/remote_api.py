@@ -427,13 +427,12 @@ class RemoteAPI:
         """
         Perform an HTTP GET request.
 
-        @param url: the URL of the request.
-        @param params: any additional parameters to send along with the request.
-        @param headers: additional headers to send with the request.
-        @param authenticate: True if we should send authentication headers with the
-                             request.
-        @param stream: True to enable streaming.
-        @return:
+        :param url: the URL of the request.
+        :param params: any additional parameters to send along with the request.
+        :param headers: additional headers to send with the request.
+        :param authenticate: True if we should send authentication headers with
+            the request.
+        :param stream: True to enable streaming.
         """
 
         params = params if params is not None else {}
