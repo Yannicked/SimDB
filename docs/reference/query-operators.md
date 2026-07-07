@@ -42,17 +42,20 @@ These operators are available for both local and remote queries:
 | `le` | Less than or equal to `VALUE`. |
 | `exist` | The field exists, regardless of its value. Provide no value: `NAME=exist:`. |
 
-### Array operators (remote only)
+### Range operators
 
-When a metadata value is an array, these operators match if **any** element
-satisfies the comparison. They are available on remote queries:
+These operators apply to a metadata value shaped as a range object with `min`
+and `max` keys, for example `time: {min: 2.0, max: 8.5}`. The `a` prefix stands
+for "any": the comparison succeeds if any value in the range satisfies it, which
+is tested against the range's `max` (for `agt`/`age`) or `min` (for
+`alt`/`ale`). They work for both local and remote queries.
 
 | Modifier | Meaning |
 | --- | --- |
-| `agt` | Any element greater than `VALUE`. |
-| `age` | Any element greater than or equal to `VALUE`. |
-| `alt` | Any element less than `VALUE`. |
-| `ale` | Any element less than or equal to `VALUE`. |
+| `agt` | The range's `max` is greater than `VALUE`. |
+| `age` | The range's `max` is greater than or equal to `VALUE`. |
+| `alt` | The range's `min` is less than `VALUE`. |
+| `ale` | The range's `min` is less than or equal to `VALUE`. |
 
 ## Examples
 
@@ -69,8 +72,8 @@ simdb simulation query pulse=gt:1000 run=0
 # Simulations that have a "sequence" metadata field at all
 simdb simulation query sequence=exist:
 
-# Remote array query: any time slice above 5.0
-simdb remote iter query time=agt:5.0
+# Range query: the time range's upper bound is above 5.0
+simdb simulation query time=agt:5.0
 ```
 
 Use `-m/--meta-data NAME` to add extra metadata columns to the output, and

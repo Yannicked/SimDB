@@ -5,7 +5,7 @@ intact, and acceptable. There are three independent layers. For the commands,
 see [Validate a simulation](../how-to/validate-a-simulation.md); for the server
 settings, see [Configure validation](../how-to/operate-server/configure-validation.md).
 
-## 1. Integrity (checksums)
+## Integrity (checksums)
 
 When a simulation is ingested, SimDB records a checksum for every input and
 output: a SHA-1 hash for ordinary files, and a content hash derived from the
@@ -16,7 +16,7 @@ catalogued (or a file is missing), and the simulation will not validate.
 This is the most common cause of validation failure: one of the data sources is
 absent, or something changed after ingestion.
 
-## 2. Metadata schema
+## Metadata schema
 
 A server can require specific metadata through a `validation-schema.yaml` file,
 expressed as [Cerberus](https://docs.python-cerberus.org/) rules. For example, a
@@ -39,7 +39,7 @@ simdb simulation validate SERVER SIM_ID
 Failing to provide a server's mandatory metadata is the second common cause of
 validation failure.
 
-## 3. File-content validation
+## File-content validation
 
 Optionally, a server can inspect the *contents* of data files with a file
 validator. The validator currently available is the **IDS validator** (the

@@ -21,7 +21,9 @@ see the [Operating a server](../how-to/operate-server/install-server.md) guides.
 | `file` | If `type=sqlite` | SQLite database file. Defaults to `remote.db` in the user data directory. |
 | `host` | If `type=postgres` | Database host. |
 | `port` | If `type=postgres` | Database port. |
-| `name` | If `type=postgres` | Database name. |
+| `user` | No | Database user. Defaults to `simdb`. |
+| `password` | No | Database password. Defaults to `simdb`. |
+| `db_name` | No | Database name. Defaults to `simdb`. |
 
 See [Set up PostgreSQL](../how-to/operate-server/set-up-postgresql.md).
 
@@ -38,6 +40,9 @@ See [Set up PostgreSQL](../how-to/operate-server/set-up-postgresql.md).
 | `token_lifetime` | No | Days that generated tokens stay valid. Defaults to 30. |
 | `imas_remote_host` | No | Host set on ingested IMAS URIs so data can be fetched via an IMAS remote access server. For example `imas:hdf5?path=foo` becomes `imas://<imas_remote_host>:<imas_remote_port>/uda?path=foo&backend=hdf5` on ingest. |
 | `imas_remote_port` | No | Port set on ingested IMAS URIs. See `imas_remote_host`. |
+| `copy_files` | No | `True`/`False`: copy uploaded data files into the server's storage. Defaults to `True`. |
+| `copy_ids` | No | `True`/`False`: copy uploaded IMAS IDS data into the server's storage. Defaults to `True`. |
+| `user_upload_folder` | No | Optional staging directory clients upload into before ingest (returned by the `staging_dir` endpoint). Falls back to `upload_folder` if unset. |
 
 ## `[flask]`
 
@@ -87,7 +92,7 @@ Outgoing SMTP server used to send watcher notifications.
 
 | Option | Required | Description |
 | --- | --- | --- |
-| `type` | Yes | Authentication method: `ActiveDirectory`, `LDAP`, or `None`. |
+| `type` | Yes | Authentication method(s): `ActiveDirectory`, `LDAP`, `KeyCloak`, or `None`. List several separated by commas to enable more than one; a token authenticator is always available in addition. |
 | `firewall_auth` | No | `True`/`False`: read authentication from firewall headers (server runs behind a firewall). |
 | `firewall_user` | If `firewall_auth=True` | Name of the firewall header carrying the username. |
 | `firewall_email` | If `firewall_auth=True` | Name of the firewall header carrying the user's email. |
@@ -112,6 +117,21 @@ Outgoing SMTP server used to send watcher notifications.
 | `ldap_query_password` | No | Password for `ldap_query_user`. Required if `ldap_query_user` is set. |
 | `ldap_query_uid` | No | Name of the user parameter in the search result. Defaults to `uid`. |
 | `ldap_query_mail` | No | Name of the email parameter in the search result. Defaults to `mail`. |
+
+### Keycloak (`type = KeyCloak`)
+
+Clients send their Keycloak access token in a `KeyCloak-Token` request header.
+
+| Option | Required | Description |
+| --- | --- | --- |
+| `sever_url` | Yes | Keycloak server URL. The key is spelled `sever_url` in the current release. |
+| `realm_name` | Yes | Keycloak realm name. |
+| `client_id` | Yes | Keycloak client ID. |
+
+```{note}
+Keycloak support is experimental. Enable it only if you have verified it against
+your Keycloak deployment.
+```
 
 See [Configure authentication](../how-to/operate-server/configure-authentication.md).
 
@@ -213,7 +233,9 @@ secret_key = CHANGE_ME_TO_A_LONG_RANDOM_STRING
 type = postgres
 host = localhost
 port = 5432
-name = simdb
+user = simdb
+password = simdb
+db_name = simdb
 
 [authentication]
 type = None

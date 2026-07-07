@@ -6,8 +6,8 @@ ITER HPC nodes) installing the ITER SSL certificates.
 
 ## Add the ITER remote
 
-On first run, SimDB pre-populates an `iter` remote. If you need to add it
-manually:
+Your site configuration may already provide an `iter` remote (run
+`simdb remote config list` to check). If it does not, add it manually:
 
 ```bash
 simdb remote config new iter https://simdb.iter.org/scenarios/api/
@@ -66,11 +66,11 @@ openssl x509 -inform DER -in "io-ws-pkiroot_ITER Organization Root CA.crt" -out 
 cat CA1.pem CA2.pem > $HOME/iter.pem
 ```
 
-Point SimDB at the bundle through the `SIMDB_REQUESTS_CA_BUNDLE` environment
-variable:
+Point SimDB at the bundle through the `REQUESTS_CA_BUNDLE` environment variable,
+which the underlying HTTP library reads automatically:
 
 ```bash
-export SIMDB_REQUESTS_CA_BUNDLE=$HOME/iter.pem
+export REQUESTS_CA_BUNDLE=$HOME/iter.pem
 ```
 
 Add that line to `$HOME/.bash_profile` so it is set for every session.

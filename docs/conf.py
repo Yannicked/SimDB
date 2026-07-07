@@ -108,10 +108,14 @@ html_theme_options = {
         "navigation.tabs",
         "navigation.top",
         "toc.follow",
+        "content.action.edit",
         "search.share",
     ],
     "repo_url": "https://github.com/iterorganization/SimDB",
     "repo_name": "SimDB",
+    # Show an "edit this page" link. Joined onto repo_url; docs live under docs/
+    # on the default branch.
+    "edit_uri": "blob/develop/docs",
 }
 
 htmlhelp_basename = "simdb"
