@@ -86,10 +86,9 @@ reference pointing to the new one. Follow the chain of revisions with:
 simdb remote trace iter-baseline-scenario-2024
 ```
 
-## What you have learned
+## Where next
 
-You configured a remote, validated a simulation against it, and pushed it.
-From here:
+Your simulation is now on the server for colleagues to find. From here you can:
 
 - [Query simulations](../how-to/query-simulations.md) on the server.
 - [Pull simulations](../how-to/push-pull.md) back to your machine.

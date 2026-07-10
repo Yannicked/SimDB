@@ -1,8 +1,9 @@
 # Connect to ITER
 
-This guide sets up the SimDB client to talk to the ITER server at
-`simdb.iter.org`. It covers the remote configuration, the F5 firewall, and (for
-ITER HPC nodes) installing the ITER SSL certificates.
+Talking to the ITER server at `simdb.iter.org` takes a little more setup than
+an ordinary remote: the remote configuration itself, authentication at the F5
+firewall, and (on ITER HPC nodes) the ITER SSL certificates. This guide covers
+all three.
 
 ## Add the ITER remote
 

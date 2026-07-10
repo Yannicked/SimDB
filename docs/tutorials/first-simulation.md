@@ -1,9 +1,9 @@
 # Tutorial: catalogue your first simulation
 
-This tutorial walks you through cataloguing a simulation in your local SimDB,
-from checking the CLI to inspecting the ingested result. It assumes SimDB is
-[installed](../getting-started/installation.md). When you are done, continue with
-[Push your simulation to a server](push-to-remote.md).
+By the end of this tutorial you will have written a manifest, checked it, and
+ingested your first simulation into your local catalogue. All you need to start
+is SimDB [installed](../getting-started/installation.md). When you are done,
+continue with [Push your simulation to a server](push-to-remote.md).
 
 ## Step 1: check the CLI
 
@@ -114,7 +114,8 @@ And show the full detail of one, by alias or UUID:
 simdb simulation info iter-baseline-scenario-2024
 ```
 
-## What you have learned
+## Where next
 
-You created a manifest, validated it, ingested a simulation, and inspected it,
-all locally. Next, share it: [Push your simulation to a server](push-to-remote.md).
+Your simulation is now catalogued: manifest written, checked, ingested, and
+inspected, all locally. The next step is to share it:
+[Push your simulation to a server](push-to-remote.md).

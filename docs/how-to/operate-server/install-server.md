@@ -1,8 +1,9 @@
 # Install a server
 
-This guide installs SimDB with the server components. For running it, see
+A SimDB server is the same package as the client, installed from source with
+the server extras and given an `app.cfg`. Once you have it installed, see
 [Run a development server](run-dev-server.md) and
-[Run behind Nginx and Gunicorn](run-behind-nginx-gunicorn.md).
+[Run behind Nginx and Gunicorn](run-behind-nginx-gunicorn.md) for running it.
 
 ## Install
 

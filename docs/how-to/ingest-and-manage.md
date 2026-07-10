@@ -1,9 +1,9 @@
 # Ingest and manage simulations
 
-This guide covers working with simulations in your **local** catalogue:
-ingesting, listing, inspecting, modifying metadata, and deleting. For querying,
-see [Query simulations](query-simulations.md); for sharing, see
-[Push and pull](push-pull.md).
+Everything on this page happens in your **local** catalogue: ingesting
+simulations, listing them, inspecting them, changing their metadata, and
+deleting them. Querying has [its own guide](query-simulations.md), as does
+[sharing](push-pull.md).
 
 ## Ingest
 

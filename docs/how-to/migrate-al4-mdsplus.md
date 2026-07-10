@@ -23,7 +23,7 @@ mdsplusIMASDB4to5 [-h] [--dry-run] [-p PATH] [-d DATABASE] [-f]
 | `-d DATABASE`, `--database DATABASE` | A specific database to map (default: all). |
 | `-f`, `--force` | Create the symlink even if the target file exists. |
 
-A dry run first is recommended:
+Do a dry run first to see what it would change:
 
 ```bash
 mdsplusIMASDB4to5 --dry-run -p /path/to/imasdb

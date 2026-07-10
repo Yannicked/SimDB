@@ -1,6 +1,7 @@
 # Set up a development environment
 
-This guide sets up SimDB for local development.
+To work on SimDB itself you need a checkout of the `develop` branch and an
+editable install with the development dependencies.
 
 ## Clone and check out
 
