@@ -1,7 +1,9 @@
 # Architecture
 
-This page describes how SimDB is put together. For the user-facing concepts
-(simulation, manifest, metadata, and so on), see [Concepts](concepts.md).
+SimDB is a command line client plus an optional shared server. This page
+describes how the pieces fit together and how data moves between them. For the
+user-facing concepts (simulation, manifest, metadata, and so on), see
+[Concepts](concepts.md).
 
 ## Two components
 

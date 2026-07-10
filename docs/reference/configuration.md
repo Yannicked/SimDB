@@ -45,8 +45,8 @@ user files (environment variables still apply).
 
 ## Managing configuration from the CLI
 
-It is recommended to manage the file through the CLI rather than editing it by
-hand, so it always stays valid:
+Manage the file through the CLI rather than editing it by hand, so it always
+stays valid:
 
 ```bash
 simdb config list             # show all options

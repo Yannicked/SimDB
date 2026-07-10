@@ -1,7 +1,7 @@
 # Configure authentication
 
 A server authenticates users according to its `[authentication]` configuration.
-This guide shows the common setups; for every option see the
+The common setups are below; every option is listed in the
 [server configuration reference](../../reference/server-configuration.md#authentication).
 
 ## No authentication (testing only)

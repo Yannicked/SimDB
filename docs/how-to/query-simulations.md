@@ -1,7 +1,7 @@
 # Query simulations
 
 You can search by metadata both in your local catalogue and on a remote server.
-This guide shows the commands; for the full operator list and syntax, see
+The common cases are shown below; for the full operator list and syntax, see
 [Query operators](../reference/query-operators.md).
 
 ## Query locally

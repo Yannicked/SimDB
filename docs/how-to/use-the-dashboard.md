@@ -1,7 +1,7 @@
 # Use the dashboard
 
-A SimDB server provides a web dashboard for browsing simulation metadata in a
-browser, complementing the CLI.
+Besides the CLI, a SimDB server has a web dashboard for browsing simulation
+metadata in the browser.
 
 ## Open a simulation by UUID
 

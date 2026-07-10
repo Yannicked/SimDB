@@ -1,9 +1,10 @@
 # Create a manifest
 
 A [manifest](../reference/manifest-format.md) is the YAML file you ingest to
-catalogue a simulation. This guide shows how to write a good one. For the
-complete specification of every field, see the
-[manifest format reference](../reference/manifest-format.md).
+catalogue a simulation. Writing one is mostly a matter of listing the right
+data and describing it well; that is what this guide covers. The
+[manifest format reference](../reference/manifest-format.md) has the complete
+specification of every field.
 
 ## Start from a template
 

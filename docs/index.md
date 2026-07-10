@@ -12,8 +12,8 @@ but works with any files you want to catalogue.
 
 - **Getting started**: [Install SimDB](getting-started/installation.md), then
   follow the [quickstart](getting-started/quickstart.md).
-- **Tutorials**: Learn by doing:
-  [catalogue your first simulation](tutorials/first-simulation.md) and
+- **Tutorials**:
+  [Catalogue your first simulation](tutorials/first-simulation.md), then
   [push it to a server](tutorials/push-to-remote.md).
 - **How-to guides**: Task recipes for
   [manifests](how-to/create-a-manifest.md),
