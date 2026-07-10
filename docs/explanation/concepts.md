@@ -64,15 +64,10 @@ SimDB has two halves:
   production). Pushing a simulation copies its metadata and data to the server
   so authorized colleagues can query and reuse it.
 
-A separate distinction applies to the *data* a simulation references:
-
-- **Local IMAS data** is reachable from the file system where you run the CLI.
-- **Remote IMAS data** lives on a data server and is reached over the network.
-
-The two distinctions are independent: a locally-catalogued simulation can
-reference either local or remote data. When you push, local IMAS URIs are
-rewritten so the data stays reachable from the server. See
-[URI schemes](../reference/uri-schemes.md).
+The data a simulation references is addressed by
+[URI](../reference/uri-schemes.md) and must be reachable from the file system
+where you run the CLI. When you push, local IMAS URIs are rewritten so the data
+stays reachable from the server.
 
 ## Typical workflow
 

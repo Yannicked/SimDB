@@ -59,8 +59,9 @@ Summary IDS
   source of metadata.
 
 UDA
-  Universal Data Access. A server protocol for reaching remote IMAS data, used
-  in [remote IMAS URIs](../reference/uri-schemes.md#remote-imas-data).
+  Universal Data Access. A server protocol for reaching remote IMAS data. When
+  a simulation is pushed, the server rewrites its local IMAS URIs into
+  UDA-based remote URIs. See [URI schemes](../reference/uri-schemes.md#imas-scheme).
 
 UUID
   The permanent unique identifier assigned to every simulation.
