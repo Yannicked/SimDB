@@ -36,7 +36,7 @@ from simdb.config import Config
 from simdb.database.models import Simulation
 from simdb.imas.utils import SimDBUrl, imas_files
 from simdb.json import CustomDecoder, CustomEncoder
-from simdb.remote import APIConstants
+from simdb.remote import CLIENT_API_VERSIONS, APIConstants
 
 from .manifest import DataType
 
@@ -131,6 +131,19 @@ def _read_bytes_in_chunks(
                 yield data
 
 
+def select_api_version(
+    server_versions: Iterable[str],
+    client_versions: Iterable[str] = CLIENT_API_VERSIONS,
+) -> Optional[str]:
+    """
+    Select the highest API version supported by both the server and this client.
+    """
+    common_versions = set(server_versions) & set(client_versions)
+    if not common_versions:
+        return None
+    return max(common_versions, key=lambda v: Version.coerce(v.lstrip("v")))
+
+
 def check_return(res: "requests.Response") -> None:
     if res.status_code != 200:
         try:
@@ -198,7 +211,6 @@ class RemoteAPI:
                 f"Remote '{remote}' not found. Use `simdb remote config add` to add it."
             ) from None
 
-        self._api_url: str = f"{self._url}/v{config.api_version}/"
         self._firewall: Optional[str] = config.get_string_option(
             f"remote.{remote}.firewall", default=None
         )
@@ -247,14 +259,18 @@ class RemoteAPI:
         endpoints = self.get_endpoints()
         endpoint_versions = [endpoint.split("/")[-1] for endpoint in endpoints]
 
-        if not endpoint_versions:
-            raise RemoteError("No compatible API version found on remote")
+        selected_version = select_api_version(endpoint_versions)
+        if selected_version is None:
+            raise RemoteError(
+                "No compatible API version found on remote: the server provides "
+                f"{', '.join(endpoint_versions) or 'none'} and this client supports "
+                f"{', '.join(CLIENT_API_VERSIONS)}."
+            )
 
-        latest_version = max(endpoint_versions)
         if config.verbose:
-            print(f"Selected latest endpoint version {latest_version}")
+            print(f"Selected API version {selected_version}")
 
-        self._api_url += f"{latest_version}/"
+        self._api_url += f"{selected_version}/"
         self.version = Version.coerce(self.get_api_version())
         self.server_version = Version.coerce(self.get_server_version())
 
