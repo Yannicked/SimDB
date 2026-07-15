@@ -352,17 +352,18 @@ def _expand_directories(
 
 
 def _expand_directories_http(
-    files: Iterable[FileData], sim_uuid: uuid.UUID, partitions: dict[str, str]
+    files: Iterable[FileData], sim_uuid: uuid.UUID
 ) -> List[Tuple[FileData, Path, str]]:
     """Expand directories / IMAS data into individual files for HTTP upload.
 
-    Returns ``(file_data, local_source_path, target)`` triples. Each file keeps
-    the same partition-relative layout that :func:`_expand_directories` produces
-    for ``push_local`` - so structure handling (IMAS directories stay grouped,
-    standalone files stay flat) is identical to local push. The layout is then
-    namespaced under ``<sim_uuid>/<scheme>/`` and assigned an ``http://`` URI so
-    the server stages it into the ``http`` partition; the server's existing copy
-    step strips the common root exactly as it does for local push.
+    Returns ``(file_data, local_source_path, target)`` triples. Structure
+    handling (IMAS directories stay grouped, standalone files stay flat) is
+    identical to local push, but unlike ``push_local`` the file bytes are
+    uploaded, so partitions play no role: each file keeps its absolute local
+    path, namespaced under ``<sim_uuid>/file/``, and is assigned an ``http://``
+    URI so the server stages it into the ``http`` partition. The server's
+    existing copy step strips the common root exactly as it does for local
+    push.
     """
     result: List[Tuple[FileData, Path, str]] = []
     for file in files:
@@ -381,9 +382,9 @@ def _expand_directories_http(
             for sub_file in file_path.iterdir():
                 if sub_file.is_dir():
                     raise ValueError("Nested directory found")
-                result.append(_make_http_entry(file, sub_file, sim_uuid, partitions))
+                result.append(_make_http_entry(file, sub_file, sim_uuid))
         else:
-            result.append(_make_http_entry(file, file_path, sim_uuid, partitions))
+            result.append(_make_http_entry(file, file_path, sim_uuid))
     return result
 
 
@@ -391,21 +392,19 @@ def _make_http_entry(
     template: FileData,
     local_path: Path,
     sim_uuid: uuid.UUID,
-    partitions: dict[str, str],
 ) -> Tuple[FileData, Path, str]:
     """Build the HTTP upload entry for a single local file.
 
-    The relative path is taken from :func:`_find_partition_for_file` (the same
-    mapping ``push_local`` uses) and namespaced under ``<sim_uuid>/<scheme>/`` so
-    uploads from different partitions never collide on the server.
+    HTTP uploads carry the file bytes from the local system, so partitions are
+    not consulted: the file's absolute path is namespaced under
+    ``<sim_uuid>/file/``, which keeps targets unique on the server.
 
     The checksum is left empty here and filled in later by
     :func:`_compute_checksums`, so that hashing (a full read of every file) can be
     reported with a progress bar instead of stalling silently before the upload.
     """
-    scheme, rel = _find_partition_for_file(local_path, partitions)
-    rel_posix = rel.as_posix().lstrip("/")
-    target = f"{sim_uuid.hex}/{scheme}/{rel_posix}"
+    rel_posix = local_path.as_posix().lstrip("/")
+    target = f"{sim_uuid.hex}/file/{rel_posix}"
     new_uri = SimDBUrl.build(scheme="http", path=target, host="")
     file_type = "IMAS" if _check_file_is_imas(local_path) else template.type
     return (
@@ -1140,13 +1139,8 @@ class RemoteAPI:
         """
         sim_data = simulation.to_model(recurse=True)
 
-        partitions = _partition_roots(self._config)
-        inputs = _expand_directories_http(
-            sim_data.inputs.root, simulation.uuid, partitions
-        )
-        outputs = _expand_directories_http(
-            sim_data.outputs.root, simulation.uuid, partitions
-        )
+        inputs = _expand_directories_http(sim_data.inputs.root, simulation.uuid)
+        outputs = _expand_directories_http(sim_data.outputs.root, simulation.uuid)
 
         files = list(itertools.chain(inputs, outputs))
         upload_headers = {"User-Agent": "it_script_basic"}
