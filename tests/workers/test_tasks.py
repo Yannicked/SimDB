@@ -200,9 +200,7 @@ def test_copy_files_task_copies_inputs_and_marks_copied(task_environment):
     source_file.write_text("test content")
 
     input_files = [
-        _make_file_data(
-            f"data:/{source_file.name}", checksum=hash_file(source_file)
-        )
+        _make_file_data(f"data:/{source_file.name}", checksum=hash_file(source_file))
     ]
 
     copy_files_task(env["simulation_uuid"], input_files, [])
@@ -238,6 +236,7 @@ def test_notify_watchers_noop_without_watchers():
         _notify_watchers(simulation, "subject", "body")
 
     delay.assert_not_called()
+
 
 def test_copy_files_task_http_keeps_imas_folder_flattens_sibling(task_environment):
     """HTTP-staged files are copied like local push: a shared root is stripped,

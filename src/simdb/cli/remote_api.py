@@ -25,11 +25,12 @@ from typing import (
     Tuple,
     Union,
 )
-from urllib.parse import ParseResult, quote, urlparse
+from urllib.parse import quote, urlparse
 
 import appdirs
 import click
 import requests
+from netCDF4 import Dataset
 from requests.auth import AuthBase
 from rich.progress import (
     BarColumn,
@@ -39,7 +40,6 @@ from rich.progress import (
     TimeRemainingColumn,
     TransferSpeedColumn,
 )
-from netCDF4 import Dataset
 from semantic_version import Version
 
 from simdb.checksum import CHECKSUM_ALGORITHM, READ_CHUNK_SIZE, hash_file

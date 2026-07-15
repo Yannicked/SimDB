@@ -118,7 +118,6 @@ def _checksum_matches(path: Path, expected: str) -> bool:
     return hash_file(path) == expected
 
 
-
 def _get_imas_identifier_path(path: Path) -> Path:
     if path.suffix == ".nc":
         return path
