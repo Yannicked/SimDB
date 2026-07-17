@@ -2,8 +2,9 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from simdb.imas.utils import imas_files
 from simdb.uri import URI
+
+from simdb.imas.utils import imas_files
 
 
 class ImasFilesTests(unittest.TestCase):
