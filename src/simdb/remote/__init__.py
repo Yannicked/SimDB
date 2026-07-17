@@ -6,7 +6,7 @@ endpoint to which simulations can be sent for staging and signing-off.
 
 # API versions supported by this client, as they appear in the server endpoint URLs.
 # Update this when a new API version is added to simdb.remote.apis.
-CLIENT_API_VERSIONS = ("v1", "v1.1", "v1.2")
+CLIENT_API_VERSIONS = ("v1.2",)
 
 
 # API constants
