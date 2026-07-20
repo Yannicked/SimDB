@@ -4,11 +4,9 @@ The remote module contains code for running a REST API which is used to provide 
 endpoint to which simulations can be sent for staging and signing-off.
 """
 
-from semantic_version import SimpleSpec
-
-# Compatibility scheme for the latest API version, i.e. anything with the same major and
-# minor version
-COMPATIBILITY_SPEC = SimpleSpec("~=1.2.0")
+# API versions supported by this client, as they appear in the server endpoint URLs.
+# Update this when a new API version is added to simdb.remote.apis.
+CLIENT_API_VERSIONS = ("v1.2",)
 
 
 # API constants
