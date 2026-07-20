@@ -1,4 +1,4 @@
-"""IMAS simulation data endpoint: /data."""
+"""IMAS v1.3 simulation data endpoint: /data."""
 
 from typing import Annotated, Any, NamedTuple, Optional
 

@@ -278,13 +278,13 @@ The command prints the simulation UUID, requested path, occurrence, field value,
 The corresponding REST endpoint is:
 
 ```text
-GET /v1.2/simulation/{SIM_ID}/data?path={IDS_PATH}[&dd_version={DD_VERSION}]
+GET /v1.3/simulation/{SIM_ID}/data?path={IDS_PATH}[&dd_version={DD_VERSION}]
 ```
 
 For example:
 
 ```bash
-curl 'http://<simdb-host>/v1.2/simulation/53301%2F2/data?path=summary%3A0%2Fglobal_quantities%2Fli_3%2Fvalue&dd_version=4.1.1'
+curl 'http://<simdb-host>/v1.3/simulation/53301%2F2/data?path=summary%3A0%2Fglobal_quantities%2Fli_3%2Fvalue&dd_version=4.1.1'
 ```
 
 ## Pushing simulations to a remote

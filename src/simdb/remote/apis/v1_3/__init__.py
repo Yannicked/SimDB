@@ -4,17 +4,18 @@ from flask_restx import Api, Resource
 
 from simdb.remote.apis.files import api as file_ns
 from simdb.remote.apis.metadata import api as metadata_ns
+from simdb.remote.apis.v1_2.simulations import api as sim_ns
 from simdb.remote.apis.watchers import api as watcher_ns
 from simdb.remote.core.auth import TokenAuthenticator, User, requires_auth
 from simdb.remote.core.pydantic_utils import pydantic_validate
 from simdb.remote.core.typing import current_app
 from simdb.remote.models import StagingDirectoryResponse
 
-from .simulations import api as sim_ns
+from .simulation_data import api as data_ns
 
 api = Api(
     title="SimDB REST API",
-    version="1.2",
+    version="1.3",
     description="SimDB REST API",
     authorizations={
         "basicAuth": {
@@ -31,7 +32,7 @@ api = Api(
 )
 
 api.add_namespace(sim_ns)
-namespaces = [metadata_ns, watcher_ns, file_ns, sim_ns]
+namespaces = [metadata_ns, watcher_ns, file_ns, sim_ns, data_ns]
 
 
 @api.route("/staging_dir", defaults={"sim_hex": None})

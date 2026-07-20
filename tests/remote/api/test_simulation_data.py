@@ -4,7 +4,7 @@ import imas
 import pytest
 from imas.ids_defs import IDS_TIME_MODE_HOMOGENEOUS
 
-from simdb.remote.apis.v1_2 import simulation_data
+from simdb.remote.apis.v1_3 import simulation_data
 
 
 @pytest.fixture

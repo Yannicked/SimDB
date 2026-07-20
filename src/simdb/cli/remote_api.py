@@ -768,7 +768,7 @@ class RemoteAPI:
         res = self.delete("simulation/metadata/" + sim_id, {"key": key})
         return [data["value"] for data in res.json()]
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.3")
     @try_request
     def get_simulation_data(
         self, sim_id: str, path: str, dd_version: Optional[str] = None
