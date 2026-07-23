@@ -26,7 +26,9 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    InstanceOf,
     PlainSerializer,
+    field_validator,
     model_validator,
 )
 from pydantic import (
@@ -108,21 +110,6 @@ class RangeValue(BaseModel):
     max: float
 
 
-MetadataValue = Union[
-    CustomUUID,
-    str,
-    int,
-    float,
-    bool,
-    list,
-    RangeValue,
-    dict[str, Any],
-    None,
-]
-"""Supported types for simulation metadata values. Numpy arrays and regular arrays
-containing numeric data are automatically converted to RangeValue."""
-
-
 class StatusPatchData(BaseModel):
     """Post data for updating simulation status."""
 
@@ -179,6 +166,53 @@ class FileDataList(RootModel):
     def __getitem__(self, item) -> FileData:
         """Allow indexing on the list."""
         return self.root[item]
+
+
+def _deserialize_numpy(v: Any) -> Any:
+    if isinstance(v, np.ndarray):
+        return v
+    if isinstance(v, dict) and v.get("_type") == "numpy.ndarray":
+        np_bytes = base64.b64decode(v["bytes"].encode())
+        arr = np.frombuffer(np_bytes, dtype=v["dtype"])
+        if "shape" in v:
+            arr = arr.reshape(v["shape"])
+        return arr
+    raise ValueError(f"Cannot deserialize {v} to np.ndarray")
+
+
+def _serialize_numpy(o: np.ndarray) -> dict:
+    """Serialize numpy arrays to dict format for the web dashboard."""
+    encoded_bytes = base64.b64encode(o.tobytes()).decode()
+    return {
+        "_type": "numpy.ndarray",
+        "dtype": o.dtype.name,
+        "shape": o.shape,
+        "bytes": encoded_bytes,
+    }
+
+
+NumpyArray = Annotated[
+    InstanceOf[np.ndarray],
+    BeforeValidator(_deserialize_numpy),
+    PlainSerializer(_serialize_numpy, return_type=dict),
+]
+
+
+MetadataValue = Union[
+    CustomUUID,
+    str,
+    int,
+    float,
+    bool,
+    RangeValue,
+    list,
+    dict,
+    NumpyArray,
+    None,
+]
+"""Supported types for simulation metadata values. RangeValue, numpy arrays and
+scalars are automatically converted to their plain Python equivalents before
+validation."""
 
 
 class MetadataData(BaseModel):
@@ -570,6 +604,53 @@ class StagingDirectoryResponse(BaseModel):
 
     staging_dir: Path
     """Path to the staging dir."""
+
+
+class ImasDataQueryParams(BaseModel):
+    """Query parameters for the IMAS field-data endpoint."""
+
+    path: str
+    """Full IDS path including IDS name and optional occurrence."""
+
+    dd_version: Optional[str] = None
+    """When provided, explicitly convert the loaded IDS to this DD version
+    string (e.g. ``"3.42.0"``) using :func:`imas.convert_ids` after
+    reading.  When omitted, data is returned in its stored DD version."""
+
+    @field_validator("path", mode="before")
+    @classmethod
+    def _strip_path(cls, v: Any) -> str:
+        v = str(v).strip()
+        if not v:
+            raise ValueError("must not be empty")
+        return v
+
+
+class QuantityData(BaseModel):
+    """A named, unit-bearing data quantity (field value or coordinate)."""
+
+    name: str
+    """IDS path of this quantity relative to the IDS root"""
+    units: str
+    """Physical units of the quantity"""
+    data: Any
+    """Data value: a Python scalar for 0-D quantities, or a nested list for
+    arrays. """
+
+
+class ImasDataResponse(BaseModel):
+    """Response from the IMAS field-data endpoint."""
+
+    simulation: str
+    """UUID of the simulation."""
+    path: str
+    """Requested IDS path."""
+    occurrence: int
+    """IDS occurrence index."""
+    field: QuantityData
+    """The requested quantity"""
+    coordinates: List[QuantityData]
+    """Coordinates for each dimension of *field*, in dimension order."""
 
 
 class ErrorResponse(BaseModel):

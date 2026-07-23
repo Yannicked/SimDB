@@ -620,48 +620,48 @@ class RemoteAPI:
     def has_url(self) -> bool:
         return bool(self._url)
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_token(self) -> str:
         res = self.get("token")
         data = res.json()
         return data["token"]
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_endpoints(self) -> List[str]:
         res = self.get("", authenticate=False)
         data = res.json()
         return data["endpoints"]
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_server_authentication(self) -> Optional[str]:
         res = self.get("", authenticate=False)
         data = res.json()
         return data.get("authentication")
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_api_version(self) -> str:
         res = self.get("", authenticate=False)
         data = res.json()
         return data["api_version"]
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_server_version(self) -> str:
         res = self.get("", authenticate=False)
         data = res.json()
         return data["server_version"]
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_validation_schemas(self) -> List[Dict]:
         res = self.get("validation_schema")
         return res.json()
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_upload_options(self) -> Dict[str, Any]:
         try:
@@ -671,7 +671,7 @@ class RemoteAPI:
             # old remotes may not provide this endpoint
             return {}
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def list_simulations(
         self, meta: Optional[List[str]] = None, limit: int = 0
@@ -682,19 +682,19 @@ class RemoteAPI:
         data = res.json(cls=CustomDecoder)
         return [Simulation.from_data(sim) for sim in data["results"]]
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_simulation(self, sim_id: str) -> "Simulation":
         res = self.get("simulation/" + sim_id)
         return Simulation.from_data(res.json(cls=CustomDecoder))
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def trace_simulation(self, sim_id: str) -> dict:
         res = self.get("trace/" + sim_id)
         return res.json(cls=CustomDecoder)
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def query_simulations(
         self, constraints: List[str], meta: List[str], limit=0
@@ -712,18 +712,18 @@ class RemoteAPI:
         data = res.json(cls=CustomDecoder)
         return [Simulation.from_data(sim) for sim in data["results"]]
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def delete_simulation(self, sim_id: str) -> Dict:
         res = self.delete("simulation/" + sim_id, {})
         return res.json()
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def update_simulation(self, sim_id: str, update_type: "Simulation.Status") -> None:
         self.patch("simulation/" + sim_id, {"status": update_type.value})
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def validate_simulation(self, sim_id: str) -> Tuple[bool, str]:
         res = self.post("validate/" + sim_id, {})
@@ -733,7 +733,7 @@ class RemoteAPI:
         else:
             return False, data["error"]
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def add_watcher(
         self, sim_id: str, user: str, email: str, notification: "Watcher.Notification"
@@ -743,18 +743,18 @@ class RemoteAPI:
             {"user": user, "email": email, "notification": notification.name},
         )
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def remove_watcher(self, sim_id: str, user: str) -> None:
         self.delete("watchers/" + sim_id, {"user": user})
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def list_watchers(self, sim_id: str) -> List[Tuple]:
         res = self.get("watchers/" + sim_id)
         return [(d["username"], d["email"], d["notification"]) for d in res.json()]
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def set_metadata(
         self, sim_id: str, key: str, value: Union[str, uuid.UUID, int, float]
@@ -762,13 +762,23 @@ class RemoteAPI:
         res = self.patch("simulation/metadata/" + sim_id, {"key": key, "value": value})
         return [data["value"] for data in res.json()]
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def delete_metadata(self, sim_id: str, key: str) -> List[str]:
         res = self.delete("simulation/metadata/" + sim_id, {"key": key})
         return [data["value"] for data in res.json()]
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.3")
+    @try_request
+    def get_simulation_data(
+        self, sim_id: str, path: str, dd_version: Optional[str] = None
+    ) -> Dict[str, Any]:
+        params = {"path": path}
+        if dd_version is not None:
+            params["dd_version"] = dd_version
+        res = self.get(f"simulation/{sim_id}/data", params=params)
+        return res.json()
+
     @try_request
     def get_directory(self) -> str:
         res = self.get("staging_dir")
@@ -846,7 +856,7 @@ class RemoteAPI:
         ]
         self.post("files", data={}, files=files)
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def push_simulation(
         self,
@@ -1077,7 +1087,7 @@ class RemoteAPI:
         if sha1.hexdigest() != checksum:
             raise APIError(f"Checksum failed for file {from_path}")
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def pull_simulation(
         self, sim_id: str, directory: Path, out_stream: IO[str] = sys.stdout
@@ -1133,7 +1143,7 @@ class RemoteAPI:
 
         return simulation
 
-    @versioned_method("v1.2")
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def reset_database(self) -> None:
         self.post("reset", {})
