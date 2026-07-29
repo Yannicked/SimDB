@@ -168,3 +168,24 @@ def test_post_simulations_v13(client_with_task_mock, tmp_path):
         Path(simulation.inputs[0].uri.path)
         == tmp_path / "uploads" / result.ingested.hex / "file.txt"
     )
+
+
+@pytest.mark.xfail(
+    reason="User.email is not set for admin without custom authenticators"
+)
+def test_post_simulations_with_watcher_v13(client_with_task_mock, tmp_path):
+    """POST with add_watcher registers a watcher (parity with v1.2)."""
+    client = client_with_task_mock
+    simulation_data = generate_simulation_data(
+        alias="test-watcher-v13",
+        add_watcher=True,
+        inputs=[generate_simulation_file(tmp_path)],
+        outputs=[generate_simulation_file(tmp_path)],
+    )
+
+    rv = post_simulation_v13(client, simulation_data)
+    assert rv.status_code == 200
+
+    sim_hex = SimulationPostResponse.model_validate(rv.json).ingested.hex
+    simulation = client.application.db.get_simulation(sim_hex)
+    assert [watcher.email for watcher in simulation.watchers]

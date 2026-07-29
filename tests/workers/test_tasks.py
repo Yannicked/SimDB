@@ -8,12 +8,14 @@ from simdb.config import Config
 from simdb.enums import IngestionStatus
 from simdb.imas.utils import SimDBUrl
 from simdb.remote.models import FileData
+from simdb.workers import tasks as simdb_tasks
 from simdb.workers.tasks import (
     _calculate_checksum,
     _copy_files,
     _create_file_from_data,
     _get_imas_identifier_path,
     _imas_path_to_uri,
+    _notify_watchers,
     _resolve_paths,
     _resolve_uri_to_path,
     copy_files_task,
@@ -205,3 +207,22 @@ def test_copy_files_task_with_no_files_marks_copied(task_environment):
     copy_files_task(env["simulation_uuid"], [], [])
 
     assert env["simulation"].ingestion_status == IngestionStatus.COPIED
+
+
+def test_notify_watchers_queues_email_when_watchers_present():
+    watcher = mock.MagicMock(email="watcher@example.com")
+    simulation = mock.MagicMock(watchers=[watcher])
+
+    with mock.patch.object(simdb_tasks.send_email_task, "delay") as delay:
+        _notify_watchers(simulation, "subject", "body")
+
+    delay.assert_called_once_with("subject", "body", ["watcher@example.com"])
+
+
+def test_notify_watchers_noop_without_watchers():
+    simulation = mock.MagicMock(watchers=[])
+
+    with mock.patch.object(simdb_tasks.send_email_task, "delay") as delay:
+        _notify_watchers(simulation, "subject", "body")
+
+    delay.assert_not_called()

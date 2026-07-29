@@ -5,6 +5,7 @@ from flask_restx import Namespace, Resource
 
 from simdb.database.models import metadata as models_meta
 from simdb.database.models import simulation as models_sim
+from simdb.database.models import watcher as models_watcher
 from simdb.enums import IngestionStatus
 from simdb.remote.apis.v1_2.simulations import (
     Simulation,
@@ -92,6 +93,13 @@ class SimulationList(SimulationListV12):
         uploaded_by = body.uploaded_by or user.email or user.name or "anonymous"
 
         simulation.set_meta("uploaded_by", uploaded_by)
+
+        if body.add_watcher:
+            simulation.watchers.append(
+                models_watcher.Watcher(
+                    user.name, user.email, models_watcher.Notification.ALL
+                )
+            )
 
         _set_alias(simulation, body.simulation.alias)
 

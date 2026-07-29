@@ -41,6 +41,23 @@ def send_email_task(
     }
 
 
+_EMAIL_FOOTER = (
+    "\n\nNote: please don't reply to this email, replies to this address are "
+    "not monitored."
+)
+
+
+def _simulation_label(simulation) -> str:
+    return simulation.alias or simulation.uuid.hex
+
+
+def _notify_watchers(simulation, subject: str, message: str) -> None:
+    """Queue an email to a simulation's watchers, if it has any."""
+    to_addresses = [watcher.email for watcher in simulation.watchers]
+    if to_addresses:
+        send_email_task.delay(subject, message, to_addresses)
+
+
 def _imas_path_to_uri(imas_path: Path) -> SimDBUrl:
     if imas_path.suffix == ".nc":
         return SimDBUrl.build(scheme="file", path=imas_path.as_posix())
@@ -225,6 +242,13 @@ def copy_files_task(
     except Exception:
         simulation.ingestion_status = IngestionStatus.COPY_FAILED
         database.session.commit()
+        label = _simulation_label(simulation)
+        _notify_watchers(
+            simulation,
+            f"Simulation {label} ingestion failed",
+            f"Ingestion of simulation {label} failed while copying files. "
+            f"Please check the uploaded files and try again.{_EMAIL_FOOTER}",
+        )
         raise
     finally:
         database.close()
@@ -261,6 +285,14 @@ def complete_ingestion_task(simulation_uuid: UUID):
         simulation = database.get_simulation(simulation_uuid.hex)
         simulation.ingestion_status = IngestionStatus.COMPLETED
         database.session.commit()
+
+        label = _simulation_label(simulation)
+        _notify_watchers(
+            simulation,
+            f"Simulation {label} ingested",
+            f"Simulation {label} has been successfully ingested into "
+            f"SimDB.{_EMAIL_FOOTER}",
+        )
     finally:
         database.close()
 
