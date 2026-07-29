@@ -13,8 +13,13 @@ server {
         return 200 '{"deployment":"${SIMDB_DEPLOYMENT}","git_branch":"${SIMDB_GIT_BRANCH}","git_commit":"${SIMDB_GIT_COMMIT}","deployed_at":"${SIMDB_DEPLOYED_AT}"}';
     }
 
+    location ~ ^/v(?<api_version>[0-9]+(?:\.[0-9]+)*)/$ {
+        default_type application/json;
+        return 200 '{"api":"simdb","api_version":"$api_version","server_version":"0.0.0","authentication":"None","endpoints":["$scheme://$http_host/v$api_version/simulations","$scheme://$http_host/v$api_version/files","$scheme://$http_host/v$api_version/validation_schema","$scheme://$http_host/v$api_version/metadata","$scheme://$http_host/v$api_version/upload_options"],"documentation":"$scheme://$http_host/v$api_version/docs"}';
+    }
+
     location / {
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;

@@ -1,3 +1,4 @@
+import functools
 import getpass
 import gzip
 import hashlib
@@ -36,7 +37,7 @@ from simdb.config import Config
 from simdb.database.models import Simulation
 from simdb.imas.utils import SimDBUrl, imas_files
 from simdb.json import CustomDecoder, CustomEncoder
-from simdb.remote import APIConstants
+from simdb.remote import CLIENT_API_VERSIONS, APIConstants
 
 from .manifest import DataType
 
@@ -63,6 +64,7 @@ class RemoteError(APIError):
 
 
 def try_request(func: Callable) -> Callable:
+    @functools.wraps(func)
     def wrapped_func(*args, **kwargs):
         try:
             return func(*args, **kwargs)
@@ -93,6 +95,74 @@ This might indicate an invalid SimDB URL or the existence of a firewall.
             ) from None
 
     return wrapped_func
+
+
+def versioned_method(*versions: str) -> Callable:
+    """
+    Mark a RemoteAPI method that has version-specific implementations.
+
+    The decorated function is the default implementation and serves the API versions
+    passed here (e.g. "v1.3"). Register an alternative implementation for other versions
+    with ``@<name>.register("v1.2")``; when the remote negotiates one of those versions,
+    the registered function is called instead of the default::
+
+        @versioned_method("v1.3")
+        @try_request
+        def push_simulation(self, ...):
+            ...  # default implementation
+
+        @push_simulation.register("v1.2")
+        @try_request
+        def _push_simulation_v1_2(self, ...):
+            ...  # implementation used when the remote negotiates v1.2
+
+    Methods that behave the same across every version they support simply omit the
+    ``register`` calls and act as a plain version marker.
+
+    Make the default (main) method the implementation for the latest
+    supported version, and register overrides for the older versions it must stay
+    compatible with. This keeps the current protocol as the primary, most-visible code
+    path and confines backwards-compatibility handling to clearly named shims.
+
+    The full set of supported versions is recorded on the method as ``_api_versions``,
+    and calling the method with a negotiated version that no implementation serves
+    raises a RemoteError. While no version has been negotiated yet, the default
+    implementation is used.
+    """
+
+    def decorator(default: Callable) -> Callable:
+        default_name = getattr(default, "__name__", repr(default))
+        registry: Dict[str, Callable] = dict.fromkeys(versions, default)
+
+        @functools.wraps(default)
+        def wrapper(self, *args, **kwargs):
+            selected = getattr(self, "_api_version", None)
+            if selected is None:
+                return default(self, *args, **kwargs)
+            impl = registry.get(selected)
+            if impl is None:
+                raise RemoteError(
+                    f"'{default_name}' is not supported by the negotiated API "
+                    f"version '{selected}'. It requires one of: "
+                    f"{', '.join(sorted(registry))}."
+                )
+            return impl(self, *args, **kwargs)
+
+        def register(*impl_versions: str) -> Callable:
+            def do_register(func: Callable) -> Callable:
+                for version in impl_versions:
+                    registry[version] = func
+                # Keep the advertised version set in sync with the registry.
+                wrapper._api_versions = frozenset(registry)  # ty: ignore[unresolved-attribute]
+                return func
+
+            return do_register
+
+        wrapper._api_versions = frozenset(registry)  # ty: ignore[unresolved-attribute]
+        wrapper.register = register  # ty: ignore[unresolved-attribute]
+        return wrapper
+
+    return decorator
 
 
 def read_bytes(path: Path, compressed: bool = True) -> bytes:
@@ -129,6 +199,19 @@ def _read_bytes_in_chunks(
                 if not data:
                     break
                 yield data
+
+
+def select_api_version(
+    server_versions: Iterable[str],
+    client_versions: Iterable[str] = CLIENT_API_VERSIONS,
+) -> Optional[str]:
+    """
+    Select the highest API version supported by both the server and this client.
+    """
+    common_versions = set(server_versions) & set(client_versions)
+    if not common_versions:
+        return None
+    return max(common_versions, key=lambda v: Version.coerce(v.lstrip("v")))
 
 
 def check_return(res: "requests.Response") -> None:
@@ -198,7 +281,6 @@ class RemoteAPI:
                 f"Remote '{remote}' not found. Use `simdb remote config add` to add it."
             ) from None
 
-        self._api_url: str = f"{self._url}/v{config.api_version}/"
         self._firewall: Optional[str] = config.get_string_option(
             f"remote.{remote}.firewall", default=None
         )
@@ -247,14 +329,19 @@ class RemoteAPI:
         endpoints = self.get_endpoints()
         endpoint_versions = [endpoint.split("/")[-1] for endpoint in endpoints]
 
-        if not endpoint_versions:
-            raise RemoteError("No compatible API version found on remote")
+        selected_version = select_api_version(endpoint_versions)
+        if selected_version is None:
+            raise RemoteError(
+                "No compatible API version found on remote: the server provides "
+                f"{', '.join(endpoint_versions) or 'none'} and this client supports "
+                f"{', '.join(CLIENT_API_VERSIONS)}."
+            )
 
-        latest_version = max(endpoint_versions)
         if config.verbose:
-            print(f"Selected latest endpoint version {latest_version}")
+            print(f"Selected API version {selected_version}")
 
-        self._api_url += f"{latest_version}/"
+        self._api_version = selected_version
+        self._api_url += f"{selected_version}/"
         self.version = Version.coerce(self.get_api_version())
         self.server_version = Version.coerce(self.get_server_version())
 
@@ -533,41 +620,48 @@ class RemoteAPI:
     def has_url(self) -> bool:
         return bool(self._url)
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_token(self) -> str:
         res = self.get("token")
         data = res.json()
         return data["token"]
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_endpoints(self) -> List[str]:
         res = self.get("", authenticate=False)
         data = res.json()
         return data["endpoints"]
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_server_authentication(self) -> Optional[str]:
         res = self.get("", authenticate=False)
         data = res.json()
         return data.get("authentication")
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_api_version(self) -> str:
         res = self.get("", authenticate=False)
         data = res.json()
         return data["api_version"]
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_server_version(self) -> str:
         res = self.get("", authenticate=False)
         data = res.json()
         return data["server_version"]
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_validation_schemas(self) -> List[Dict]:
         res = self.get("validation_schema")
         return res.json()
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_upload_options(self) -> Dict[str, Any]:
         try:
@@ -577,6 +671,7 @@ class RemoteAPI:
             # old remotes may not provide this endpoint
             return {}
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def list_simulations(
         self, meta: Optional[List[str]] = None, limit: int = 0
@@ -587,16 +682,19 @@ class RemoteAPI:
         data = res.json(cls=CustomDecoder)
         return [Simulation.from_data(sim) for sim in data["results"]]
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def get_simulation(self, sim_id: str) -> "Simulation":
         res = self.get("simulation/" + sim_id)
         return Simulation.from_data(res.json(cls=CustomDecoder))
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def trace_simulation(self, sim_id: str) -> dict:
         res = self.get("trace/" + sim_id)
         return res.json(cls=CustomDecoder)
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def query_simulations(
         self, constraints: List[str], meta: List[str], limit=0
@@ -614,15 +712,18 @@ class RemoteAPI:
         data = res.json(cls=CustomDecoder)
         return [Simulation.from_data(sim) for sim in data["results"]]
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def delete_simulation(self, sim_id: str) -> Dict:
         res = self.delete("simulation/" + sim_id, {})
         return res.json()
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def update_simulation(self, sim_id: str, update_type: "Simulation.Status") -> None:
         self.patch("simulation/" + sim_id, {"status": update_type.value})
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def validate_simulation(self, sim_id: str) -> Tuple[bool, str]:
         res = self.post("validate/" + sim_id, {})
@@ -632,6 +733,7 @@ class RemoteAPI:
         else:
             return False, data["error"]
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def add_watcher(
         self, sim_id: str, user: str, email: str, notification: "Watcher.Notification"
@@ -641,15 +743,18 @@ class RemoteAPI:
             {"user": user, "email": email, "notification": notification.name},
         )
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def remove_watcher(self, sim_id: str, user: str) -> None:
         self.delete("watchers/" + sim_id, {"user": user})
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def list_watchers(self, sim_id: str) -> List[Tuple]:
         res = self.get("watchers/" + sim_id)
         return [(d["username"], d["email"], d["notification"]) for d in res.json()]
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def set_metadata(
         self, sim_id: str, key: str, value: Union[str, uuid.UUID, int, float]
@@ -657,10 +762,22 @@ class RemoteAPI:
         res = self.patch("simulation/metadata/" + sim_id, {"key": key, "value": value})
         return [data["value"] for data in res.json()]
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def delete_metadata(self, sim_id: str, key: str) -> List[str]:
         res = self.delete("simulation/metadata/" + sim_id, {"key": key})
         return [data["value"] for data in res.json()]
+
+    @versioned_method("v1.3")
+    @try_request
+    def get_simulation_data(
+        self, sim_id: str, path: str, dd_version: Optional[str] = None
+    ) -> Dict[str, Any]:
+        params = {"path": path}
+        if dd_version is not None:
+            params["dd_version"] = dd_version
+        res = self.get(f"simulation/{sim_id}/data", params=params)
+        return res.json()
 
     @try_request
     def get_directory(self) -> str:
@@ -739,6 +856,7 @@ class RemoteAPI:
         ]
         self.post("files", data={}, files=files)
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def push_simulation(
         self,
@@ -969,6 +1087,7 @@ class RemoteAPI:
         if sha1.hexdigest() != checksum:
             raise APIError(f"Checksum failed for file {from_path}")
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def pull_simulation(
         self, sim_id: str, directory: Path, out_stream: IO[str] = sys.stdout
@@ -1024,6 +1143,7 @@ class RemoteAPI:
 
         return simulation
 
+    @versioned_method("v1.2", "v1.3")
     @try_request
     def reset_database(self) -> None:
         self.post("reset", {})
