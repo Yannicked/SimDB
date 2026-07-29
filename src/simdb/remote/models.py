@@ -118,6 +118,14 @@ class StatusPatchData(BaseModel):
     """New simulation status."""
 
 
+class SimulationDeleteQuery(BaseModel):
+    """Query parameters for DELETE v1.x/simulation/{uuid}."""
+
+    force: bool = False
+    """When true, delete the simulation even if its ingestion is still in a
+    non-terminal state."""
+
+
 class DeletedSimulation(BaseModel):
     """Reference to a deleted simulation."""
 

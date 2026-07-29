@@ -24,6 +24,29 @@ def make_celery(config: Optional[Config] = None) -> Celery:
         include=["simdb.workers.tasks"],
     )
 
+    # Fail hung ingestion tasks rather than letting them run forever. When the
+    # soft limit is hit the task raises SoftTimeLimitExceeded, which the
+    # ingestion tasks catch and turn into a terminal COPY_FAILED status. The hard
+    # limit is an absolute backstop that forcibly kills the task.
+    celery_app.conf.task_soft_time_limit = config.get_int_option(
+        "celery.task_soft_time_limit", default=3600
+    )
+    celery_app.conf.task_time_limit = config.get_int_option(
+        "celery.task_time_limit", default=3660
+    )
+
+    # Periodically fail simulations left stuck in a non-terminal ingestion state
+    # (e.g. because a worker was hard-killed and its task never ran to
+    # completion). Runs on the beat scheduler; see fail_stale_ingestions_task.
+    celery_app.conf.beat_schedule = {
+        "fail-stale-ingestions": {
+            "task": "simdb.workers.tasks.fail_stale_ingestions_task",
+            "schedule": float(
+                config.get_int_option("celery.stale_sweep_interval", default=300)
+            ),
+        }
+    }
+
     return celery_app
 
 

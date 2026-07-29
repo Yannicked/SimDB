@@ -3,6 +3,7 @@ import itertools
 import logging
 import os
 import shutil
+from datetime import timedelta
 from pathlib import Path
 from typing import Iterable, List
 from uuid import UUID
@@ -260,5 +261,24 @@ def complete_ingestion_task(simulation_uuid: UUID):
         simulation = database.get_simulation(simulation_uuid.hex)
         simulation.ingestion_status = IngestionStatus.COMPLETED
         database.session.commit()
+    finally:
+        database.close()
+
+
+@celery_app.task
+def fail_stale_ingestions_task() -> dict:
+    """Periodic sweep that fails simulations stuck in a non-terminal ingestion
+    state.
+    """
+    config = Config()
+    config.load()
+    database = get_db(config)
+
+    try:
+        timeout = config.get_int_option("celery.stale_ingestion_timeout", default=7200)
+        failed = database.fail_stale_ingestions(timedelta(seconds=timeout))
+        if failed:
+            logger.warning("Marked %d stale ingestion(s) as failed", failed)
+        return {"failed": failed}
     finally:
         database.close()

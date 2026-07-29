@@ -18,6 +18,7 @@ from simdb.remote.core.auth import User, requires_auth
 from simdb.remote.core.cache import clear_cache
 from simdb.remote.core.pydantic_utils import (
     Body,
+    ServerException,
     pydantic_validate,
 )
 from simdb.remote.core.typing import current_app
@@ -107,7 +108,17 @@ class SimulationList(SimulationListV12):
         # The complete job will set simulation.ingestion_status = Completed
         complete = complete_ingestion_task.si(simulation.uuid)
 
-        _ = (copy_files | complete).apply_async()
+        try:
+            _ = (copy_files | complete).apply_async()
+        except Exception as err:
+            simulation.ingestion_status = IngestionStatus.COPY_FAILED
+            current_app.db.session.commit()
+            clear_cache()
+            raise ServerException(
+                f"Failed to queue ingestion for simulation {simulation.uuid.hex}: "
+                f"{err}",
+                return_code=503,
+            ) from err
 
         result = SimulationPostResponse(ingested=simulation.uuid)
 

@@ -127,6 +127,25 @@ def test_delete_simulation_after_ingestion_v13(client_with_task_mock, tmp_path):
     assert UUID(rv.json["deleted"]["simulation"]).hex == sim_hex
 
 
+def test_force_delete_stuck_simulation_v13(client):
+    """A simulation stuck in a non-terminal ingestion state can be force-deleted."""
+    simulation = Simulation(Manifest())
+    simulation.ingestion_status = IngestionStatus.COPYING
+    with client.application.app_context():
+        client.application.db.insert_simulation(simulation)
+
+    # Without force it is rejected because ingestion is not terminal.
+    rv = client.delete(f"/v1.3/simulation/{simulation.uuid.hex}", headers=HEADERS)
+    assert rv.status_code == 409
+
+    # With force it succeeds, providing an escape hatch for stuck simulations.
+    rv = client.delete(
+        f"/v1.3/simulation/{simulation.uuid.hex}?force=true", headers=HEADERS
+    )
+    assert rv.status_code == 200
+    assert UUID(rv.json["deleted"]["simulation"]).hex == simulation.uuid.hex
+
+
 def test_post_simulations_v13(client_with_task_mock, tmp_path):
     """Test POST endpoint for creating a new simulation."""
     client = client_with_task_mock
