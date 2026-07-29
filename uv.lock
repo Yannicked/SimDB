@@ -2945,13 +2945,6 @@ build-docs = [
     { name = "sphinx-immaterial", version = "0.12.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
     { name = "sphinx-immaterial", version = "0.13.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
 ]
-celery = [
-    { name = "celery", version = "5.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
-    { name = "celery", version = "5.6.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
-    { name = "redis", version = "6.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
-    { name = "redis", version = "7.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
-    { name = "redis", version = "8.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-]
 imas-validator = [
     { name = "imas-validator" },
 ]
@@ -2960,6 +2953,8 @@ postgres = [
     { name = "psycopg2-binary", version = "2.9.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
 ]
 server = [
+    { name = "celery", version = "5.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
+    { name = "celery", version = "5.6.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "flask", version = "3.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "flask", version = "3.1.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "flask-caching", version = "2.3.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -2972,12 +2967,15 @@ server = [
     { name = "flask-restx", version = "1.3.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "flask-restx", version = "1.3.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "python-magic" },
+    { name = "redis", version = "6.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
+    { name = "redis", version = "7.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
+    { name = "redis", version = "8.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "simplejson" },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "imas-simdb", extra = ["auth", "celery", "imas-validator", "postgres", "server"] },
+    { name = "imas-simdb", extra = ["auth", "imas-validator", "postgres", "server"] },
     { name = "pytest", version = "8.3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "pytest", version = "8.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
     { name = "pytest", version = "9.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
@@ -2993,7 +2991,7 @@ requires-dist = [
     { name = "appdirs", specifier = ">=1.4.0" },
     { name = "argcomplete", specifier = ">=1.9.4" },
     { name = "backports-datetime-fromisoformat", specifier = ">=1.0" },
-    { name = "celery", marker = "extra == 'celery'", specifier = ">=5.3.0" },
+    { name = "celery", marker = "extra == 'server'", specifier = ">=5.3.0" },
     { name = "cerberus", specifier = ">=1.3.2" },
     { name = "click", specifier = ">=7.0,<=8.1.8" },
     { name = "click-option-group", specifier = ">=0.5" },
@@ -3009,7 +3007,7 @@ requires-dist = [
     { name = "flask-restx", marker = "extra == 'server'", specifier = ">=1.0.0" },
     { name = "imas-python" },
     { name = "imas-simdb", extras = ["auth-ad", "auth-keycloak", "auth-ldap"], marker = "extra == 'auth'" },
-    { name = "imas-simdb", extras = ["celery", "imas-validator", "postgres", "server"], marker = "extra == 'all'" },
+    { name = "imas-simdb", extras = ["imas-validator", "postgres", "server"], marker = "extra == 'all'" },
     { name = "imas-validator", marker = "extra == 'imas-validator'", specifier = ">=1.0.0" },
     { name = "myst-parser", marker = "extra == 'build-docs'", specifier = ">=0.18.0" },
     { name = "nbsphinx", marker = "extra == 'build-docs'", specifier = ">=0.8.0" },
@@ -3024,7 +3022,7 @@ requires-dist = [
     { name = "python-magic", marker = "extra == 'server'", specifier = "~=0.4" },
     { name = "pyyaml", specifier = ">=3.13" },
     { name = "recommonmark", marker = "extra == 'build-docs'", specifier = ">=0.7.0" },
-    { name = "redis", marker = "extra == 'celery'", specifier = ">=5.0.0" },
+    { name = "redis", marker = "extra == 'server'", specifier = ">=5.0.0" },
     { name = "requests", specifier = ">=2.27.0" },
     { name = "rich", specifier = ">=14.3.3" },
     { name = "semantic-version", specifier = ">=2.8" },
@@ -3034,11 +3032,11 @@ requires-dist = [
     { name = "sphinx-immaterial", marker = "extra == 'build-docs'", specifier = ">=0.11.14" },
     { name = "sqlalchemy", specifier = ">=1.2.12,<2.0" },
 ]
-provides-extras = ["server", "auth-ad", "auth-keycloak", "auth-ldap", "auth", "imas-validator", "build-docs", "postgres", "celery", "all"]
+provides-extras = ["server", "auth-ad", "auth-keycloak", "auth-ldap", "auth", "imas-validator", "build-docs", "postgres", "all"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "imas-simdb", extras = ["server", "imas-validator", "postgres", "auth", "celery"] },
+    { name = "imas-simdb", extras = ["server", "imas-validator", "postgres", "auth"] },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-cov", specifier = ">=5.0.0" },
     { name = "ruff", specifier = "~=0.15.0" },

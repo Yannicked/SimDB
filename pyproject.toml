@@ -63,6 +63,8 @@ server = [
     "flask-restx>=1.0.0",
     "python-magic~=0.4",
     "simplejson~=3.0",
+    "celery>=5.3.0",
+    "redis>=5.0.0",
 ]
 auth-ad = [
     "easyad>=1.0",
@@ -91,12 +93,8 @@ build-docs = [
 postgres = [
     "psycopg2-binary>=2.8.0",
 ]
-celery = [
-    "celery>=5.3.0",
-    "redis>=5.0.0",
-]
 all = [
-    "imas-simdb[server, imas-validator, postgres, celery]",
+    "imas-simdb[server, imas-validator, postgres]",
 ]
 
 [project.scripts]
@@ -173,5 +171,5 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff~=0.15.0",
     "ty==0.0.34",
-    "imas-simdb[server, imas-validator, postgres, auth, celery]"
+    "imas-simdb[server, imas-validator, postgres, auth]"
 ]
