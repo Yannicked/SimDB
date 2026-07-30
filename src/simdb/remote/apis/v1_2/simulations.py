@@ -24,6 +24,7 @@ from simdb.remote.core.path import find_common_root, secure_path
 from simdb.remote.core.pydantic_utils import (
     Body,
     Header,
+    Query,
     ResponseException,
     pydantic_validate,
 )
@@ -42,6 +43,7 @@ from simdb.remote.models import (
     SimulationPatchResponse,
     SimulationPostData,
     SimulationPostResponse,
+    SimulationQueryParams,
     SimulationTraceData,
     StatusPatchData,
     ValidationResult,
@@ -170,6 +172,7 @@ class SimulationList(Resource):
         self,
         user: User,
         pagination: Annotated[PaginationData, Header()],
+        filters: Annotated[SimulationQueryParams, Query()],
     ) -> PaginatedResponse[SimulationListItem]:
         names = []
         constraints = []
