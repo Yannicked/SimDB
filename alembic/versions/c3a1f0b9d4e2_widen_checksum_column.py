@@ -8,7 +8,7 @@ The actual re-hashing of existing values is done by the online (data) migration
 ``recalculate_checksums`` in :mod:`simdb.workers.migrations`, not here.
 
 Revision ID: c3a1f0b9d4e2
-Revises: b2c52ee8ff12
+Revises: 6fb9b8fbac38
 Create Date: 2026-07-17 00:00:00.000000
 
 """
@@ -21,7 +21,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c3a1f0b9d4e2"
-down_revision: Union[str, Sequence[str], None] = "b2c52ee8ff12"
+down_revision: Union[str, Sequence[str], None] = "6fb9b8fbac38"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
