@@ -1,12 +1,13 @@
 import itertools
 import sys
 import uuid
-from datetime import datetime
+from datetime import datetime as dt
 from enum import Enum
 from getpass import getuser
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
 
+from simdb.enums import IngestionStatus
 from simdb.imas.utils import SimDBUrl
 from simdb.remote.models import (
     FileDataList,
@@ -21,7 +22,7 @@ if sys.version_info < (3, 11):
     from backports.datetime_fromisoformat import MonkeyPatch
 
 from dateutil import parser as date_parser
-from sqlalchemy import JSON, Column, ForeignKey, Table
+from sqlalchemy import JSON, Column, ForeignKey, Table, text
 from sqlalchemy import types as sql_types
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.mutable import MutableDict
@@ -139,6 +140,22 @@ class Simulation(Base):
         "Watcher", secondary=simulation_watchers, lazy="dynamic"
     )
 
+    ingestion_status = Column(
+        sql_types.Enum(IngestionStatus),
+        nullable=False,
+        default=IngestionStatus.COMPLETED,
+    )
+    # Set on insert and refreshed on every update, so the stale-ingestion sweep
+    # can tell how long a simulation has been sitting in its current status.
+    ingestion_status_updated_at = Column(
+        sql_types.DateTime,
+        nullable=False,
+        default=dt.now,
+        onupdate=dt.now,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+    ingestion_version = Column(sql_types.Integer, nullable=False, default=0)
+
     @property
     def meta(self) -> List[MetaDataWrapper]:
         """
@@ -170,7 +187,7 @@ class Simulation(Base):
             self._metadata = {}
             return
         self.uuid = uuid.uuid1()
-        self.datetime = datetime.now()
+        self.datetime = dt.now()
         self._metadata = {}
 
         # For legacy simulation import responsible_name is from manifest else it will be
@@ -344,7 +361,7 @@ class Simulation(Base):
         simulation.uuid = checked_get(data, "uuid", uuid.UUID)
         simulation.alias = checked_get(data, "alias", str)
         if "datetime" not in data:
-            data["datetime"] = datetime.now().isoformat()
+            data["datetime"] = dt.now().isoformat()
         simulation.datetime = date_parser.parse(checked_get(data, "datetime", str))
         if "inputs" in data:
             inputs = checked_get(data, "inputs", list)

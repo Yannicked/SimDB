@@ -36,6 +36,7 @@ from pydantic import (
 )
 
 from simdb.cli.manifest import DataType
+from simdb.enums import IngestionStatus
 
 HexUUID = Annotated[UUID, PlainSerializer(lambda x: x.hex, return_type=str)]
 """UUID serialized as a hex string."""
@@ -115,6 +116,14 @@ class StatusPatchData(BaseModel):
 
     status: StatusLiteral
     """New simulation status."""
+
+
+class SimulationDeleteQuery(BaseModel):
+    """Query parameters for DELETE v1.x/simulation/{uuid}."""
+
+    force: bool = False
+    """When true, delete the simulation even if its ingestion is still in a
+    non-terminal state."""
 
 
 class DeletedSimulation(BaseModel):
@@ -658,3 +667,9 @@ class ErrorResponse(BaseModel):
 
     error: str
     """Error description."""
+
+
+class SimulationStatusResponse(BaseModel):
+    """Response from the get simulation status endpoint."""
+
+    status: IngestionStatus

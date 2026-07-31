@@ -4,7 +4,7 @@ from simdb.remote.apis.files import api as file_ns
 from simdb.remote.apis.metadata import api as metadata_ns
 from simdb.remote.apis.v1_2 import StagingDirectory
 from simdb.remote.apis.v1_2 import api as api_v1_2
-from simdb.remote.apis.v1_2.simulations import api as sim_ns
+from simdb.remote.apis.v1_3.simulations import api as sim_ns
 from simdb.remote.apis.watchers import api as watcher_ns
 from simdb.remote.core.auth import TokenAuthenticator
 
