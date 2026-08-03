@@ -50,6 +50,7 @@ dependencies = [
     "sqlalchemy>=1.2.12,<2.0",
     "alembic~=1.13",
     "rich>=14.3.3",
+    "netcdf4>=1.7.2",
 ]
 
 [project.optional-dependencies]

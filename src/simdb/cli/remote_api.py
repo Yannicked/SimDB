@@ -24,20 +24,24 @@ from typing import (
     Optional,
     Tuple,
     Union,
+    cast,
 )
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 import appdirs
 import click
 import requests
+from netCDF4 import Dataset
 from requests.auth import AuthBase
 from semantic_version import Version
 
+from simdb.checksum import calculate_checksum
 from simdb.config import Config
 from simdb.database.models import Simulation
-from simdb.imas.utils import SimDBUrl, imas_files
+from simdb.imas.utils import SimDBUrl, imas_backend_for_directory, imas_files
 from simdb.json import CustomDecoder, CustomEncoder
 from simdb.remote import CLIENT_API_VERSIONS, APIConstants
+from simdb.remote.models import FileData, SimulationPostData
 
 from .manifest import DataType
 
@@ -235,6 +239,78 @@ def _get_paths(file: "File") -> Iterable[Path]:
         return imas_files(file.uri)
 
 
+def _check_file_is_imas(file: Path) -> bool:
+    # NetCDF is identified by the IMAS "Conventions" attribute
+    if file.suffix == ".nc":
+        try:
+            with Dataset(file, "r") as ds:
+                if getattr(ds, "Conventions", None) == "IMAS":
+                    return True
+        except OSError:
+            # Not a readable NetCDF file; fall back to the directory heuristics
+            pass
+
+    return imas_backend_for_directory(file.parent) is not None
+
+
+def _find_partition_for_file(
+    file: Path, partitions: dict[str, str]
+) -> Tuple[str, Path]:
+    for partition, path in partitions.items():
+        try:
+            return partition, file.relative_to(Path(path))
+        except ValueError:
+            pass
+    raise click.ClickException(
+        f"File {file} is not located under any configured partition "
+        f"(configured partitions: {', '.join(partitions) or 'none'})"
+    )
+
+
+def _file_data_for_partition(
+    file: FileData, source: Path, partitions: dict[str, str]
+) -> FileData:
+    partition, partition_path = _find_partition_for_file(source, partitions)
+    new_uri = SimDBUrl.build(scheme=partition, path=partition_path.as_posix())
+    return FileData(
+        type=file.type,
+        uri=new_uri.encoded_string(),
+        checksum=calculate_checksum(source),
+        datetime=file.datetime,
+        usage=file.usage,
+        purpose=file.purpose,
+        sensitivity=file.sensitivity,
+        access=file.access,
+        embargo=file.embargo,
+    )
+
+
+def _expand_directories(files: Iterable[FileData], partitions: dict[str, str]):
+    new_file_list = []
+    for file in files:
+        file_uri = SimDBUrl(file.uri)
+        if file_uri.path is None:
+            raise ValueError("File has no associated path")
+        file_path = Path(file_uri.path)
+        if file_uri.scheme == "imas":
+            qs = dict(file_uri.query_params())
+            path = qs.get("path")
+            if path is None:
+                raise ValueError("IMAS uri has not path set")
+            file_path = Path(path)
+
+        if file_path.is_dir():
+            for sub_file in file_path.iterdir():
+                if sub_file.is_dir():
+                    raise ValueError("Nested directory found")
+                new_file_list.append(
+                    _file_data_for_partition(file, sub_file, partitions)
+                )
+        else:
+            new_file_list.append(_file_data_for_partition(file, file_path, partitions))
+    return new_file_list
+
+
 class RemoteAPI:
     """
     Class to represent connection to remote API.
@@ -352,7 +428,7 @@ class RemoteAPI:
             headers = {"User-Agent": "it_script_basic"}
             cookies_file = f"{remote}-cookies.pkl"
             cookies_path = Path(appdirs.user_config_dir("simdb")) / cookies_file
-            parsed_url = urlparse(self._url)
+            parsed_url: ParseResult = urlparse(self._url)
             base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
             cookies = None
@@ -855,6 +931,61 @@ class RemoteAPI:
         ]
         self.post("files", data={}, files=files)
 
+    def _mark_imas_files(self, files: Iterable[FileData]) -> None:
+        for file in files:
+            file_uri = SimDBUrl(file.uri)
+            if file_uri.path is None:
+                raise ValueError("File has no associated path")
+
+            partition = Path(
+                self._config.get_string_option(f"partition.{file_uri.scheme}")
+            )
+            if _check_file_is_imas(partition / Path(file_uri.path)):
+                file.type = "IMAS"
+
+    @versioned_method("v1.3")
+    @try_request
+    def push_local_simulation(self, simulation: Simulation, add_watcher: bool = False):
+        sim_data = simulation.to_model(recurse=True)
+
+        partitions = cast(dict[str, str], self._config.get_section("partition"))
+        sim_data.inputs.root = _expand_directories(sim_data.inputs.root, partitions)
+        sim_data.outputs.root = _expand_directories(sim_data.outputs.root, partitions)
+
+        self._mark_imas_files(sim_data.inputs.root)
+        self._mark_imas_files(sim_data.outputs.root)
+
+        uploaded_by = simulation.meta_dict().get("uploaded_by")
+
+        headers = {"Content-type": "application/json", "User-Agent": "it_script_basic"}
+        post_data = SimulationPostData(
+            simulation=sim_data,
+            add_watcher=add_watcher,
+            uploaded_by=str(uploaded_by) if uploaded_by is not None else None,
+        ).model_dump_json()
+        res = requests.post(
+            f"{self._url}/v1.3/simulations",
+            data=post_data,
+            headers=headers,
+            auth=self._get_auth(),
+            cookies=self._cookies,
+        )
+        check_return(res)
+
+    @versioned_method("v1.3")
+    @try_request
+    def get_ingestion_status(self, sim_id: str) -> str:
+        headers = {"User-Agent": "it_script_basic"}
+        auth = self._get_auth() if self._server_auth != "None" else None
+        res = requests.get(
+            f"{self._url}/v1.3/simulation/status/{sim_id}",
+            headers=headers,
+            auth=auth,
+            cookies=self._cookies,
+        )
+        check_return(res)
+        return res.json()["status"]
+
     @versioned_method("v1.2", "v1.3")
     @try_request
     def push_simulation(
@@ -878,7 +1009,7 @@ class RemoteAPI:
         sim_data = simulation.data(recurse=True)
 
         try:
-            sim_json = json.dumps(
+            sim_json: bytes = json.dumps(
                 sim_data, cls=CustomEncoder, separators=(",", ":")
             ).encode("utf-8")
             sim_json_size = len(sim_json)

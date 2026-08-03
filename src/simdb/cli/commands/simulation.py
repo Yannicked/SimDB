@@ -1,5 +1,6 @@
 import contextlib
 import sys
+import time
 import urllib.parse
 from itertools import chain
 from pathlib import Path
@@ -14,6 +15,7 @@ from simdb.cli.remote_api import RemoteAPI, RemoteError
 from simdb.config.config import Config
 from simdb.database import DatabaseError, get_local_db
 from simdb.database.models import Simulation
+from simdb.enums import IngestionStatus
 from simdb.query import QueryType, parse_query_arg
 from simdb.validation import ValidationError, Validator
 
@@ -210,6 +212,100 @@ def n_required_args_adaptor(n) -> Type[click.Command]:
             super().parse_args(ctx, args)
 
     return NRequiredArgs
+
+
+@simulation.command("push_local", cls=n_required_args_adaptor(1))
+@pass_config
+@click.argument("remote", required=False)
+@click.argument("sim_id")
+@click.option("--username", help="Username used to authenticate with the remote.")
+@click.option("--password", help="Password used to authenticate with the remote.")
+@click.option("--replaces", help="SIM_ID of simulation to deprecate and replace.")
+@click.option(
+    "--add-watcher",
+    is_flag=True,
+    help="Add the current user as a watcher of the simulation.",
+)
+@click.option(
+    "--timeout",
+    type=float,
+    default=600.0,
+    show_default=True,
+    help="Maximum number of seconds to wait for ingestion to complete.",
+)
+def simulation_push_local(
+    config: Config,
+    remote: Optional[str],
+    sim_id: str,
+    username: Optional[str],
+    password: Optional[str],
+    replaces: Optional[str],
+    add_watcher: bool,
+    timeout: float,
+):
+    """Push the simulation with the given SIM_ID (UUID or alias) to the REMOTE."""
+
+    api = RemoteAPI(remote, username, password, config)
+    db = get_local_db(config)
+
+    simulation = db.get_simulation(sim_id)
+    if simulation is None:
+        raise click.ClickException(f"Failed to find simulation: {sim_id}")
+
+    if replaces:
+        simulation.set_meta("replaces", replaces)
+
+    schemas = api.get_validation_schemas()
+    try:
+        for schema in schemas:
+            Validator(schema).validate(simulation)
+    except ValidationError as err:
+        raise click.ClickException(f"Simulation does not validate: {err}") from err
+
+    api.push_local_simulation(simulation, add_watcher=add_watcher)
+
+    terminal_statuses = {
+        IngestionStatus.COMPLETED.value,
+        IngestionStatus.COPY_FAILED.value,
+        IngestionStatus.VALIDATION_FAILED.value,
+    }
+
+    click.echo("Waiting for ingestion to complete...", nl=False)
+    last_status = None
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            status = api.get_ingestion_status(simulation.uuid.hex)
+        except Exception as err:
+            click.echo()
+            raise click.ClickException(
+                f"Failed to check ingestion status: {err}"
+            ) from err
+
+        if status != last_status:
+            if last_status is not None:
+                click.echo(f" -> {status}", nl=False)
+            else:
+                click.echo(f" {status}", nl=False)
+            last_status = status
+
+        if status in terminal_statuses:
+            break
+
+        if time.monotonic() >= deadline:
+            click.echo()
+            raise click.ClickException(
+                f"Timed out after {timeout:g}s waiting for ingestion to complete "
+                f"(last status: {status})"
+            )
+
+        time.sleep(1)
+
+    click.echo()
+    if status == IngestionStatus.COMPLETED.value:
+        click.echo(f"Successfully pushed simulation {simulation.uuid}")
+    else:
+        raise click.ClickException(f"Simulation ingestion failed with status: {status}")
 
 
 @simulation.command("push", cls=n_required_args_adaptor(1))
