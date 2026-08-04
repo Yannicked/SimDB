@@ -1151,11 +1151,13 @@ class RemoteAPI:
         sim_data.inputs.root = [file_data for file_data, _, _ in inputs]
         sim_data.outputs.root = [file_data for file_data, _, _ in outputs]
 
-        uploaded_by = str(simulation.meta_dict().get("uploaded_by", None))
+        uploaded_by = simulation.meta_dict().get("uploaded_by")
 
         headers = {"Content-type": "application/json", "User-Agent": "it_script_basic"}
         post_data = SimulationPostData(
-            simulation=sim_data, add_watcher=add_watcher, uploaded_by=uploaded_by
+            simulation=sim_data,
+            add_watcher=add_watcher,
+            uploaded_by=str(uploaded_by) if uploaded_by is not None else None,
         ).model_dump_json()
         res = requests.post(
             f"{self._url}/v1.3/simulations",
