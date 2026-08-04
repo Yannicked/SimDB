@@ -1111,7 +1111,7 @@ class RemoteAPI:
                 progress.reset(
                     file_task, total=size, description=f"  {local_path.name}"
                 )
-                url = f"{self._url}/v1.3/upload/{quote(target)}"
+                url = f"{self._api_url}upload/{quote(target)}"
 
                 def _on_progress(completed: int, _base: int = uploaded) -> None:
                     progress.update(file_task, completed=completed)
@@ -1120,7 +1120,7 @@ class RemoteAPI:
                 resumable_upload(
                     url,
                     local_path,
-                    auth=self._get_auth(),
+                    auth=self._get_auth() if self._server_auth != "None" else None,
                     cookies=self._cookies,
                     headers=upload_headers,
                     progress=_on_progress,
@@ -1129,6 +1129,7 @@ class RemoteAPI:
                 progress.update(file_task, completed=size)
                 progress.update(overall, completed=uploaded)
 
+    @versioned_method("v1.3")
     @try_request
     def push_http_simulation(self, simulation: Simulation, add_watcher: bool = False):
         """Push a simulation by uploading its files over resumable HTTP.
@@ -1153,20 +1154,12 @@ class RemoteAPI:
 
         uploaded_by = simulation.meta_dict().get("uploaded_by")
 
-        headers = {"Content-type": "application/json", "User-Agent": "it_script_basic"}
         post_data = SimulationPostData(
             simulation=sim_data,
             add_watcher=add_watcher,
             uploaded_by=str(uploaded_by) if uploaded_by is not None else None,
-        ).model_dump_json()
-        res = requests.post(
-            f"{self._url}/v1.3/simulations",
-            data=post_data,
-            headers=headers,
-            auth=self._get_auth(),
-            cookies=self._cookies,
         )
-        check_return(res)
+        self.post("simulations", data=post_data.model_dump(mode="json"))
 
     @versioned_method("v1.3")
     @try_request
