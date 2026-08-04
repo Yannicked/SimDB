@@ -940,33 +940,17 @@ class RemoteAPI:
 
         uploaded_by = simulation.meta_dict().get("uploaded_by")
 
-        headers = {"Content-type": "application/json", "User-Agent": "it_script_basic"}
         post_data = SimulationPostData(
             simulation=sim_data,
             add_watcher=add_watcher,
             uploaded_by=str(uploaded_by) if uploaded_by is not None else None,
-        ).model_dump_json()
-        res = requests.post(
-            f"{self._url}/v1.3/simulations",
-            data=post_data,
-            headers=headers,
-            auth=self._get_auth(),
-            cookies=self._cookies,
         )
-        check_return(res)
+        self.post("simulations", data=post_data.model_dump(mode="json"))
 
     @versioned_method("v1.3")
     @try_request
     def get_ingestion_status(self, sim_id: str) -> str:
-        headers = {"User-Agent": "it_script_basic"}
-        auth = self._get_auth() if self._server_auth != "None" else None
-        res = requests.get(
-            f"{self._url}/v1.3/simulation/status/{sim_id}",
-            headers=headers,
-            auth=auth,
-            cookies=self._cookies,
-        )
-        check_return(res)
+        res = self.get(f"simulation/status/{sim_id}")
         return res.json()["status"]
 
     @versioned_method("v1.2", "v1.3")
