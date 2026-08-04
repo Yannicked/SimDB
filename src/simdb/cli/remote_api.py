@@ -26,7 +26,7 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import ParseResult, urlparse
+from urllib.parse import urlparse
 
 import appdirs
 import click
@@ -250,25 +250,40 @@ def _check_file_is_imas(file: Path) -> bool:
             # Not a readable NetCDF file; fall back to the directory heuristics
             pass
 
-    return imas_backend_for_directory(file.parent) is not None
+    try:
+        imas_backend_for_directory(file.parent)
+    except ValueError:
+        return False
+    return True
 
 
 def _find_partition_for_file(
-    file: Path, partitions: dict[str, str]
+    file: Path, partitions: Dict[str, str]
 ) -> Tuple[str, Path]:
+    # Match the partition with the longest root so that a catch-all mapping
+    # (e.g. "/") does not shadow more specific partitions.
+    best: Optional[Tuple[str, Path]] = None
+    best_depth = -1
     for partition, path in partitions.items():
+        root = Path(path)
         try:
-            return partition, file.relative_to(Path(path))
+            relative = file.relative_to(root)
         except ValueError:
-            pass
-    raise click.ClickException(
-        f"File {file} is not located under any configured partition "
-        f"(configured partitions: {', '.join(partitions) or 'none'})"
-    )
+            continue
+        depth = len(root.parts)
+        if depth > best_depth:
+            best = (partition, relative)
+            best_depth = depth
+    if best is None:
+        raise APIError(
+            f"File {file} is not located under any configured partition "
+            f"(configured partitions: {', '.join(partitions) or 'none'})"
+        )
+    return best
 
 
 def _file_data_for_partition(
-    file: FileData, source: Path, partitions: dict[str, str]
+    file: FileData, source: Path, partitions: Dict[str, str]
 ) -> FileData:
     partition, partition_path = _find_partition_for_file(source, partitions)
     new_uri = SimDBUrl.build(scheme=partition, path=partition_path.as_posix())
@@ -285,24 +300,26 @@ def _file_data_for_partition(
     )
 
 
-def _expand_directories(files: Iterable[FileData], partitions: dict[str, str]):
+def _expand_directories(files: Iterable[FileData], partitions: Dict[str, str]):
     new_file_list = []
     for file in files:
         file_uri = SimDBUrl(file.uri)
         if file_uri.path is None:
-            raise ValueError("File has no associated path")
+            raise APIError(f"File URI has no path: {file.uri}")
         file_path = Path(file_uri.path)
         if file_uri.scheme == "imas":
             qs = dict(file_uri.query_params())
             path = qs.get("path")
             if path is None:
-                raise ValueError("IMAS uri has not path set")
+                raise APIError(f"IMAS URI has no path set: {file.uri}")
             file_path = Path(path)
 
         if file_path.is_dir():
             for sub_file in file_path.iterdir():
                 if sub_file.is_dir():
-                    raise ValueError("Nested directory found")
+                    raise APIError(
+                        f"Nested directory found in {file_path}: {sub_file.name}"
+                    )
                 new_file_list.append(
                     _file_data_for_partition(file, sub_file, partitions)
                 )
@@ -428,7 +445,7 @@ class RemoteAPI:
             headers = {"User-Agent": "it_script_basic"}
             cookies_file = f"{remote}-cookies.pkl"
             cookies_path = Path(appdirs.user_config_dir("simdb")) / cookies_file
-            parsed_url: ParseResult = urlparse(self._url)
+            parsed_url = urlparse(self._url)
             base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
             cookies = None
@@ -935,7 +952,7 @@ class RemoteAPI:
         for file in files:
             file_uri = SimDBUrl(file.uri)
             if file_uri.path is None:
-                raise ValueError("File has no associated path")
+                raise APIError(f"File URI has no path: {file.uri}")
 
             partition = Path(
                 self._config.get_string_option(f"partition.{file_uri.scheme}")
@@ -948,7 +965,7 @@ class RemoteAPI:
     def push_local_simulation(self, simulation: Simulation, add_watcher: bool = False):
         sim_data = simulation.to_model(recurse=True)
 
-        partitions = cast(dict[str, str], self._config.get_section("partition"))
+        partitions = cast(Dict[str, str], self._config.get_section("partition"))
         sim_data.inputs.root = _expand_directories(sim_data.inputs.root, partitions)
         sim_data.outputs.root = _expand_directories(sim_data.outputs.root, partitions)
 
@@ -1009,7 +1026,7 @@ class RemoteAPI:
         sim_data = simulation.data(recurse=True)
 
         try:
-            sim_json: bytes = json.dumps(
+            sim_json = json.dumps(
                 sim_data, cls=CustomEncoder, separators=(",", ":")
             ).encode("utf-8")
             sim_json_size = len(sim_json)

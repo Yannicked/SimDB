@@ -311,13 +311,13 @@ def _get_path(uri: SimDBUrl) -> Path:
     return path
 
 
-def imas_backend_for_directory(directory: Path) -> Optional[str]:
+def imas_backend_for_directory(directory: Path) -> str:
     """
     Identify the IMAS backend of a directory by inspecting its contents.
 
     @param directory: a directory that may contain an IMAS dataset
-    @return: the backend name ("ascii", "hdf5" or "mdsplus"), or None if no IMAS
-             dataset is detected
+    @return: the backend name ("ascii", "hdf5" or "mdsplus")
+    @raise ValueError: if no IMAS dataset is detected
     """
     children = list(directory.iterdir())
 

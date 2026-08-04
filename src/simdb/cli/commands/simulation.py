@@ -270,17 +270,33 @@ def simulation_push_local(
         IngestionStatus.VALIDATION_FAILED.value,
     }
 
+    max_consecutive_failures = 5
+
     click.echo("Waiting for ingestion to complete...", nl=False)
     last_status = None
+    consecutive_failures = 0
     deadline = time.monotonic() + timeout
     while True:
         try:
             status = api.get_ingestion_status(simulation.uuid.hex)
         except Exception as err:
-            click.echo()
-            raise click.ClickException(
-                f"Failed to check ingestion status: {err}"
-            ) from err
+            # Tolerate transient errors: the ingestion continues server-side
+            consecutive_failures += 1
+            if consecutive_failures >= max_consecutive_failures:
+                click.echo()
+                raise click.ClickException(
+                    f"Failed to check ingestion status "
+                    f"{consecutive_failures} times in a row: {err}"
+                ) from err
+            if time.monotonic() >= deadline:
+                click.echo()
+                raise click.ClickException(
+                    f"Timed out after {timeout:g}s waiting for ingestion to "
+                    f"complete (last status: {last_status})"
+                ) from err
+            time.sleep(1)
+            continue
+        consecutive_failures = 0
 
         if status != last_status:
             if last_status is not None:

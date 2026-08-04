@@ -80,12 +80,14 @@ sdcc = /
 ```
 
 Mapping `sdcc` to the system root makes any path under `/sdcc/projects/...`
-match, so `/sdcc/projects/my_run` becomes `sdcc:///sdcc/projects/my_run`.
+match, so `/sdcc/projects/my_run` becomes `sdcc:sdcc/projects/my_run`. When
+several partitions contain a file the most specific (deepest) path wins, so a
+catch-all mapping like this never shadows the others.
 
 When you run `push_local`, SimDB checks every input and output path against your
 partitions. A path inside a partition is rewritten to a partition-relative URI —
 `/home/user/my_simdb_data/scenarios/run1.txt` becomes
-`data:///scenarios/run1.txt`. The server resolves that URI against its own
+`data:scenarios/run1.txt`. The server resolves that URI against its own
 `[partition]` configuration, so the two sides may mount the same storage at
 different absolute paths.
 
