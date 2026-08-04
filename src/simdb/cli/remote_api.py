@@ -1130,7 +1130,7 @@ class RemoteAPI:
                 progress.update(overall, completed=uploaded)
 
     @try_request
-    def push_http_simulation(self, simulation: Simulation):
+    def push_http_simulation(self, simulation: Simulation, add_watcher: bool = False):
         """Push a simulation by uploading its files over resumable HTTP.
 
         Unlike :meth:`push_local_simulation` (which requires a filesystem shared
@@ -1155,7 +1155,7 @@ class RemoteAPI:
 
         headers = {"Content-type": "application/json", "User-Agent": "it_script_basic"}
         post_data = SimulationPostData(
-            simulation=sim_data, add_watcher=False, uploaded_by=uploaded_by
+            simulation=sim_data, add_watcher=add_watcher, uploaded_by=uploaded_by
         ).model_dump_json()
         res = requests.post(
             f"{self._url}/v1.3/simulations",

@@ -419,7 +419,7 @@ def simulation_push_http(
     except ValidationError as err:
         raise click.ClickException(f"Simulation does not validate: {err}") from err
 
-    api.push_http_simulation(simulation)
+    api.push_http_simulation(simulation, add_watcher=add_watcher)
 
     click.echo("Waiting for ingestion to complete...", nl=False)
     last_status = None

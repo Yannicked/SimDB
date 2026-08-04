@@ -120,8 +120,40 @@ def test_push_http_command_pushes_and_reports_success(tmp_path):
         )
 
     assert result.exit_code == 0, result.output
-    fake_api.push_http_simulation.assert_called_once_with(sim)
+    fake_api.push_http_simulation.assert_called_once_with(sim, add_watcher=False)
     assert "Successfully pushed simulation" in result.output
+
+
+def test_push_http_command_passes_add_watcher(tmp_path):
+    runner = CliRunner()
+    config_file = config_test_file()
+
+    fake_api = mock.MagicMock()
+    fake_api.get_validation_schemas.return_value = []
+    fake_api.get_ingestion_status.return_value = "completed"
+
+    sim = mock.MagicMock()
+    sim.uuid = uuid.uuid4()
+    fake_db = mock.MagicMock()
+    fake_db.get_simulation.return_value = sim
+
+    with mock.patch(
+        "simdb.cli.commands.simulation.RemoteAPI", return_value=fake_api
+    ), mock.patch("simdb.cli.commands.simulation.get_local_db", return_value=fake_db):
+        result = runner.invoke(
+            cli,
+            [
+                f"--config-file={config_file}",
+                "simulation",
+                "push_http",
+                "iter",
+                "sim1",
+                "--add-watcher",
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    fake_api.push_http_simulation.assert_called_once_with(sim, add_watcher=True)
 
 
 def test_push_http_command_fails_on_failed_status(tmp_path):
