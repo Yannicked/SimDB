@@ -31,14 +31,13 @@ from urllib.parse import urlparse
 import appdirs
 import click
 import requests
-from netCDF4 import Dataset
 from requests.auth import AuthBase
 from semantic_version import Version
 
 from simdb.checksum import calculate_checksum
 from simdb.config import Config
 from simdb.database.models import Simulation
-from simdb.imas.utils import SimDBUrl, imas_backend_for_directory, imas_files
+from simdb.imas.utils import SimDBUrl, imas_files
 from simdb.json import CustomDecoder, CustomEncoder
 from simdb.remote import CLIENT_API_VERSIONS, APIConstants
 from simdb.remote.models import FileData, SimulationPostData
@@ -237,24 +236,6 @@ def _get_paths(file: "File") -> Iterable[Path]:
         return []
     else:
         return imas_files(file.uri)
-
-
-def _check_file_is_imas(file: Path) -> bool:
-    # NetCDF is identified by the IMAS "Conventions" attribute
-    if file.suffix == ".nc":
-        try:
-            with Dataset(file, "r") as ds:
-                if getattr(ds, "Conventions", None) == "IMAS":
-                    return True
-        except OSError:
-            # Not a readable NetCDF file; fall back to the directory heuristics
-            pass
-
-    try:
-        imas_backend_for_directory(file.parent)
-    except ValueError:
-        return False
-    return True
 
 
 def _find_partition_for_file(
@@ -948,18 +929,6 @@ class RemoteAPI:
         ]
         self.post("files", data={}, files=files)
 
-    def _mark_imas_files(self, files: Iterable[FileData]) -> None:
-        for file in files:
-            file_uri = SimDBUrl(file.uri)
-            if file_uri.path is None:
-                raise APIError(f"File URI has no path: {file.uri}")
-
-            partition = Path(
-                self._config.get_string_option(f"partition.{file_uri.scheme}")
-            )
-            if _check_file_is_imas(partition / Path(file_uri.path)):
-                file.type = "IMAS"
-
     @versioned_method("v1.3")
     @try_request
     def push_local_simulation(self, simulation: Simulation, add_watcher: bool = False):
@@ -968,9 +937,6 @@ class RemoteAPI:
         partitions = cast(Dict[str, str], self._config.get_section("partition"))
         sim_data.inputs.root = _expand_directories(sim_data.inputs.root, partitions)
         sim_data.outputs.root = _expand_directories(sim_data.outputs.root, partitions)
-
-        self._mark_imas_files(sim_data.inputs.root)
-        self._mark_imas_files(sim_data.outputs.root)
 
         uploaded_by = simulation.meta_dict().get("uploaded_by")
 
