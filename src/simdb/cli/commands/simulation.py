@@ -259,12 +259,19 @@ def _wait_for_ingestion(api: RemoteAPI, sim_id: str, timeout: float) -> Ingestio
     deadline = time.monotonic() + timeout
     while True:
         try:
-            status = api.get_ingestion_status(sim_id)
+            raw_status = api.get_ingestion_status(sim_id)
         except RemoteError as err:
             # The remote rejected the request, so retrying will not help.
             click.echo()
             raise click.ClickException(
                 f"Failed to check ingestion status: {err}"
+            ) from err
+        except ValueError as err:
+            # The remote reported a status this client does not know about, so
+            # waiting for it to change will not help.
+            click.echo()
+            raise click.ClickException(
+                f"Remote reported an unknown ingestion status: {err}"
             ) from err
         except Exception as err:
             # Tolerate transient errors: the ingestion continues server-side
@@ -286,29 +293,29 @@ def _wait_for_ingestion(api: RemoteAPI, sim_id: str, timeout: float) -> Ingestio
         consecutive_failures = 0
 
         try:
-            ingestion_status = IngestionStatus(status)
+            status = IngestionStatus(raw_status)
         except ValueError as err:
             click.echo()
             raise click.ClickException(
-                f"Remote reported an unknown ingestion status: {status}"
+                f"Remote reported an unknown ingestion status: {raw_status}"
             ) from err
 
         if status != last_status:
             if last_status is not None:
-                click.echo(f" -> {status}", nl=False)
+                click.echo(f" -> {status.value}", nl=False)
             else:
-                click.echo(f" {status}", nl=False)
+                click.echo(f" {status.value}", nl=False)
             last_status = status
 
-        if ingestion_status.is_terminal():
+        if status.is_terminal():
             click.echo()
-            return ingestion_status
+            return status
 
         if time.monotonic() >= deadline:
             click.echo()
             raise click.ClickException(
                 f"Timed out after {timeout:g}s waiting for ingestion to complete "
-                f"(last status: {status})"
+                f"(last status: {status.value})"
             )
 
         time.sleep(poll_interval)
@@ -434,21 +441,23 @@ def simulation_push_http(
 
         if status != last_status:
             if last_status is not None:
-                click.echo(f" -> {status}", nl=False)
+                click.echo(f" -> {status.value}", nl=False)
             else:
-                click.echo(f" {status}", nl=False)
+                click.echo(f" {status.value}", nl=False)
             last_status = status
 
-        if status in ("completed", "copy_failed", "validation_failed"):
+        if status.is_terminal():
             break
 
         time.sleep(1)
 
     click.echo()
-    if status == "completed":
+    if status == IngestionStatus.COMPLETED:
         click.echo(f"Successfully pushed simulation {simulation.uuid}")
     else:
-        raise click.ClickException(f"Simulation ingestion failed with status: {status}")
+        raise click.ClickException(
+            f"Simulation ingestion failed with status: {status.value}"
+        )
 
 
 @simulation.command(

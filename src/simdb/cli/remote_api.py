@@ -46,6 +46,7 @@ from simdb.checksum import CHECKSUM_ALGORITHM, READ_CHUNK_SIZE, hash_file
 from simdb.cli.resumable_upload import resumable_upload
 from simdb.config import Config
 from simdb.database.models import Simulation
+from simdb.enums import IngestionStatus
 from simdb.imas.utils import SimDBUrl, imas_backend_for_directory, imas_files
 from simdb.json import CustomDecoder, CustomEncoder
 from simdb.remote import CLIENT_API_VERSIONS, APIConstants
@@ -1165,7 +1166,7 @@ class RemoteAPI:
     @try_request
     def get_ingestion_status(self, sim_id: str) -> str:
         res = self.get(f"simulation/status/{sim_id}")
-        return res.json()["status"]
+        return IngestionStatus(res.json()["status"])
 
     @versioned_method("v1.2", "v1.3")
     @try_request
