@@ -1164,7 +1164,7 @@ class RemoteAPI:
 
     @versioned_method("v1.3")
     @try_request
-    def get_ingestion_status(self, sim_id: str) -> str:
+    def get_ingestion_status(self, sim_id: str) -> IngestionStatus:
         res = self.get(f"simulation/status/{sim_id}")
         return IngestionStatus(res.json()["status"])
 

@@ -10,6 +10,7 @@ from utils import config_test_file
 
 from simdb.cli.remote_api import _compute_checksums, _expand_directories_http
 from simdb.cli.simdb import cli
+from simdb.enums import IngestionStatus
 from simdb.imas.utils import SimDBUrl
 from simdb.remote.models import FileData
 
@@ -104,7 +105,7 @@ def test_push_http_command_pushes_and_reports_success(tmp_path):
 
     fake_api = mock.MagicMock()
     fake_api.get_validation_schemas.return_value = []
-    fake_api.get_ingestion_status.return_value = "completed"
+    fake_api.get_ingestion_status.return_value = IngestionStatus.COMPLETED
 
     sim = mock.MagicMock()
     sim.uuid = uuid.uuid4()
@@ -117,6 +118,7 @@ def test_push_http_command_pushes_and_reports_success(tmp_path):
         result = runner.invoke(
             cli,
             [f"--config-file={config_file}", "simulation", "push_http", "iter", "sim1"],
+            catch_exceptions=False,
         )
 
     assert result.exit_code == 0, result.output
@@ -130,7 +132,7 @@ def test_push_http_command_passes_add_watcher(tmp_path):
 
     fake_api = mock.MagicMock()
     fake_api.get_validation_schemas.return_value = []
-    fake_api.get_ingestion_status.return_value = "completed"
+    fake_api.get_ingestion_status.return_value = IngestionStatus.COMPLETED
 
     sim = mock.MagicMock()
     sim.uuid = uuid.uuid4()
@@ -162,7 +164,7 @@ def test_push_http_command_fails_on_failed_status(tmp_path):
 
     fake_api = mock.MagicMock()
     fake_api.get_validation_schemas.return_value = []
-    fake_api.get_ingestion_status.return_value = "copy_failed"
+    fake_api.get_ingestion_status.return_value = IngestionStatus.COPY_FAILED
 
     sim = mock.MagicMock()
     sim.uuid = uuid.uuid4()
@@ -178,4 +180,4 @@ def test_push_http_command_fails_on_failed_status(tmp_path):
         )
 
     assert result.exit_code != 0
-    assert "copy_failed" in result.output
+    assert "COPY_FAILED" in result.output
