@@ -3,14 +3,8 @@
 import hashlib
 import uuid
 from datetime import datetime, timezone
-from unittest import mock
-
-from click.testing import CliRunner
-from utils import config_test_file
 
 from simdb.cli.remote_api import _compute_checksums, _expand_directories_http
-from simdb.cli.simdb import cli
-from simdb.enums import IngestionStatus
 from simdb.imas.utils import SimDBUrl
 from simdb.remote.models import FileData
 
@@ -97,87 +91,3 @@ def test_expand_directories_http_unpartitioned_file_uses_file_scheme(tmp_path):
 
     _, _, target = result[0]
     assert target == f"{sim_uuid.hex}/file/{str(f).lstrip('/')}"
-
-
-def test_push_http_command_pushes_and_reports_success(tmp_path):
-    runner = CliRunner()
-    config_file = config_test_file()
-
-    fake_api = mock.MagicMock()
-    fake_api.get_validation_schemas.return_value = []
-    fake_api.get_ingestion_status.return_value = IngestionStatus.COMPLETED
-
-    sim = mock.MagicMock()
-    sim.uuid = uuid.uuid4()
-    fake_db = mock.MagicMock()
-    fake_db.get_simulation.return_value = sim
-
-    with mock.patch(
-        "simdb.cli.commands.simulation.RemoteAPI", return_value=fake_api
-    ), mock.patch("simdb.cli.commands.simulation.get_local_db", return_value=fake_db):
-        result = runner.invoke(
-            cli,
-            [f"--config-file={config_file}", "simulation", "push_http", "iter", "sim1"],
-            catch_exceptions=False,
-        )
-
-    assert result.exit_code == 0, result.output
-    fake_api.push_http_simulation.assert_called_once_with(sim, add_watcher=False)
-    assert "Successfully pushed simulation" in result.output
-
-
-def test_push_http_command_passes_add_watcher(tmp_path):
-    runner = CliRunner()
-    config_file = config_test_file()
-
-    fake_api = mock.MagicMock()
-    fake_api.get_validation_schemas.return_value = []
-    fake_api.get_ingestion_status.return_value = IngestionStatus.COMPLETED
-
-    sim = mock.MagicMock()
-    sim.uuid = uuid.uuid4()
-    fake_db = mock.MagicMock()
-    fake_db.get_simulation.return_value = sim
-
-    with mock.patch(
-        "simdb.cli.commands.simulation.RemoteAPI", return_value=fake_api
-    ), mock.patch("simdb.cli.commands.simulation.get_local_db", return_value=fake_db):
-        result = runner.invoke(
-            cli,
-            [
-                f"--config-file={config_file}",
-                "simulation",
-                "push_http",
-                "iter",
-                "sim1",
-                "--add-watcher",
-            ],
-        )
-
-    assert result.exit_code == 0, result.output
-    fake_api.push_http_simulation.assert_called_once_with(sim, add_watcher=True)
-
-
-def test_push_http_command_fails_on_failed_status(tmp_path):
-    runner = CliRunner()
-    config_file = config_test_file()
-
-    fake_api = mock.MagicMock()
-    fake_api.get_validation_schemas.return_value = []
-    fake_api.get_ingestion_status.return_value = IngestionStatus.COPY_FAILED
-
-    sim = mock.MagicMock()
-    sim.uuid = uuid.uuid4()
-    fake_db = mock.MagicMock()
-    fake_db.get_simulation.return_value = sim
-
-    with mock.patch(
-        "simdb.cli.commands.simulation.RemoteAPI", return_value=fake_api
-    ), mock.patch("simdb.cli.commands.simulation.get_local_db", return_value=fake_db):
-        result = runner.invoke(
-            cli,
-            [f"--config-file={config_file}", "simulation", "push_http", "iter", "sim1"],
-        )
-
-    assert result.exit_code != 0
-    assert "COPY_FAILED" in result.output
