@@ -9,6 +9,7 @@ import os
 import pickle
 import shutil
 import sys
+import time
 import uuid
 from collections import defaultdict
 from io import BytesIO
@@ -1004,16 +1005,15 @@ class RemoteAPI:
         file_type: str,
         sim_data: Dict[str, Any],
         chunk_size: int,
-        out_stream: IO,
         type: DataType,
     ):
         msg = f"Uploading file {path} "
-        print(msg, file=out_stream, end="")
+        print(msg, end="")
         num_chunks = 0
         for chunk_index, chunk in enumerate(
             _read_bytes_in_chunks(path, compressed=True, chunk_size=chunk_size)
         ):
-            print(".", file=out_stream, end="", flush=True)
+            print(".", end="")
             self._send_chunk(chunk_index, chunk, chunk_size, uuid, file_type, sim_data)
             num_chunks += 1
         if num_chunks == 0:
@@ -1035,11 +1035,9 @@ class RemoteAPI:
                     ],
                 },
             )
-        print(f"\r{msg}", file=out_stream, end="")
+        print(f"\r{msg}", end="")
         print(
             "Complete".rjust(shutil.get_terminal_size().columns - len(msg)),
-            file=out_stream,
-            flush=True,
         )
 
     def _send_chunk(
@@ -1132,7 +1130,11 @@ class RemoteAPI:
 
     @versioned_method("v1.3")
     @try_request
-    def push_http_simulation(self, simulation: Simulation, add_watcher: bool = False):
+    def push_simulation(
+        self,
+        simulation: Simulation,
+        add_watcher: bool = False,
+    ):
         """Push a simulation by uploading its files over resumable HTTP.
 
         Unlike :meth:`push_local_simulation` (which requires a filesystem shared
@@ -1162,18 +1164,42 @@ class RemoteAPI:
         )
         self.post("simulations", data=post_data.model_dump(mode="json"))
 
+        print("Waiting for ingestion to complete...", end="")
+        last_status = None
+        while True:
+            try:
+                status = self.get_ingestion_status(simulation.uuid.hex)
+            except Exception as err:
+                raise APIError(f"Failed to check ingestion status: {err}") from err
+
+            if status != last_status:
+                if last_status is not None:
+                    print(f" -> {status.value}", end="")
+                else:
+                    print(f" {status.value}", end="")
+                last_status = status
+
+            if status.is_terminal():
+                break
+
+            time.sleep(1)
+
+        if status == IngestionStatus.COMPLETED:
+            return
+        else:
+            raise APIError(f"Simulation ingestion failed with status: {status.value}")
+
     @versioned_method("v1.3")
     @try_request
     def get_ingestion_status(self, sim_id: str) -> IngestionStatus:
         res = self.get(f"simulation/status/{sim_id}")
         return IngestionStatus(res.json()["status"])
 
-    @versioned_method("v1.2", "v1.3")
+    @push_simulation.register("v1.2")
     @try_request
-    def push_simulation(
+    def _push_simulation_v12(
         self,
         simulation: "Simulation",
-        out_stream: IO[str] = sys.stdout,
         add_watcher: bool = True,
     ) -> None:
         """
@@ -1183,7 +1209,6 @@ class RemoteAPI:
         simulation metadata.
 
         :param simulation: The Simulation to push to remote server
-        :param out_stream: The IO stream to write messages to the user (default: stdout)
         :param add_watcher: Add the current user as a watcher of the simulation on the
                             remote server
         """
@@ -1218,7 +1243,7 @@ class RemoteAPI:
             for file in simulation.inputs:
                 if file.type == DataType.IMAS:
                     if not copy_ids:
-                        print(f"Skipping IDS data {file}", file=out_stream, flush=True)
+                        print(f"Skipping IDS data {file}")
                         continue
                     ids_list = simulation.meta_dict().get("input_ids", [])
                     for path in imas_files(file.uri):
@@ -1240,7 +1265,6 @@ class RemoteAPI:
                             "input",
                             sim_data,
                             chunk_size,
-                            out_stream,
                             file.type,
                         )
 
@@ -1267,14 +1291,13 @@ class RemoteAPI:
                             "input",
                             sim_data,
                             chunk_size,
-                            out_stream,
                             file.type,
                         )
 
             for file in simulation.outputs:
                 if file.type == DataType.IMAS:
                     if not copy_ids:
-                        print(f"Skipping IDS data {file}", file=out_stream, flush=True)
+                        print(f"Skipping IDS data {file}")
                         continue
 
                     ids_list = simulation.meta_dict().get("ids", [])
@@ -1303,7 +1326,6 @@ class RemoteAPI:
                             "output",
                             sim_data,
                             chunk_size,
-                            out_stream,
                             file.type,
                         )
 
@@ -1329,13 +1351,12 @@ class RemoteAPI:
                             "output",
                             sim_data,
                             chunk_size,
-                            out_stream,
                             file.type,
                         )
 
         sim_data = simulation.data(recurse=True)
         uploaded_by = simulation.meta_dict().get("uploaded_by", None)
-        print("Uploading simulation data ... ", file=out_stream, end="", flush=True)
+        print("Uploading simulation data ... ", end="")
         self.post(
             "simulations",
             data={
@@ -1344,7 +1365,7 @@ class RemoteAPI:
                 "uploaded_by": uploaded_by,
             },
         )
-        print("Success", file=out_stream, flush=True)
+        print("Success")
 
     def _get_file_info(self, uuid: uuid.UUID) -> List[Tuple[Path, str]]:
         r = self.get(f"file/{uuid.hex}")

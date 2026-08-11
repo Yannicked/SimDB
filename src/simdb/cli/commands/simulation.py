@@ -11,7 +11,7 @@ import click
 from rich.prompt import Confirm
 
 from simdb.cli.manifest import Manifest
-from simdb.cli.remote_api import RemoteAPI, RemoteError
+from simdb.cli.remote_api import APIError, RemoteAPI, RemoteError
 from simdb.config.config import Config
 from simdb.database import DatabaseError, get_local_db
 from simdb.database.models import Simulation
@@ -377,90 +377,6 @@ def simulation_push_local(
 
 
 @simulation.command(
-    "push_http",
-    cls=OptionalRemoteCommand,
-    short_help="Upload a simulation and its files to the REMOTE over HTTP.",
-)
-@pass_config
-@click.argument("remote", required=False)
-@click.argument("sim_id")
-@click.option("--username", help="Username used to authenticate with the remote.")
-@click.option("--password", help="Password used to authenticate with the remote.")
-@click.option("--replaces", help="SIM_ID of simulation to deprecate and replace.")
-@click.option(
-    "--add-watcher",
-    is_flag=True,
-    help="Add the current user as a watcher of the simulation.",
-)
-def simulation_push_http(
-    config: Config,
-    remote: Optional[str],
-    sim_id: str,
-    username: Optional[str],
-    password: Optional[str],
-    replaces: Optional[str],
-    add_watcher: bool,
-):
-    """Push the simulation with the given SIM_ID to the REMOTE over resumable HTTP.
-
-    Unlike push_local, this does not require a filesystem shared with the server:
-    the file bytes are uploaded over HTTP using a resumable protocol and staged
-    into the server's 'http' partition. An interrupted push can be resumed by
-    re-running the command.
-    """
-
-    api = RemoteAPI(remote, username, password, config)
-    db = get_local_db(config)
-
-    simulation = db.get_simulation(sim_id)
-    if simulation is None:
-        raise click.ClickException(f"Failed to find simulation: {sim_id}")
-
-    if replaces:
-        simulation.set_meta("replaces", replaces)
-
-    schemas = api.get_validation_schemas()
-    try:
-        for schema in schemas:
-            Validator(schema).validate(simulation)
-    except ValidationError as err:
-        raise click.ClickException(f"Simulation does not validate: {err}") from err
-
-    api.push_http_simulation(simulation, add_watcher=add_watcher)
-
-    click.echo("Waiting for ingestion to complete...", nl=False)
-    last_status = None
-    while True:
-        try:
-            status = api.get_ingestion_status(simulation.uuid.hex)
-        except Exception as err:
-            click.echo()
-            raise click.ClickException(
-                f"Failed to check ingestion status: {err}"
-            ) from err
-
-        if status != last_status:
-            if last_status is not None:
-                click.echo(f" -> {status.value}", nl=False)
-            else:
-                click.echo(f" {status.value}", nl=False)
-            last_status = status
-
-        if status.is_terminal():
-            break
-
-        time.sleep(1)
-
-    click.echo()
-    if status == IngestionStatus.COMPLETED:
-        click.echo(f"Successfully pushed simulation {simulation.uuid}")
-    else:
-        raise click.ClickException(
-            f"Simulation ingestion failed with status: {status.value}"
-        )
-
-
-@simulation.command(
     "push",
     cls=OptionalRemoteCommand,
     short_help="Upload a simulation and its files to the REMOTE.",
@@ -494,7 +410,10 @@ def simulation_push(
     api = RemoteAPI(remote, username, password, config)
     simulation = _prepare_simulation(config, api, sim_id, replaces)
 
-    api.push_simulation(simulation, out_stream=sys.stdout, add_watcher=add_watcher)
+    try:
+        api.push_simulation(simulation, add_watcher=add_watcher)
+    except APIError as err:
+        raise click.ClickException(f"Failed to push simulation: {err}") from err
 
     click.echo(f"Successfully pushed simulation {simulation.uuid}")
 
