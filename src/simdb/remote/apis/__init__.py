@@ -36,6 +36,26 @@ def register(api, version, namespaces):
     version_str = version.replace(".", "_")
     blueprint = Blueprint(f"api_{version_str}", f"{__name__}.{version_str}")
     blueprints[version] = blueprint
+
+    def index():
+        return jsonify(
+            {
+                "api": "simdb",
+                "api_version": api.version,
+                "server_version": __version__,
+                "endpoints": [
+                    request.url + "simulations",
+                    request.url + "files",
+                    request.url + "validation_schema",
+                    request.url + "metadata",
+                    request.url + "upload_options",
+                ],
+                "documentation": request.url + "docs",
+            }
+        )
+
+    api.render_root = index
+
     api.init_app(blueprint)
 
     for namespace in namespaces:
@@ -78,21 +98,7 @@ def register(api, version, namespaces):
     class Index(Resource):
         @api.doc(security=[])
         def get(self):
-            return jsonify(
-                {
-                    "api": "simdb",
-                    "api_version": api.version,
-                    "server_version": __version__,
-                    "endpoints": [
-                        request.url + "simulations",
-                        request.url + "files",
-                        request.url + "validation_schema",
-                        request.url + "metadata",
-                        request.url + "upload_options",
-                    ],
-                    "documentation": request.url + "docs",
-                }
-            )
+            return index()
 
     @api.route("/token")
     class Token(Resource):
