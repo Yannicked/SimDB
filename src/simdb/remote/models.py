@@ -521,7 +521,7 @@ class FileUploadResponse(BaseModel):
 class FileRegistrationItem(BaseModel):
     """A single file entry in the file registration payload."""
 
-    chunks: int
+    chunks: int = 0
     """The amount of chunks to be processed."""
     file_type: str
     """The file type."""
@@ -529,6 +529,17 @@ class FileRegistrationItem(BaseModel):
     """The UUID of the file."""
     ids_list: Optional[List[Any]] = None
     """List of IDS names associated with the file."""
+
+    @field_validator("ids_list", mode="before")
+    @classmethod
+    def _coerce_ids_list(cls, v: Any) -> Any:
+        """Accept the display-string form of the IDS list, ``"[a, b, c]"``."""
+        if not isinstance(v, str):
+            return v
+        text = v.strip()
+        if text.startswith("[") and text.endswith("]"):
+            text = text[1:-1]
+        return [name.strip() for name in text.split(",") if name.strip()]
 
 
 class FileRegistrationData(BaseModel):
