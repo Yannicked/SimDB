@@ -246,7 +246,13 @@ def simulation_push_local(
     add_watcher: bool,
     timeout: float,
 ):
-    """Push the simulation with the given SIM_ID (UUID or alias) to the REMOTE."""
+    """Register the simulation with the given SIM_ID (UUID or alias) on the REMOTE.
+
+    Only the metadata is sent: the REMOTE copies the simulation files itself from
+    the recorded paths, which must therefore be reachable from the remote.
+    Waits for the remote ingestion to reach a terminal state, or until --timeout
+    seconds have passed.
+    """
 
     api = RemoteAPI(remote, username, password, config)
     db = get_local_db(config)
