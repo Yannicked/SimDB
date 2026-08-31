@@ -114,4 +114,4 @@ SimDB also recognises these special variables:
 | `SIMDB_CONFIG_FILE` | Path to a config file to load (same as `-c`). |
 | `SIMDB_USER_CONFIG_PATH` | Override the location of the user config file. |
 | `SIMDB_SITE_CONFIG_PATH` | Override the location of the site config file. |
-| `SIMDB_REQUESTS_CA_BUNDLE` | Path to a CA certificate bundle for verifying HTTPS connections to remotes. See [Connect to ITER](../how-to/connect-to-iter.md). |
+| `REQUESTS_CA_BUNDLE` | Path to a CA certificate bundle for verifying HTTPS connections to remotes. See [Connect to ITER](../how-to/connect-to-iter.md). |
