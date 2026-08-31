@@ -74,7 +74,7 @@ def try_request(func: Callable) -> Callable:
                 f"""\
 Connection failed to {url}
 
-Please check that the URL is valid and that SIMDB_REQUESTS_CA_BUNDLE is set if required.
+Please check that the URL is valid and that REQUESTS_CA_BUNDLE is set if required.
                 """
             ) from None
         except requests.HTTPError as ex:

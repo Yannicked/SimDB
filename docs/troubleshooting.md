@@ -28,7 +28,7 @@ See [Client configuration](reference/configuration.md).
 
 - Check the remote URL: `simdb remote config list`, then `simdb remote test`.
 - On an ITER HPC node, install the ITER CA bundle and set
-  `SIMDB_REQUESTS_CA_BUNDLE`. See [Connect to ITER](how-to/connect-to-iter.md).
+  `REQUESTS_CA_BUNDLE`. See [Connect to ITER](how-to/connect-to-iter.md).
 - For remote IMAS data, make sure the data server's port is reachable through
   your firewall. Contact your system administrator if not.
 
