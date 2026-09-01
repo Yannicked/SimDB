@@ -157,13 +157,17 @@ drop the `CACHE_` prefix and lowercase it, for example `CACHE_ARGS` becomes
 
 ## `[celery]`
 
-Used by the optional background workers in the
-[Docker Compose deployment](../how-to/operate-server/run-with-docker.md).
+Used by the optional
+[background workers](../how-to/operate-server/run-celery-workers.md).
 
 | Option | Required | Description |
 | --- | --- | --- |
 | `broker_url` | For workers | Message broker URL, for example `redis://redis:6379/0`. |
 | `result_backend` | For workers | Result backend URL, for example `redis://redis:6379/0`. |
+| `task_soft_time_limit` | No | Seconds before a running task is asked to stop. Ingestion tasks turn this into a `COPY_FAILED` status. Defaults to `3600`. |
+| `task_time_limit` | No | Hard limit in seconds, after which the task is killed. Defaults to `3660`. |
+| `stale_sweep_interval` | No | How often, in seconds, beat runs the stale-ingestion sweep. Defaults to `300`. |
+| `stale_ingestion_timeout` | No | How long, in seconds, a simulation may sit in a non-terminal ingestion state before the sweep fails it. Should be larger than `task_time_limit`. Defaults to `7200`. |
 
 ## `[partition]`
 

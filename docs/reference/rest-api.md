@@ -65,6 +65,7 @@ A few endpoints sit at the top level of each version rather than in a namespace:
 | `validation_schema` | Retrieve the server's validation schema. |
 | `upload_options` | Report whether the server copies uploaded files and IDS data (`copy_files`/`copy_ids`). |
 | `staging_dir` | Return the staging directory for an upload (v1.2 and later). |
+| `simulation/{id}/data` | Read one IDS field from a simulation's IMAS output, optionally converted to a given Data Dictionary version (v1.3 and later). |
 
 The root URL of a version lists its available endpoints as JSON.
 

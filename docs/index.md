@@ -71,6 +71,7 @@ how-to/use-the-dashboard
 how-to/operate-server/install-server
 how-to/operate-server/run-dev-server
 how-to/operate-server/run-with-docker
+how-to/operate-server/run-celery-workers
 how-to/operate-server/run-multiple-instances
 how-to/operate-server/run-behind-nginx-gunicorn
 how-to/operate-server/enable-ssl
