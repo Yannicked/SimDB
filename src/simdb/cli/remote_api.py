@@ -74,7 +74,7 @@ def try_request(func: Callable) -> Callable:
                 f"""\
 Connection failed to {url}
 
-Please check that the URL is valid and that SIMDB_REQUESTS_CA_BUNDLE is set if required.
+Please check that the URL is valid and that REQUESTS_CA_BUNDLE is set if required.
                 """
             ) from None
         except requests.HTTPError as ex:
@@ -427,13 +427,12 @@ class RemoteAPI:
         """
         Perform an HTTP GET request.
 
-        @param url: the URL of the request.
-        @param params: any additional parameters to send along with the request.
-        @param headers: additional headers to send with the request.
-        @param authenticate: True if we should send authentication headers with the
-                             request.
-        @param stream: True to enable streaming.
-        @return:
+        :param url: the URL of the request.
+        :param params: any additional parameters to send along with the request.
+        :param headers: additional headers to send with the request.
+        :param authenticate: True if we should send authentication headers with
+            the request.
+        :param stream: True to enable streaming.
         """
 
         params = params if params is not None else {}
