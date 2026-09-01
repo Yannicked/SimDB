@@ -221,7 +221,7 @@ class Simulation(Base):
             self.inputs.append(file)
 
         if all_input_idss:
-            self.set_meta("input_ids", "[{}]".format(", ".join(all_input_idss)))
+            self.set_meta("input_ids", all_input_idss)
 
         all_output_idss = []
 
@@ -249,7 +249,7 @@ class Simulation(Base):
             self.outputs.append(file)
 
         if all_output_idss:
-            self.set_meta("ids", "[{}]".format(", ".join(all_output_idss)))
+            self.set_meta("ids", all_output_idss)
 
         flattened_dict = flatten_dict(manifest.metadata)
 
@@ -293,6 +293,10 @@ class Simulation(Base):
                     first_line = False
             elif isinstance(value, dict) and "min" in value and "max" in value:
                 result += f"  {element}: [{value['min']}, {value['max']}]\n"
+            elif isinstance(value, list):
+                result += "  {}: [{}]\n".format(
+                    element, ", ".join(str(el) for el in value)
+                )
             else:
                 result += f"  {element}: {value}\n"
         result += "inputs:\n"
