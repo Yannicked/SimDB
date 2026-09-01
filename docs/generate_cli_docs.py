@@ -11,7 +11,7 @@ by hand from the ``docs/`` directory:
     python generate_cli_docs.py
 """
 
-import os
+import subprocess
 from pathlib import Path
 
 DOCS_DIR = Path(__file__).parent.resolve()
@@ -19,9 +19,15 @@ TEMPLATE = DOCS_DIR / "cli.md.in"
 OUTPUT = DOCS_DIR / "reference" / "cli.md"
 
 
-def run_command(cmd: str) -> str:
-    stream = os.popen(cmd)
-    return stream.read()
+def run_command(args: list[str]) -> str:
+    try:
+        result = subprocess.run(args, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"`{' '.join(args)}` failed with exit status {exc.returncode}:\n"
+            f"{exc.stderr.strip()}"
+        ) from exc
+    return result.stdout
 
 
 def extract_command(line: str) -> str:
@@ -45,7 +51,7 @@ def generate_block(output: str) -> str:
 
 
 def process_cmd(cmd: str) -> str:
-    output = run_command(f"simdb {cmd} --help")
+    output = run_command(["simdb", *cmd.split(), "--help"])
     sub_commands = extract_sub_commands(output) if cmd else []
 
     text = generate_block(output)
