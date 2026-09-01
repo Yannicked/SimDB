@@ -61,7 +61,7 @@ simdb simulation push_local SIM_ID
 The command blocks and reports the ingestion state as it changes:
 
 ```text
-Waiting for ingestion to complete... queued -> copy_files -> completed
+Waiting for ingestion to complete... QUEUED -> COPYING -> COPIED -> COMPLETED
 Successfully pushed simulation UUID
 ```
 
