@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64.0", "wheel", "setuptools_scm>8", "tomli;python_version<'3.11'"]
+requires = ["setuptools>=64.0", "wheel", "setuptools_scm>8"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,7 @@ name = "imas-simdb"
 description = "ITER Simulation Management Tool"
 readme = {file = "README.md", content-type = "text/markdown"}
 license = {file = "LICENCE"}
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 authors = [
     {name = "ITER Organization", email = "imas-support@iter.org"},
 ]
@@ -17,10 +17,9 @@ maintainers = [
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
     "Development Status :: 4 - Beta",
     "Topic :: Scientific/Engineering :: Physics",
@@ -35,7 +34,6 @@ dependencies = [
     "PyJWT>=1.4.0",
     "appdirs>=1.4.0",
     "argcomplete>=1.9.4",
-    "backports-datetime-fromisoformat>=1.0",
     "click>=7.0,<=8.1.8",
     "click_option_group>=0.5",
     "distro>=1.8.0",
@@ -120,6 +118,8 @@ write_to = "src/simdb/_version.py"
 local_scheme = "dirty-tag"
 
 [tool.ruff]
+# Pinned to 3.8 to keep ruff from complaining for now
+target-version = "py38"
 extend-exclude = ["scripts", "sql", "docs", "src/simdb/_version.py"]
 line-length = 88
 indent-width = 4
