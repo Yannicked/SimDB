@@ -217,7 +217,108 @@ class OptionalRemoteCommand(click.Command):
         return sum(1 for argument in arguments if values.get(argument.name) is not None)
 
 
-@simulation.command("push_local", cls=OptionalRemoteCommand)
+def _prepare_simulation(
+    config: Config, api: RemoteAPI, sim_id: str, replaces: Optional[str]
+) -> Simulation:
+    """Look up the local simulation SIM_ID and validate it against the remote
+    schemas."""
+    db = get_local_db(config)
+
+    simulation = db.get_simulation(sim_id)
+    if simulation is None:
+        raise click.ClickException(f"Failed to find simulation: {sim_id}")
+
+    if replaces:
+        simulation.set_meta("replaces", replaces)
+
+    schemas = api.get_validation_schemas()
+    try:
+        for schema in schemas:
+            Validator(schema).validate(simulation)
+    except ValidationError as err:
+        raise click.ClickException(f"Simulation does not validate: {err}") from err
+
+    return simulation
+
+
+def _wait_for_ingestion(api: RemoteAPI, sim_id: str, timeout: float) -> IngestionStatus:
+    """Poll the remote until the ingestion of SIM_ID reaches a terminal state.
+
+    Reports every status change and returns the terminal status.
+
+    :raise click.ClickException: if the remote cannot be reached, reports an
+                                 unknown status, or TIMEOUT seconds pass before
+                                 the ingestion finishes.
+    """
+    max_consecutive_failures = 5
+    poll_interval = 1.0
+
+    click.echo("Waiting for ingestion to complete...", nl=False)
+    last_status = None
+    consecutive_failures = 0
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            status = api.get_ingestion_status(sim_id)
+        except RemoteError as err:
+            # The remote rejected the request, so retrying will not help.
+            click.echo()
+            raise click.ClickException(
+                f"Failed to check ingestion status: {err}"
+            ) from err
+        except Exception as err:
+            # Tolerate transient errors: the ingestion continues server-side
+            consecutive_failures += 1
+            if consecutive_failures >= max_consecutive_failures:
+                click.echo()
+                raise click.ClickException(
+                    f"Failed to check ingestion status "
+                    f"{consecutive_failures} times in a row: {err}"
+                ) from err
+            if time.monotonic() >= deadline:
+                click.echo()
+                raise click.ClickException(
+                    f"Timed out after {timeout:g}s waiting for ingestion to "
+                    f"complete (last status: {last_status})"
+                ) from err
+            time.sleep(poll_interval)
+            continue
+        consecutive_failures = 0
+
+        try:
+            ingestion_status = IngestionStatus(status)
+        except ValueError as err:
+            click.echo()
+            raise click.ClickException(
+                f"Remote reported an unknown ingestion status: {status}"
+            ) from err
+
+        if status != last_status:
+            if last_status is not None:
+                click.echo(f" -> {status}", nl=False)
+            else:
+                click.echo(f" {status}", nl=False)
+            last_status = status
+
+        if ingestion_status.is_terminal():
+            click.echo()
+            return ingestion_status
+
+        if time.monotonic() >= deadline:
+            click.echo()
+            raise click.ClickException(
+                f"Timed out after {timeout:g}s waiting for ingestion to complete "
+                f"(last status: {status})"
+            )
+
+        time.sleep(poll_interval)
+
+
+@simulation.command(
+    "push_local",
+    cls=OptionalRemoteCommand,
+    short_help="Register a simulation whose files the REMOTE copies itself.",
+)
 @pass_config
 @click.argument("remote", required=False)
 @click.argument("sim_id")
@@ -255,85 +356,24 @@ def simulation_push_local(
     """
 
     api = RemoteAPI(remote, username, password, config)
-    db = get_local_db(config)
-
-    simulation = db.get_simulation(sim_id)
-    if simulation is None:
-        raise click.ClickException(f"Failed to find simulation: {sim_id}")
-
-    if replaces:
-        simulation.set_meta("replaces", replaces)
-
-    schemas = api.get_validation_schemas()
-    try:
-        for schema in schemas:
-            Validator(schema).validate(simulation)
-    except ValidationError as err:
-        raise click.ClickException(f"Simulation does not validate: {err}") from err
+    simulation = _prepare_simulation(config, api, sim_id, replaces)
 
     api.push_local_simulation(simulation, add_watcher=add_watcher)
 
-    terminal_statuses = {
-        IngestionStatus.COMPLETED.value,
-        IngestionStatus.COPY_FAILED.value,
-        IngestionStatus.VALIDATION_FAILED.value,
-    }
+    status = _wait_for_ingestion(api, simulation.uuid.hex, timeout)
+    if status is not IngestionStatus.COMPLETED:
+        raise click.ClickException(
+            f"Simulation ingestion failed with status: {status.value}"
+        )
 
-    max_consecutive_failures = 5
-
-    click.echo("Waiting for ingestion to complete...", nl=False)
-    last_status = None
-    consecutive_failures = 0
-    deadline = time.monotonic() + timeout
-    while True:
-        try:
-            status = api.get_ingestion_status(simulation.uuid.hex)
-        except Exception as err:
-            # Tolerate transient errors: the ingestion continues server-side
-            consecutive_failures += 1
-            if consecutive_failures >= max_consecutive_failures:
-                click.echo()
-                raise click.ClickException(
-                    f"Failed to check ingestion status "
-                    f"{consecutive_failures} times in a row: {err}"
-                ) from err
-            if time.monotonic() >= deadline:
-                click.echo()
-                raise click.ClickException(
-                    f"Timed out after {timeout:g}s waiting for ingestion to "
-                    f"complete (last status: {last_status})"
-                ) from err
-            time.sleep(1)
-            continue
-        consecutive_failures = 0
-
-        if status != last_status:
-            if last_status is not None:
-                click.echo(f" -> {status}", nl=False)
-            else:
-                click.echo(f" {status}", nl=False)
-            last_status = status
-
-        if status in terminal_statuses:
-            break
-
-        if time.monotonic() >= deadline:
-            click.echo()
-            raise click.ClickException(
-                f"Timed out after {timeout:g}s waiting for ingestion to complete "
-                f"(last status: {status})"
-            )
-
-        time.sleep(1)
-
-    click.echo()
-    if status == IngestionStatus.COMPLETED.value:
-        click.echo(f"Successfully pushed simulation {simulation.uuid}")
-    else:
-        raise click.ClickException(f"Simulation ingestion failed with status: {status}")
+    click.echo(f"Successfully pushed simulation {simulation.uuid}")
 
 
-@simulation.command("push", cls=OptionalRemoteCommand)
+@simulation.command(
+    "push",
+    cls=OptionalRemoteCommand,
+    short_help="Upload a simulation and its files to the REMOTE.",
+)
 @pass_config
 @click.argument("remote", required=False)
 @click.argument("sim_id")
@@ -354,24 +394,14 @@ def simulation_push(
     replaces: Optional[str],
     add_watcher: bool,
 ):
-    """Push the simulation with the given SIM_ID (UUID or alias) to the REMOTE."""
+    """Push the simulation with the given SIM_ID (UUID or alias) to the REMOTE.
+
+    Both the metadata and the simulation files are uploaded over HTTP. Use
+    push_local instead when the REMOTE can read the files itself.
+    """
 
     api = RemoteAPI(remote, username, password, config)
-    db = get_local_db(config)
-
-    simulation = db.get_simulation(sim_id)
-    if simulation is None:
-        raise click.ClickException(f"Failed to find simulation: {sim_id}")
-
-    if replaces:
-        simulation.set_meta("replaces", replaces)
-
-    schemas = api.get_validation_schemas()
-    try:
-        for schema in schemas:
-            Validator(schema).validate(simulation)
-    except ValidationError as err:
-        raise click.ClickException(f"Simulation does not validate: {err}") from err
+    simulation = _prepare_simulation(config, api, sim_id, replaces)
 
     api.push_simulation(simulation, out_stream=sys.stdout, add_watcher=add_watcher)
 
