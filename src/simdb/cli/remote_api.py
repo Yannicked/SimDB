@@ -264,48 +264,58 @@ def _find_partition_for_file(
 
 
 def _file_data_for_partition(
-    file: FileData, source: Path, partitions: Dict[str, str]
+    file: FileData, source: Path, partitions: Dict[str, str], keep_uuid: bool = True
 ) -> FileData:
+    """Copy FILE with its URI rewritten relative to the partition holding SOURCE."""
     partition, partition_path = _find_partition_for_file(source, partitions)
     new_uri = SimDBUrl.build(scheme=partition, path=partition_path.as_posix())
-    return FileData(
-        type=file.type,
-        uri=new_uri.encoded_string(),
-        checksum=calculate_checksum(source),
-        datetime=file.datetime,
-        usage=file.usage,
-        purpose=file.purpose,
-        sensitivity=file.sensitivity,
-        access=file.access,
-        embargo=file.embargo,
-    )
+    update: Dict[str, Any] = {
+        "uri": new_uri.encoded_string(),
+        "checksum": calculate_checksum(source),
+    }
+    if not keep_uuid:
+        update["uuid"] = uuid.uuid1()
+    return file.model_copy(update=update)
 
 
-def _expand_directories(files: Iterable[FileData], partitions: Dict[str, str]):
+def _source_files(file: FileData) -> List[Path]:
+    """Return the local files that FILE refers to, expanding directories."""
+    file_uri = SimDBUrl(file.uri)
+    if file_uri.path is None:
+        raise APIError(f"File URI has no path: {file.uri}")
+
+    if file_uri.scheme == "imas":
+        try:
+            sources = sorted(imas_files(file_uri))
+        except ValueError as err:
+            raise APIError(f"Failed to list IMAS files of {file.uri}: {err}") from err
+        if not sources:
+            raise APIError(f"IMAS URI does not contain any files: {file.uri}")
+        return sources
+
+    file_path = Path(file_uri.path)
+    if not file_path.is_dir():
+        return [file_path]
+
+    sources = []
+    for sub_file in sorted(file_path.iterdir()):
+        if sub_file.is_dir():
+            raise APIError(f"Nested directory found in {file_path}: {sub_file.name}")
+        sources.append(sub_file)
+    return sources
+
+
+def _expand_directories(
+    files: Iterable[FileData], partitions: Dict[str, str]
+) -> List[FileData]:
     new_file_list = []
     for file in files:
-        file_uri = SimDBUrl(file.uri)
-        if file_uri.path is None:
-            raise APIError(f"File URI has no path: {file.uri}")
-        file_path = Path(file_uri.path)
-        if file_uri.scheme == "imas":
-            qs = dict(file_uri.query_params())
-            path = qs.get("path")
-            if path is None:
-                raise APIError(f"IMAS URI has no path set: {file.uri}")
-            file_path = Path(path)
-
-        if file_path.is_dir():
-            for sub_file in file_path.iterdir():
-                if sub_file.is_dir():
-                    raise APIError(
-                        f"Nested directory found in {file_path}: {sub_file.name}"
-                    )
-                new_file_list.append(
-                    _file_data_for_partition(file, sub_file, partitions)
-                )
-        else:
-            new_file_list.append(_file_data_for_partition(file, file_path, partitions))
+        sources = _source_files(file)
+        keep_uuid = len(sources) == 1
+        for source in sources:
+            new_file_list.append(
+                _file_data_for_partition(file, source, partitions, keep_uuid=keep_uuid)
+            )
     return new_file_list
 
 
@@ -934,7 +944,9 @@ class RemoteAPI:
     def push_local_simulation(self, simulation: Simulation, add_watcher: bool = False):
         sim_data = simulation.to_model(recurse=True)
 
-        partitions = cast(Dict[str, str], self._config.get_section("partition"))
+        partitions = cast(
+            Dict[str, str], self._config.get_section("partition", default={})
+        )
         sim_data.inputs.root = _expand_directories(sim_data.inputs.root, partitions)
         sim_data.outputs.root = _expand_directories(sim_data.outputs.root, partitions)
 
