@@ -1166,6 +1166,12 @@ class RemoteAPI:
 
         all_paths = []
 
+        if len(simulation.inputs) + len(simulation.outputs) == 0:
+            raise RemoteError(
+                f"Simulation '{sim_id}' on remote has no input or output files "
+                "registered, so there is nothing to download."
+            )
+
         for file in itertools.chain(simulation.inputs, simulation.outputs):
             info = self._get_file_info(file.uuid)
             all_paths += [path for (path, _) in info]
