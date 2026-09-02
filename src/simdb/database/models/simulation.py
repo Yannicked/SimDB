@@ -170,7 +170,25 @@ class Simulation(Base):
             return {}
         return self._metadata
 
+    def _coerce_ids_list(self, v: Any) -> Any:
+        """Repair ``ids``/``input_ids`` metadata written as a display string.
+
+        SimDB <= 1.2 stored these as ``"[core_profiles, equilibrium]"`` rather than a
+        list, which fails validation when the simulation is pushed back (#119).
+        remains.
+        """
+        if not isinstance(v, str):
+            return v
+        text = v.strip()
+        if text.startswith("[") and text.endswith("]"):
+            text = text[1:-1]
+        return [name.strip() for name in text.split(",") if name.strip()]
+
     def _set_metadata_dict(self, meta_dict: Dict[str, Any]) -> None:
+        # Fix simulations pulled with odd formatted ids arrays:
+        for key in ("ids", "input_ids"):
+            if key in meta_dict:
+                meta_dict[key] = self._coerce_ids_list(meta_dict[key])
         self._metadata = meta_dict
 
     def __init__(
