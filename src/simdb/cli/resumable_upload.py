@@ -131,17 +131,17 @@ def resumable_upload(
 ) -> None:
     """Upload ``path`` to ``url`` using the resumable upload protocol.
 
-    @param url: the upload resource URL. The server is expected to treat this
-                URL itself as the upload resource (it is both the creation
-                target and the resource that is appended to / queried).
-    @param path: the local file to upload.
-    @param auth: authentication passed through to ``requests``.
-    @param cookies: cookies passed through to ``requests`` (e.g. firewall).
-    @param headers: extra headers to send with every request.
-    @param chunk_size: number of bytes sent per ``PATCH`` request.
-    @param progress: optional callback invoked with the absolute number of bytes
-                     confirmed by the server, after resuming and after each
-                     chunk. Useful for driving a progress bar.
+    :param url: the upload resource URL. The server is expected to treat this
+        URL itself as the upload resource (it is both the creation target and
+        the resource that is appended to / queried).
+    :param path: the local file to upload.
+    :param auth: authentication passed through to ``requests``.
+    :param cookies: cookies passed through to ``requests`` (e.g. firewall).
+    :param headers: extra headers to send with every request.
+    :param chunk_size: number of bytes sent per ``PATCH`` request.
+    :param progress: optional callback invoked with the absolute number of bytes
+        confirmed by the server, after resuming and after each chunk. Useful for
+        driving a progress bar.
     """
     path = Path(path)
     total = path.stat().st_size
