@@ -10,7 +10,7 @@ from typing import Annotated, Optional
 from flask import send_file
 from flask_restx import Namespace, Resource
 
-from simdb.database import DatabaseError
+from simdb.database import DatabaseError, SimulationIngestionInProgressError
 from simdb.database.models import simulation as models_sim
 from simdb.database.models import watcher as models_watcher
 from simdb.email.server import EmailServer
@@ -37,6 +37,7 @@ from simdb.remote.models import (
     PaginatedResponse,
     PaginationData,
     SimulationDataResponse,
+    SimulationDeleteQuery,
     SimulationDeleteResponse,
     SimulationListItem,
     SimulationPatchResponse,
@@ -421,8 +422,13 @@ class Simulation(Resource):
         return SimulationPatchResponse()
 
     @requires_auth("admin")
-    @pydantic_validate(api)
-    def delete(self, sim_id: str, user: User) -> SimulationDeleteResponse:
+    @pydantic_validate(api, client_error_codes=(400, 409))
+    def delete(
+        self,
+        sim_id: str,
+        user: User,
+        query: Annotated[SimulationDeleteQuery, Query()],
+    ) -> SimulationDeleteResponse:
         """Delete a simulation and its stored files.
 
         Removes the simulation from the database and deletes its staging
@@ -430,7 +436,10 @@ class Simulation(Resource):
         simulation's id and the list of files that were removed. Requires admin
         privileges.
         """
-        simulation = current_app.db.delete_simulation(sim_id)
+        try:
+            simulation = current_app.db.delete_simulation(sim_id, force=query.force)
+        except SimulationIngestionInProgressError as err:
+            raise ResponseException(str(err), return_code=409) from None
         clear_cache()
 
         files = [str(p) for p in simulation.file_paths()]

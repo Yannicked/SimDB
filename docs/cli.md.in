@@ -1,32 +1,36 @@
-# SimDB CLI commands
+# CLI reference
+
+This page is the complete reference for the `simdb` command line interface. It
+is generated automatically from `simdb --help`, so it always matches the
+installed version of SimDB. Run `simdb COMMAND --help` at any time to get the
+same information in your terminal.
+
+For a task-oriented introduction, start with the
+[tutorial](../tutorials/first-simulation.md) and the
+[how-to guides](../how-to/create-a-manifest.md).
 
 {{ }}
 
-## Alias
+## alias
 
 {{ alias }}
 
-## Config
+## config
 
 {{ config }}
 
-## Database
-
-{{ database }}
-
-## Manifest
+## manifest
 
 {{ manifest }}
 
-## Provenance
+## provenance
 
 {{ provenance }}
 
-## Remote
+## remote
 
 {{ remote }}
 
-## Simulation
+## simulation
 
 {{ simulation }}
-

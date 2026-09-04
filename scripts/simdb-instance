@@ -19,6 +19,8 @@ Usage:
   scripts/simdb-instance deploy-develop
   scripts/simdb-instance deploy-pr PR_NUMBER [--port PORT]
   scripts/simdb-instance deploy-branch BRANCH [--name NAME] [--port PORT]
+  scripts/simdb-instance workers-start NAME
+  scripts/simdb-instance workers-stop NAME
   scripts/simdb-instance list
   scripts/simdb-instance status NAME
   scripts/simdb-instance logs NAME [SERVICE]
@@ -205,6 +207,7 @@ deploy_commit() {
         --project-directory "$worktree" \
         --file "$worktree/$COMPOSE_FILE" \
         --env-file "$pending_file" \
+        --profile with_workers \
         up -d --build --remove-orphans --wait; then
         mv "$pending_file" "$file"
     else
@@ -330,6 +333,16 @@ main() {
             done
             require_command docker
             deploy_branch "$branch" "$name" "$port"
+            ;;
+        workers-start)
+            (($# == 2)) || die "workers-start requires an instance name"
+            require_command docker
+            compose "$2" --profile with_workers up -d --wait worker beat
+            ;;
+        workers-stop)
+            (($# == 2)) || die "workers-stop requires an instance name"
+            require_command docker
+            compose "$2" --profile with_workers stop worker beat
             ;;
         list)
             list_instances

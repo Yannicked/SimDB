@@ -315,9 +315,9 @@ def imas_files(uri: SimDBUrl) -> List[Path]:
     """
     Return all the files associated with the given IMAS URI.
 
-    @param uri: a valid IMAS URI
-    @return: a list of files which contains the IDS data for the backend specified in
-             the URI
+    :param uri: a valid IMAS URI
+    :returns: a list of files which contains the IDS data for the backend
+        specified in the URI
     """
     if uri.path is None:
         raise ValueError("URI path should not be none")
@@ -353,9 +353,9 @@ def convert_uri(uri: SimDBUrl, path: Path, config: Config) -> SimDBUrl:
     Translate locale IMAS URI (imas:<backend>?path=<path>) to remote access URI
     (imas://<imas_remote_host>:<imas_remote_port>/uda?path=<path>&backend=<backend>)
 
-    @param uri: The URI to convert
-    @param config: Config to read the server.imas_remote_host and
-                   server.imas_remote_port options from
+    :param uri: The URI to convert
+    :param config: Config to read the server.imas_remote_host and
+        server.imas_remote_port options from
     """
     host = config.get_string_option("server.imas_remote_host", default=None)
     if host is None:

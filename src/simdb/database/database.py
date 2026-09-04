@@ -3,7 +3,7 @@ import json
 import shutil
 import sys
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum, auto
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Optional, Tuple, cast
@@ -24,6 +24,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.sql import elements
 
 from simdb.config import Config
+from simdb.enums import IngestionStatus
 from simdb.json import CustomDecoder, CustomEncoder
 from simdb.query import QueryType
 from simdb.remote.models import SimulationReference
@@ -44,6 +45,10 @@ class DatabaseUninitializedError(DatabaseError):
 
 
 class DatabaseOutdatedError(DatabaseError):
+    pass
+
+
+class SimulationIngestionInProgressError(DatabaseError):
     pass
 
 
@@ -203,7 +208,6 @@ class Database:
                 json_serializer=lambda obj: json.dumps(obj, cls=CustomEncoder),
                 json_deserializer=lambda s: json.loads(s, cls=CustomDecoder),
             )
-
         elif db_type == Database.DBMS.MSSQL:
             if "user" not in kwargs:
                 raise ValueError("Missing user parameter for MSSQL database")
@@ -214,10 +218,8 @@ class Database:
             self.engine: sqlalchemy.engine.Engine = create_engine(
                 "mssql+pyodbc://{user}:{password}@{dsnname}".format(**kwargs)
             )
-
         else:
             raise ValueError("Unknown database type: " + db_type.name)
-
         Base.metadata.bind = self.engine
         if scopefunc is None:
 
@@ -425,14 +427,28 @@ class Database:
 
         return self.session.query(File).all()
 
-    def delete_simulation(self, sim_ref: str) -> "Simulation":
+    def delete_simulation(self, sim_ref: str, force: bool = False) -> "Simulation":
         """
         Delete the specified simulation from the database.
 
         :param sim_ref: The simulation UUID or alias.
+        :param force: When True, delete even if ingestion is still in a
+            non-terminal state. This is an escape hatch for simulations left
+            stuck (e.g. the broker was down at enqueue time or a worker died
+            mid-ingestion) and would otherwise be undeletable.
         :return: None
         """
         simulation = self._find_simulation(sim_ref)
+        if (
+            not force
+            and simulation.ingestion_status
+            and not simulation.ingestion_status.is_terminal()
+        ):
+            raise SimulationIngestionInProgressError(
+                f"Simulation {sim_ref} is still being ingested "
+                f"(status {simulation.ingestion_status.value}); "
+                f"retry once ingestion has finished"
+            )
         for file in simulation.inputs:
             self.session.delete(file)
         for file in simulation.outputs:
@@ -440,6 +456,34 @@ class Database:
         self.session.delete(simulation)
         self.session.commit()
         return simulation
+
+    def fail_stale_ingestions(self, older_than: timedelta) -> int:
+        """Mark simulations stuck in a non-terminal ingestion state as failed.
+
+        A simulation is considered stale when its ingestion status is
+        non-terminal and it has not been updated for longer than *older_than*.
+        This recovers simulations left stuck by an event that never produced a
+        status transition (e.g. a hard-killed worker), keeping them deletable.
+
+        :param older_than: How long a simulation must have been stuck before it
+            is failed.
+        :return: The number of simulations that were marked as failed.
+        """
+        cutoff = datetime.now() - older_than
+        non_terminal = [
+            status for status in IngestionStatus if not status.is_terminal()
+        ]
+        stale = (
+            self.session.query(Simulation)
+            .filter(Simulation.ingestion_status.in_(non_terminal))
+            .filter(Simulation.ingestion_status_updated_at < cutoff)
+            .all()
+        )
+        for simulation in stale:
+            simulation.ingestion_status = IngestionStatus.COPY_FAILED
+        if stale:
+            self.session.commit()
+        return len(stale)
 
     def _build_json_filter(
         self,
@@ -890,6 +934,24 @@ def get_local_db(config: Config) -> Database:
         else:
             raise e
     return database
+
+
+def get_db(config: Config) -> Database:
+    db_type = config.get_option("database.type")
+    if db_type == "postgres":
+        args = config.get_section("database")
+        return Database(
+            Database.DBMS.POSTGRESQL,
+            **args,
+        )
+    elif db_type == "sqlite":
+        db_dir = appdirs.user_data_dir("simdb")
+        file_str = config.get_string_option("database.file", default=None)
+        file = Path(file_str) if file_str else Path(db_dir, "remote.db")
+        file.parent.mkdir(parents=True, exist_ok=True)
+        return Database(Database.DBMS.SQLITE, file=file)
+    else:
+        raise RuntimeError(f"Unknown database type in configuration: {db_type}.")
 
 
 def backup_local_db(config: Config):

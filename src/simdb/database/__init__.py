@@ -5,6 +5,16 @@ Using SQLAlchemy the code can be used with various types of databases including 
 and PostgreSQL.
 """
 
-from .database import Database, DatabaseError, get_local_db
+from .database import (
+    Database,
+    DatabaseError,
+    SimulationIngestionInProgressError,
+    get_local_db,
+)
 
-__all__ = ["Database", "DatabaseError", "get_local_db"]
+__all__ = [
+    "Database",
+    "DatabaseError",
+    "SimulationIngestionInProgressError",
+    "get_local_db",
+]
