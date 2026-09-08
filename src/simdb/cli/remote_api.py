@@ -1382,40 +1382,27 @@ class RemoteAPI:
         to_path: Path,
         out_stream: IO[str],
     ):
-        msg = f"Downloading file {from_path} to {to_path}"
-        print(
-            msg,
-            file=out_stream,
-            flush=True,
-        )
         response = self.get(f"file/download/{uuid.hex}/{index}", stream=True)
 
         to_path.parent.mkdir(parents=True, exist_ok=True)
         digest = hashlib.new(CHECKSUM_ALGORITHM)
 
-        with to_path.open("wb") as f:
-            total_length = response.headers.get("content-length")
-            if total_length is None:
-                f.write(response.content)
-            else:
-                downloaded = 0
-                total_length = int(total_length)
+        total_length = response.headers.get("content-length")
+        total = int(total_length) if total_length is not None else None
+
+        with Progress(
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            DownloadColumn(),
+            TransferSpeedColumn(),
+            TimeRemainingColumn(elapsed_when_finished=True),
+        ) as progress:
+            task = progress.add_task(f"  {from_path.name}", total=total)
+            with to_path.open("wb") as f:
                 for data in response.iter_content(chunk_size=READ_CHUNK_SIZE):
                     digest.update(data)
-                    downloaded += len(data)
                     f.write(data)
-                    done = int(50 * downloaded / total_length)
-                    print(
-                        "\r[{}{}] {:0.2f}%".format(
-                            "=" * done,
-                            " " * (50 - done),
-                            100.0 * (downloaded / total_length),
-                        ),
-                        file=out_stream,
-                        end="",
-                        flush=True,
-                    )
-                print("\r", file=out_stream, end="", flush=True)
+                    progress.advance(task_id=task, advance=len(data))
 
         if digest.hexdigest() != checksum:
             raise APIError(f"Checksum failed for file {from_path}")
