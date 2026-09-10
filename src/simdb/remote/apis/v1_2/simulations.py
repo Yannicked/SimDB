@@ -193,17 +193,10 @@ class SimulationList(Resource):
     ) -> PaginatedResponse[SimulationListItem]:
         """List simulations, optionally filtered by metadata.
 
-        Returns a paginated list of simulations. Query parameters are
-        interpreted as metadata constraints, so passing a metadata key and a
-        query value (for example ``status=passed`` or ``runtime=gt:100``)
-        filters the results to matching simulations. Values are matched for
-        equality by default, or may use a ``comparator:value`` expression
-        (comparators: ``eq``, ``ne``, ``in``, ``ni``, ``gt``, ``ge``, ``lt``,
-        ``le``, ``agt``, ``age``, ``alt``, ``ale``, ``exist``). The special
-        ``alias`` and ``uuid`` parameters filter on the simulation's identity
-        rather than its metadata. Without any query parameters all simulations
-        are returned. Use the pagination headers to control page size, page
-        number and sorting.
+        Returns a paginated list of simulations, filtered by the query
+        parameters described below. Without any query parameters all
+        simulations are returned. Use the pagination headers to control page
+        size, page number and sorting.
         """
         names, constraints = filters.constraints()
 
