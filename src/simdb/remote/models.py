@@ -37,8 +37,8 @@ from pydantic import (
 )
 
 from simdb.cli.manifest import DataType
-from simdb.query import QueryType, parse_query_arg
 from simdb.enums import IngestionStatus
+from simdb.query import QueryType, parse_query_arg
 
 HexUUID = Annotated[UUID, PlainSerializer(lambda x: x.hex, return_type=str)]
 """UUID serialized as a hex string."""
