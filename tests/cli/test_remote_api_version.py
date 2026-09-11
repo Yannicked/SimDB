@@ -35,8 +35,6 @@ def _remote_api(endpoints=("v1.2", "v1.3")):
         RemoteAPI, "get_server_authentication", return_value="None"
     ), mock.patch.object(
         RemoteAPI, "get_endpoints", return_value=list(endpoints)
-    ), mock.patch.object(
-        RemoteAPI, "get_api_version", return_value="1.3"
     ), mock.patch.object(RemoteAPI, "get_server_version", return_value="0.11"):
         return RemoteAPI("test", None, None, config)
 

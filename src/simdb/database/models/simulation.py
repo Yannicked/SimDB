@@ -7,6 +7,13 @@ from getpass import getuser
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
 
+from dateutil import parser as date_parser
+from sqlalchemy import JSON, Column, ForeignKey, Table, text
+from sqlalchemy import types as sql_types
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.orm import relationship
+
 from simdb.enums import IngestionStatus
 from simdb.imas.utils import SimDBUrl
 from simdb.remote.models import (
@@ -17,16 +24,6 @@ from simdb.remote.models import (
     SimulationDataResponse,
     SimulationTraceData,
 )
-
-if sys.version_info < (3, 11):
-    from backports.datetime_fromisoformat import MonkeyPatch
-
-from dateutil import parser as date_parser
-from sqlalchemy import JSON, Column, ForeignKey, Table, text
-from sqlalchemy import types as sql_types
-from sqlalchemy.dialects import postgresql
-from sqlalchemy.ext.mutable import MutableDict
-from sqlalchemy.orm import relationship
 
 if "sphinx" in sys.modules:
     # Patch to allow sphix doc generation
@@ -53,10 +50,6 @@ from .file import File
 from .types import UUID
 from .utils import checked_get, flatten_dict, unflatten_dict
 from .watcher import Watcher
-
-if sys.version_info < (3, 11):
-    MonkeyPatch.patch_fromisoformat()
-
 
 simulation_input_files = Table(
     "simulation_input_files",

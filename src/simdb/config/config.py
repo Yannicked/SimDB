@@ -249,11 +249,12 @@ class Config:
         """
         Returns the section from the configuration with the given name.
 
-        @param name: the name of the section to find
-        @param default: a dictionary that will be returned if the section is not found
-        @return: the section corresponding to the given name, or the default if given
-                 and the section is not found
-        @raise KeyError if the section is not found and no default is given
+        :param name: the name of the section to find
+        :param default: a dictionary that will be returned if the section is not
+            found
+        :returns: the section corresponding to the given name, or the default if
+            given and the section is not found
+        :raises KeyError: if the section is not found and no default is given
         """
         try:
             items = self._parser.items(name)
@@ -271,12 +272,12 @@ class Config:
         """
         Returns the value for the option with the given name from the configuration.
 
-        @param name: the name of the option to return
-        @param default: the value to return if the option is not found in the
-                        configuration
-        @return: the value of the found option, or the default if given and the option
-                 is not found
-        @raise KeyError if the option is not found and no default is given
+        :param name: the name of the option to return
+        :param default: the value to return if the option is not found in the
+            configuration
+        :returns: the value of the found option, or the default if given and the
+            option is not found
+        :raises KeyError: if the option is not found and no default is given
         """
         section, option = _parse_name(name)
         try:
