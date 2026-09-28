@@ -58,15 +58,11 @@ def _verify_file(
         path_value = qs.get("path")
         if path_value is None:
             raise ValueError("The 'path' key is missing in the URI query")
-        if common_root == Path("/"):
-            path_value = str(staging_dir) + path_value
-        elif common_root is not None and common_root == path_value:
-            path_value = path_value.replace(str(common_root), str(staging_dir))
-
-        else:
-            path_value = str(staging_dir)
+        staged_dir = secure_path(
+            Path(path_value), common_root, staging_dir, is_file=False
+        )
         new_uri = uri.build(
-            scheme=uri.scheme, path=uri.path, query=f"path={path_value}"
+            scheme=uri.scheme, path=uri.path, query=f"path={staged_dir.as_posix()}"
         )
         checksum = imas_checksum(new_uri, ids_list or [])
         if sim_file.checksum != checksum:
@@ -177,11 +173,24 @@ class FileList(Resource):
     @requires_auth()
     @pydantic_validate(api)
     def get(self, user: User) -> FileDataList:
+        """List all registered files.
+
+        Returns every input and output file known to the database across all
+        simulations.
+        """
         files = current_app.db.list_files()
         return FileDataList.model_validate([file.to_model() for file in files])
 
     @requires_auth()
     def post(self, user: User):
+        """Register or upload simulation files.
+
+        Handles two content types. A JSON body registers file metadata and
+        verifies each file's checksum against the copy already present in the
+        simulation's staging directory. A multipart form upload streams file
+        content (optionally gzip-compressed and chunked) into the staging
+        directory ahead of registration.
+        """
         try:
             if request.is_json:
                 body = FileRegistrationData.model_validate_json(request.get_data())
@@ -197,6 +206,11 @@ class File(Resource):
     @requires_auth()
     @pydantic_validate(api)
     def get(self, file_uuid: str, user: Optional[User] = None) -> FileGetDataResponse:
+        """Retrieve a single file's metadata.
+
+        Returns the stored record for the file identified by ``file_uuid``,
+        including its resolved on-disk path.
+        """
         file = current_app.db.get_file(file_uuid)
         return file.to_model_with_path()
 
@@ -205,6 +219,12 @@ class File(Resource):
 class NonIMASFileDownload(Resource):
     @requires_auth()
     def get(self, file_uuid: str, user: Optional[User] = None):
+        """Download a non-IMAS file.
+
+        Streams the raw contents of the plain (non-IMAS) file identified by
+        ``file_uuid`` back to the client, with a MIME type inferred from the
+        file itself.
+        """
         try:
             file: models.File = current_app.db.get_file(file_uuid)
             if file.type != DataType.FILE:
@@ -221,6 +241,12 @@ class NonIMASFileDownload(Resource):
 class FileDownload(Resource):
     @requires_auth()
     def get(self, file_uuid: str, file_index: int, user: Optional[User] = None):
+        """Download one file from a file entry by index.
+
+        Streams a single physical file back to the client. For a plain file
+        only index ``0`` is valid. For an IMAS entry, which maps to several
+        physical files, ``file_index`` selects which one to download.
+        """
         try:
             file: models.File = current_app.db.get_file(file_uuid)
             if file.type == DataType.FILE:

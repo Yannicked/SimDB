@@ -7,7 +7,6 @@ import jwt
 from flask import Blueprint, Response, jsonify, request
 from flask_restx import Resource
 
-from simdb import __version__
 from simdb.database import Database
 from simdb.remote.core.auth import AuthenticationError, User, requires_auth
 from simdb.remote.core.typing import current_app
@@ -42,7 +41,6 @@ def register(api, version, namespaces):
             {
                 "api": "simdb",
                 "api_version": api.version,
-                "server_version": __version__,
                 "endpoints": [
                     request.url + "simulations",
                     request.url + "files",
@@ -107,6 +105,12 @@ def register(api, version, namespaces):
         @api.response(401, "Unauthorized")
         @requires_auth()
         def get(self, user: User):
+            """Issue an authentication token.
+
+            Exchanges HTTP basic-auth credentials for a signed JWT that can be
+            used to authenticate subsequent requests. The token expires after
+            the server-configured lifetime.
+            """
             auth = request.authorization
             if auth is None:
                 return error("Authorization invalid")
@@ -134,6 +138,11 @@ def register(api, version, namespaces):
     class ValidationSchema(Resource):
         @requires_auth()
         def get(self, user: User):
+            """Return the configured validation schemas.
+
+            Returns the metadata validation schemas the server applies to
+            simulations, as configured on the server.
+            """
             config = current_app.simdb_config
             return jsonify(Validator.validation_schemas(config, None))
 
@@ -141,6 +150,12 @@ def register(api, version, namespaces):
     class UploadOptions(Resource):
         @requires_auth()
         def get(self, user: User):
+            """Return the server's upload options.
+
+            Returns the server-side upload behaviour flags clients should honour
+            when pushing simulations, such as whether files and IMAS data are
+            copied onto the server.
+            """
             config = current_app.simdb_config
             options = {
                 "copy_files": config.get_option("server.copy_files", default=True),
