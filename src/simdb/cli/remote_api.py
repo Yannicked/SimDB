@@ -12,6 +12,7 @@ import sys
 import time
 import uuid
 from collections import defaultdict
+from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from typing import (
@@ -20,7 +21,9 @@ from typing import (
     Any,
     Callable,
     Dict,
+    FrozenSet,
     Iterable,
+    Iterator,
     List,
     Optional,
     Tuple,
@@ -138,10 +141,14 @@ def versioned_method(*versions: str) -> Callable:
     compatible with. This keeps the current protocol as the primary, most-visible code
     path and confines backwards-compatibility handling to clearly named shims.
 
+    A method that does not support the negotiated version sends its requests to the
+    highest version it does support that the remote provides, so ``@versioned_method
+    ("v1.2")`` keeps working against a v1.3 remote.
+
     The full set of supported versions is recorded on the method as ``_api_versions``,
-    and calling the method with a negotiated version that no implementation serves
-    raises a RemoteError. While no version has been negotiated yet, the default
-    implementation is used.
+    and calling the method against a remote that provides none of them raises a
+    RemoteError. While no version has been negotiated yet, the default implementation
+    is used.
     """
 
     def decorator(default: Callable) -> Callable:
@@ -150,17 +157,25 @@ def versioned_method(*versions: str) -> Callable:
 
         @functools.wraps(default)
         def wrapper(self, *args, **kwargs):
-            selected = getattr(self, "_api_version", None)
+            selected = getattr(self, "_request_version", None) or getattr(
+                self, "_api_version", None
+            )
             if selected is None:
                 return default(self, *args, **kwargs)
-            impl = registry.get(selected)
-            if impl is None:
+
+            if selected in registry:
+                return registry[selected](self, *args, **kwargs)
+
+            version = select_api_version(self._server_versions, registry)
+            if version is None:
                 raise RemoteError(
-                    f"'{default_name}' is not supported by the negotiated API "
-                    f"version '{selected}'. It requires one of: "
-                    f"{', '.join(sorted(registry))}."
+                    f"'{default_name}' requires one of the API versions "
+                    f"{', '.join(sorted(registry))}, none of which is provided by "
+                    f"remote '{self._remote}' (it provides "
+                    f"{', '.join(sorted(self._server_versions))})."
                 )
-            return impl(self, *args, **kwargs)
+            with self.api_version(version):
+                return registry[version](self, *args, **kwargs)
 
         def register(*impl_versions: str) -> Callable:
             def do_register(func: Callable) -> Callable:
@@ -518,7 +533,10 @@ class RemoteAPI:
         if self._firewall is not None:
             self._load_cookies(remote, username, password)
 
-        self._api_url: str = f"{self._url}/"
+        self._base_url: str = f"{self._url}/"
+        self._api_version: Optional[str] = None
+        self._request_version: Optional[str] = None
+        self._server_versions: FrozenSet[str] = frozenset()
         self._server_auth = self.get_server_authentication()
         if self._firewall:
             self._server_auth = "None"
@@ -543,6 +561,7 @@ class RemoteAPI:
 
         endpoints = self.get_endpoints()
         endpoint_versions = [endpoint.split("/")[-1] for endpoint in endpoints]
+        self._server_versions = frozenset(endpoint_versions)
 
         selected_version = select_api_version(endpoint_versions)
         if selected_version is None:
@@ -556,8 +575,7 @@ class RemoteAPI:
             print(f"Selected API version {selected_version}")
 
         self._api_version = selected_version
-        self._api_url += f"{selected_version}/"
-        self.version = Version.coerce(self.get_api_version())
+        self.version = Version.coerce(selected_version.lstrip("v"))
         self.server_version = Version.coerce(self.get_server_version())
 
     def _load_cookies(
@@ -608,6 +626,42 @@ class RemoteAPI:
             self._cookies = cookies
         else:
             raise ValueError(f"Unknown firewall option {self._firewall}")
+
+    @property
+    def _api_url(self) -> str:
+        """
+        Return the base URL of the API version the current request targets.
+        """
+        version = self._request_version or self._api_version
+        if version is None:
+            return self._base_url
+        return f"{self._base_url}{version}/"
+
+    @contextmanager
+    def api_version(self, version: str) -> Iterator[None]:
+        """
+        Send the requests made inside this context to the given API version.
+
+        @param version: the API version, as it appears in the endpoint URL.
+        """
+        if version not in CLIENT_API_VERSIONS:
+            raise RemoteError(
+                f"API version '{version}' is not supported by this client. It "
+                f"supports: {', '.join(CLIENT_API_VERSIONS)}."
+            )
+        if version not in self._server_versions:
+            raise RemoteError(
+                f"API version '{version}' is not provided by remote "
+                f"'{self._remote}'. It provides: "
+                f"{', '.join(sorted(self._server_versions)) or 'none'}."
+            )
+
+        previous = self._request_version
+        self._request_version = version
+        try:
+            yield
+        finally:
+            self._request_version = previous
 
     @property
     def remote(self) -> str:
@@ -674,6 +728,32 @@ class RemoteAPI:
                 stream=stream,
             )
 
+        check_return(res)
+        return res
+
+    def get_root(
+        self,
+        headers: Optional[Dict] = None,
+        stream: bool = False,
+    ) -> "requests.Response":
+        """
+        Perform an HTTP GET request to the server root endpoint.
+
+        @param headers: additional headers to send with the request.
+        @param stream: True to enable streaming.
+        @return:
+        """
+
+        headers = headers or {}
+        headers["Accept-encoding"] = "gzip"
+        headers["User-Agent"] = "it_script_basic"
+
+        res = requests.get(
+            self._url,
+            headers=headers,
+            cookies=self._cookies,
+            stream=stream,
+        )
         check_return(res)
         return res
 
@@ -857,16 +937,14 @@ class RemoteAPI:
 
     @versioned_method("v1.2", "v1.3")
     @try_request
-    def get_api_version(self) -> str:
-        res = self.get("", authenticate=False)
-        data = res.json()
-        return data["api_version"]
-
-    @versioned_method("v1.2", "v1.3")
-    @try_request
     def get_server_version(self) -> str:
-        res = self.get("", authenticate=False)
-        data = res.json()
+        try:
+            res = self.get_root().json()
+            if (server_version := res.get("server_version")) is not None:
+                return server_version
+        except Exception:
+            pass
+        data = self.get("", authenticate=False).json()
         return data["server_version"]
 
     @versioned_method("v1.2", "v1.3")
@@ -1208,6 +1286,9 @@ class RemoteAPI:
         First we upload any files associated with the simulation, then push the
         simulation metadata.
 
+        Only supported on the v1.2 API: the chunked file upload is to be replaced by
+        a resumable HTTP upload, so it has not been ported to v1.3.
+
         :param simulation: The Simulation to push to remote server
         :param add_watcher: Add the current user as a watcher of the simulation on the
                             remote server
@@ -1441,6 +1522,12 @@ class RemoteAPI:
             raise RemoteError(f"Failed to find simulation: {sim_id}")
 
         all_paths = []
+
+        if len(simulation.inputs) + len(simulation.outputs) == 0:
+            raise RemoteError(
+                f"Simulation '{sim_id}' on remote has no input or output files "
+                "registered, so there is nothing to download."
+            )
 
         for file in itertools.chain(simulation.inputs, simulation.outputs):
             info = self._get_file_info(file.uuid)
