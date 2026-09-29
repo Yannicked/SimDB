@@ -31,7 +31,7 @@ def database_from_config(
         return Database(Database.DBMS.POSTGRESQL, scopefunc=scopefunc, **args)
 
     if db_type == "sqlite":
-        file_option = config.get_option("database.file", default=None)
+        file_option = config.get_string_option("database.file", default=None)
         if file_option:
             file = Path(file_option)
         else:
