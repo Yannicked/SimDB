@@ -14,7 +14,12 @@ from simdb.database import DatabaseError, SimulationIngestionInProgressError
 from simdb.database.models import simulation as models_sim
 from simdb.database.models import watcher as models_watcher
 from simdb.email.server import EmailServer
-from simdb.imas.utils import SimDBUrl, convert_uri
+from simdb.imas.utils import (
+    SimDBUrl,
+    convert_uri,
+    replace_uri_path,
+    uda_substitution_enabled,
+)
 from simdb.remote.core.alias import create_alias_dir
 from simdb.remote.core.auth import User, requires_auth
 from simdb.remote.core.cache import cache, cache_key, clear_cache
@@ -278,9 +283,9 @@ class SimulationList(Resource):
 
         config = current_app.simdb_config
         copy_files = config.get_option("server.copy_files", default=True)
-        imas_remote_host = config.get_option("server.imas_remote_host", default=None)
+        uda_substitution = uda_substitution_enabled(config)
 
-        if copy_files or imas_remote_host:
+        if copy_files or uda_substitution:
             staging_dir = (
                 Path(config.get_string_option("server.upload_folder"))
                 / simulation.uuid.hex
@@ -311,7 +316,10 @@ class SimulationList(Resource):
                         )
                     else:
                         path = Path(qs["path"])
-                    sim_file.uri = convert_uri(sim_file.uri, path, config)
+                    if uda_substitution:
+                        sim_file.uri = convert_uri(sim_file.uri, path, config)
+                    else:
+                        sim_file.uri = replace_uri_path(sim_file.uri, path)
 
         result = SimulationPostResponse(
             ingested=simulation.uuid, error=None, validation=None
