@@ -155,6 +155,31 @@ def test_simulation_push_local_command(get_local_db, remote_api):
     assert f"Successfully pushed simulation {simulation.uuid}" in result.output
 
 
+@mock.patch("simdb.cli.commands.simulation.Validator")
+@mock.patch("simdb.cli.commands.simulation.RemoteAPI")
+@mock.patch("simdb.cli.commands.simulation.get_local_db")
+def test_simulation_push_local_validates(get_local_db, remote_api, validator):
+    """push_local validates the simulation against the remote schemas."""
+    config_file = config_test_file()
+    remote_api.return_value.get_upload_options.return_value = {}
+    remote_api.return_value.get_validation_schemas.return_value = [{"schema": 1}]
+    remote_api.return_value.get_ingestion_status.return_value = (
+        IngestionStatus.COMPLETED.value
+    )
+    simulation = get_local_db.return_value.get_simulation.return_value
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, [f"--config-file={config_file}", "simulation", "push_local", "sim_id"]
+    )
+
+    assert result.exception is None, result.output
+    schema, config = validator.call_args.args
+    assert schema == {"schema": 1}
+    assert config is not None
+    validator.return_value.validate.assert_called_once_with(simulation)
+
+
 @pytest.mark.parametrize(
     "status", (IngestionStatus.COPY_FAILED, IngestionStatus.VALIDATION_FAILED)
 )
