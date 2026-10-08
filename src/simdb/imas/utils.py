@@ -354,17 +354,17 @@ def imas_files(uri: SimDBUrl) -> List[Path]:
         raise ValueError(f"Unknown IMAS backend {backend}")
 
 
-def uda_substitution_enabled(config: Config) -> bool:
+def remote_substitution_enabled(config: Config) -> bool:
     """
     Whether ingested IMAS URIs should be rewritten to UDA remote access URIs.
 
-    Controlled by the server.imas_uda_substitution option. If the option is not
+    Controlled by the server.imas_remote_substitution option. If the option is not
     set, substitution is enabled only when server.imas_remote_host is set.
 
     :param config: Config to read the options from
     """
     default = config.get_option("server.imas_remote_host", default=None) is not None
-    return bool(config.get_option("server.imas_uda_substitution", default=default))
+    return bool(config.get_option("server.imas_remote_substitution", default=default))
 
 
 def replace_uri_path(uri: SimDBUrl, path: Path) -> SimDBUrl:

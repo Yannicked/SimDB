@@ -17,8 +17,8 @@ from simdb.email.server import EmailServer
 from simdb.imas.utils import (
     SimDBUrl,
     convert_uri,
+    remote_substitution_enabled,
     replace_uri_path,
-    uda_substitution_enabled,
 )
 from simdb.remote.core.alias import create_alias_dir
 from simdb.remote.core.auth import User, requires_auth
@@ -283,9 +283,9 @@ class SimulationList(Resource):
 
         config = current_app.simdb_config
         copy_files = config.get_option("server.copy_files", default=True)
-        uda_substitution = uda_substitution_enabled(config)
+        remote_substitution = remote_substitution_enabled(config)
 
-        if copy_files or uda_substitution:
+        if copy_files or remote_substitution:
             staging_dir = (
                 Path(config.get_string_option("server.upload_folder"))
                 / simulation.uuid.hex
@@ -316,7 +316,7 @@ class SimulationList(Resource):
                         )
                     else:
                         path = Path(qs["path"])
-                    if uda_substitution:
+                    if remote_substitution:
                         sim_file.uri = convert_uri(sim_file.uri, path, config)
                     else:
                         sim_file.uri = replace_uri_path(sim_file.uri, path)
