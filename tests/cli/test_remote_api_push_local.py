@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
@@ -12,7 +13,7 @@ from simdb.cli.remote_api import (
 from simdb.remote.models import FileData
 
 
-def _file_data(uri: str, file_type: str = "FILE") -> FileData:
+def _file_data(uri: str, file_type: Literal["FILE", "IMAS"] = "FILE") -> FileData:
     return FileData(
         type=file_type,
         uri=uri,
