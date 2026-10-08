@@ -354,6 +354,35 @@ def imas_files(uri: SimDBUrl) -> List[Path]:
         raise ValueError(f"Unknown IMAS backend {backend}")
 
 
+def remote_substitution_enabled(config: Config) -> bool:
+    """
+    Whether ingested IMAS URIs should be rewritten to UDA remote access URIs.
+
+    Controlled by the server.imas_remote_substitution option. If the option is not
+    set, substitution is enabled only when server.imas_remote_host is set.
+
+    :param config: Config to read the options from
+    """
+    default = config.get_option("server.imas_remote_host", default=None) is not None
+    return bool(config.get_option("server.imas_remote_substitution", default=default))
+
+
+def replace_uri_path(uri: SimDBUrl, path: Path) -> SimDBUrl:
+    """
+    Return a copy of a local IMAS URI with its path query argument replaced.
+
+    :param uri: The local IMAS URI (imas:<backend>?path=<path>)
+    :param path: The new path
+    """
+    qs = dict(uri.query_params())
+    qs["path"] = str(path)
+    return SimDBUrl.build(
+        scheme="imas",
+        path=str(uri.path),
+        query="&".join(f"{key}={value}" for key, value in qs.items()),
+    )
+
+
 def convert_uri(uri: SimDBUrl, path: Path, config: Config) -> SimDBUrl:
     """
     Converts a local IMAS URI to a remote access IMAS URI based on the
@@ -372,7 +401,7 @@ def convert_uri(uri: SimDBUrl, path: Path, config: Config) -> SimDBUrl:
             "Cannot process IMAS data as server.imas_remote_host configuration option "
             "not set"
         )
-    port = config.get_string_option("server.imas_remote_port", default=None)
+    port = config.get_option("server.imas_remote_port", default=None)
     backend = uri.path
     return SimDBUrl.build(
         scheme="imas",
