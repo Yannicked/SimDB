@@ -48,7 +48,7 @@ from simdb.remote.models import FileData, SimulationPostData
 from .manifest import DataType
 
 if TYPE_CHECKING:
-    from simdb.database.models import File, Simulation, Watcher
+    from simdb.database.models import File, Watcher
 
 if TYPE_CHECKING or "sphinx" in sys.modules:
     # Only importing these for type checking and documentation generation in order to

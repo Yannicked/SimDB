@@ -85,10 +85,21 @@ def main() -> None:
 
     :return: None
     """
+    # Ref: https://click.palletsprojects.com/en/stable/exceptions/
     try:
-        cli()
+        rv = cli(standalone_mode=False)
+    except click.Abort:
+        click.echo("Aborted!", err=True)
+        sys.exit(1)
+    except click.ClickException as ex:
+        ex.show()
+        if g_debug:
+            raise
+        sys.exit(ex.exit_code)
     except Exception as ex:
         click.echo(f"Error: {ex}", err=True)
         if g_debug:
-            raise ex
+            raise
         sys.exit(1)
+    else:
+        sys.exit(rv or 0)
