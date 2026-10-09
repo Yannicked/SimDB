@@ -16,8 +16,8 @@ from simdb.enums import IngestionStatus
 from simdb.imas.utils import (
     SimDBUrl,
     convert_uri,
-    remote_substitution_enabled,
     imas_backend_for_directory,
+    remote_substitution_enabled,
 )
 from simdb.remote.models import FileData, FileDataList
 from simdb.workers.celery import celery_app
