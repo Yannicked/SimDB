@@ -13,7 +13,7 @@ from simdb.database.database import get_db
 from simdb.database.models import File
 from simdb.email.server import EmailServer
 from simdb.enums import IngestionStatus
-from simdb.imas.utils import SimDBUrl, imas_backend_for_directory
+from simdb.imas.utils import SimDBUrl, convert_uri, remote_substitution_enabled, imas_backend_for_directory
 from simdb.remote.models import FileData, FileDataList
 from simdb.workers.celery import celery_app
 
@@ -127,6 +127,8 @@ def _create_file_from_data(
 
     file = File.from_data_model(data)
     file.uri = _imas_path_to_uri(imas_identifier_path)
+    if file.uri.scheme == "imas" and remote_substitution_enabled(config):
+        file.uri = convert_uri(file.uri, imas_identifier_path, config)
 
     return file
 

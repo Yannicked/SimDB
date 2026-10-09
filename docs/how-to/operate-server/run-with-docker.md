@@ -47,6 +47,7 @@ port = 5000
 ssl_enabled = False
 admin_password = CHANGE_ME
 imas_remote_host = localhost
+imas_remote_substitution = True
 
 [database]
 type = postgres

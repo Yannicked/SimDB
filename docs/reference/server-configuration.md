@@ -40,6 +40,7 @@ See [Set up PostgreSQL](../how-to/operate-server/set-up-postgresql.md).
 | `token_lifetime` | No | Days that generated tokens stay valid. Defaults to 30. |
 | `imas_remote_host` | No | Host set on ingested IMAS URIs so data can be fetched via an IMAS remote access server. For example `imas:hdf5?path=foo` becomes `imas://<imas_remote_host>:<imas_remote_port>/uda?path=foo&backend=hdf5` on ingest. |
 | `imas_remote_port` | No | Port set on ingested IMAS URIs. See `imas_remote_host`. |
+| `imas_remote_substitution` | No | `True`/`False`: rewrite ingested IMAS URIs to UDA remote access URIs (see `imas_remote_host`). When `False`, IMAS URIs keep their local `imas:<backend>?path=<path>` form. Defaults to `True` if `imas_remote_host` is set, otherwise `False`. Setting it to `True` without `imas_remote_host` makes IMAS ingestion fail. |
 | `copy_files` | No | `True`/`False`: copy uploaded data files into the server's storage. Defaults to `True`. |
 | `copy_ids` | No | `True`/`False`: copy uploaded IMAS IDS data into the server's storage. Defaults to `True`. |
 | `user_upload_folder` | No | Optional staging directory clients upload into before ingest (returned by the `staging_dir` endpoint). Falls back to `upload_folder` if unset. |

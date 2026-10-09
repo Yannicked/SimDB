@@ -54,7 +54,8 @@ imas:hdf5?path=/work/imas/shared/imasdb/ITER_SCENARIOS/3/131002/60
 When a local IMAS URI is pushed to a server, SimDB rewrites it as a remote data
 URI (`imas://<host>:<port>/uda?path=<path>&backend=<backend>`) so the data can
 be reached from machines other than yours. The server's
-`imas_remote_host`/`imas_remote_port` settings control this rewrite (see
+`imas_remote_host`/`imas_remote_port` settings control this rewrite, and
+`imas_remote_substitution` turns it on or off (see
 [Server configuration](server-configuration.md)). This remote form is only
 produced by the server; you cannot use it in a manifest.
 
