@@ -311,13 +311,44 @@ def _get_path(uri: SimDBUrl) -> Path:
     return path
 
 
+def imas_backend_for_directory(directory: Path) -> str:
+    """
+    Identify the IMAS backend of a directory by inspecting its contents.
+
+    @param directory: a directory that may contain an IMAS dataset
+    @return: the backend name ("ascii", "hdf5" or "mdsplus")
+    @raise ValueError: if no IMAS dataset is detected
+    """
+    children = list(directory.iterdir())
+
+    # ASCII heuristic
+    if any(child.suffix == ".ids" for child in children):
+        return "ascii"
+
+    # HDF5 heuristic
+    if any(child.suffix == ".h5" for child in children) and any(
+        child.name == "master.h5" for child in children
+    ):
+        return "hdf5"
+
+    # MDSplus heuristic
+    if {p.name for p in children} >= {
+        "ids_001.tree",
+        "ids_001.characteristics",
+        "ids_001.datafile",
+    }:
+        return "mdsplus"
+
+    raise ValueError("IMAS backend could not be identified.")
+
+
 def imas_files(uri: SimDBUrl) -> List[Path]:
     """
     Return all the files associated with the given IMAS URI.
 
-    @param uri: a valid IMAS URI
-    @return: a list of files which contains the IDS data for the backend specified in
-             the URI
+    :param uri: a valid IMAS URI
+    :returns: a list of files which contains the IDS data for the backend
+        specified in the URI
     """
     if uri.path is None:
         raise ValueError("URI path should not be none")
@@ -330,6 +361,15 @@ def imas_files(uri: SimDBUrl) -> List[Path]:
         backend = backend[1:]
 
     path = _get_path(uri)
+
+    if backend == "uda":
+        query_backend = dict(uri.query_params()).get("backend")
+        if query_backend is None:
+            raise ValueError(
+                "Invalid IMAS URI - 'backend' query argument not provided for UDA "
+                "backend"
+            )
+        backend = query_backend
 
     if backend == "hdf5":
         return [p.absolute() for p in sorted(path.glob("*.h5"), key=lambda p: p.name)]
@@ -345,6 +385,35 @@ def imas_files(uri: SimDBUrl) -> List[Path]:
         raise ValueError(f"Unknown IMAS backend {backend}")
 
 
+def remote_substitution_enabled(config: Config) -> bool:
+    """
+    Whether ingested IMAS URIs should be rewritten to UDA remote access URIs.
+
+    Controlled by the server.imas_remote_substitution option. If the option is not
+    set, substitution is enabled only when server.imas_remote_host is set.
+
+    :param config: Config to read the options from
+    """
+    default = config.get_option("server.imas_remote_host", default=None) is not None
+    return bool(config.get_option("server.imas_remote_substitution", default=default))
+
+
+def replace_uri_path(uri: SimDBUrl, path: Path) -> SimDBUrl:
+    """
+    Return a copy of a local IMAS URI with its path query argument replaced.
+
+    :param uri: The local IMAS URI (imas:<backend>?path=<path>)
+    :param path: The new path
+    """
+    qs = dict(uri.query_params())
+    qs["path"] = str(path)
+    return SimDBUrl.build(
+        scheme="imas",
+        path=str(uri.path),
+        query="&".join(f"{key}={value}" for key, value in qs.items()),
+    )
+
+
 def convert_uri(uri: SimDBUrl, path: Path, config: Config) -> SimDBUrl:
     """
     Converts a local IMAS URI to a remote access IMAS URI based on the
@@ -353,9 +422,9 @@ def convert_uri(uri: SimDBUrl, path: Path, config: Config) -> SimDBUrl:
     Translate locale IMAS URI (imas:<backend>?path=<path>) to remote access URI
     (imas://<imas_remote_host>:<imas_remote_port>/uda?path=<path>&backend=<backend>)
 
-    @param uri: The URI to convert
-    @param config: Config to read the server.imas_remote_host and
-                   server.imas_remote_port options from
+    :param uri: The URI to convert
+    :param config: Config to read the server.imas_remote_host and
+        server.imas_remote_port options from
     """
     host = config.get_string_option("server.imas_remote_host", default=None)
     if host is None:
@@ -363,7 +432,7 @@ def convert_uri(uri: SimDBUrl, path: Path, config: Config) -> SimDBUrl:
             "Cannot process IMAS data as server.imas_remote_host configuration option "
             "not set"
         )
-    port = config.get_string_option("server.imas_remote_port", default=None)
+    port = config.get_option("server.imas_remote_port", default=None)
     backend = uri.path
     return SimDBUrl.build(
         scheme="imas",

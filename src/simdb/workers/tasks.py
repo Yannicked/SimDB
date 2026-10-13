@@ -1,4 +1,3 @@
-import hashlib
 import itertools
 import logging
 import os
@@ -9,15 +8,19 @@ from typing import Iterable, List
 from uuid import UUID
 
 from celery.signals import worker_ready
-from pydantic import AnyUrl
-
+from simdb.checksum import calculate_checksum
 from simdb.checksum import format_checksum, is_prefixed
 from simdb.config import Config
 from simdb.database.database import get_db
 from simdb.database.models import File
 from simdb.email.server import EmailServer
 from simdb.enums import IngestionStatus
-from simdb.imas.utils import SimDBUrl
+from simdb.imas.utils import (
+    SimDBUrl,
+    convert_uri,
+    imas_backend_for_directory,
+    remote_substitution_enabled,
+)
 from simdb.remote.models import FileData, FileDataList
 from simdb.workers.celery import celery_app
 from simdb.workers.migrations import run_online_migrations
@@ -65,36 +68,14 @@ def _imas_path_to_uri(imas_path: Path) -> SimDBUrl:
     if imas_path.suffix == ".nc":
         return SimDBUrl.build(scheme="file", path=imas_path.as_posix())
 
-    children = set(imas_path.iterdir())
+    backend = imas_backend_for_directory(imas_path)
 
-    if any(child.suffix == ".ids" for child in children):
-        u = SimDBUrl.build(
-            scheme="imas", path="ascii", query=f"path={imas_path.as_posix()}"
-        )
-        return u
-
-    if any(child.suffix == ".h5" for child in children) and any(
-        child.name == "master.h5" for child in children
-    ):
-        u = SimDBUrl.build(
-            scheme="imas", path="hdf5", query=f"path={imas_path.as_posix()}"
-        )
-        return u
-
-    if {p.name for p in children} >= {
-        "ids_001.tree",
-        "ids_001.characteristics",
-        "ids_001.datafile",
-    }:
-        u = SimDBUrl.build(
-            scheme="imas", path="mdsplus", query=f"path={imas_path.as_posix()}"
-        )
-        return u
-
-    raise ValueError("IMAS backend could not be identified.")
+    return SimDBUrl.build(
+        scheme="imas", path=backend, query=f"path={imas_path.as_posix()}"
+    )
 
 
-def _resolve_uri_to_path(uri: AnyUrl, config: Config) -> Path:
+def _resolve_uri_to_path(uri: SimDBUrl, config: Config) -> Path:
     partition = uri.scheme
     if not partition:
         raise ValueError("Partition not given")
@@ -164,6 +145,8 @@ def _create_file_from_data(
 
     file = File.from_data_model(data)
     file.uri = _imas_path_to_uri(imas_identifier_path)
+    if file.uri.scheme == "imas" and remote_substitution_enabled(config):
+        file.uri = convert_uri(file.uri, imas_identifier_path, config)
 
     return file
 

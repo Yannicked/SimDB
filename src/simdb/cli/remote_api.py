@@ -11,6 +11,7 @@ import shutil
 import sys
 import uuid
 from collections import defaultdict
+from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from typing import (
@@ -19,11 +20,14 @@ from typing import (
     Any,
     Callable,
     Dict,
+    FrozenSet,
     Iterable,
+    Iterator,
     List,
     Optional,
     Tuple,
     Union,
+    cast,
 )
 from urllib.parse import urlparse
 
@@ -34,16 +38,18 @@ from requests.auth import AuthBase
 from semantic_version import Version
 
 from simdb.checksum import checksums_match
+from simdb.checksum import calculate_checksum
 from simdb.config import Config
 from simdb.database.models import Simulation
 from simdb.imas.utils import SimDBUrl, imas_files
 from simdb.json import CustomDecoder, CustomEncoder
 from simdb.remote import CLIENT_API_VERSIONS, APIConstants
+from simdb.remote.models import FileData, SimulationPostData
 
 from .manifest import DataType
 
 if TYPE_CHECKING:
-    from simdb.database.models import File, Simulation, Watcher
+    from simdb.database.models import File, Watcher
 
 if TYPE_CHECKING or "sphinx" in sys.modules:
     # Only importing these for type checking and documentation generation in order to
@@ -75,7 +81,7 @@ def try_request(func: Callable) -> Callable:
                 f"""\
 Connection failed to {url}
 
-Please check that the URL is valid and that SIMDB_REQUESTS_CA_BUNDLE is set if required.
+Please check that the URL is valid and that REQUESTS_CA_BUNDLE is set if required.
                 """
             ) from None
         except requests.HTTPError as ex:
@@ -125,10 +131,14 @@ def versioned_method(*versions: str) -> Callable:
     compatible with. This keeps the current protocol as the primary, most-visible code
     path and confines backwards-compatibility handling to clearly named shims.
 
+    A method that does not support the negotiated version sends its requests to the
+    highest version it does support that the remote provides, so ``@versioned_method
+    ("v1.2")`` keeps working against a v1.3 remote.
+
     The full set of supported versions is recorded on the method as ``_api_versions``,
-    and calling the method with a negotiated version that no implementation serves
-    raises a RemoteError. While no version has been negotiated yet, the default
-    implementation is used.
+    and calling the method against a remote that provides none of them raises a
+    RemoteError. While no version has been negotiated yet, the default implementation
+    is used.
     """
 
     def decorator(default: Callable) -> Callable:
@@ -137,17 +147,25 @@ def versioned_method(*versions: str) -> Callable:
 
         @functools.wraps(default)
         def wrapper(self, *args, **kwargs):
-            selected = getattr(self, "_api_version", None)
+            selected = getattr(self, "_request_version", None) or getattr(
+                self, "_api_version", None
+            )
             if selected is None:
                 return default(self, *args, **kwargs)
-            impl = registry.get(selected)
-            if impl is None:
+
+            if selected in registry:
+                return registry[selected](self, *args, **kwargs)
+
+            version = select_api_version(self._server_versions, registry)
+            if version is None:
                 raise RemoteError(
-                    f"'{default_name}' is not supported by the negotiated API "
-                    f"version '{selected}'. It requires one of: "
-                    f"{', '.join(sorted(registry))}."
+                    f"'{default_name}' requires one of the API versions "
+                    f"{', '.join(sorted(registry))}, none of which is provided by "
+                    f"remote '{self._remote}' (it provides "
+                    f"{', '.join(sorted(self._server_versions))})."
                 )
-            return impl(self, *args, **kwargs)
+            with self.api_version(version):
+                return registry[version](self, *args, **kwargs)
 
         def register(*impl_versions: str) -> Callable:
             def do_register(func: Callable) -> Callable:
@@ -236,6 +254,87 @@ def _get_paths(file: "File") -> Iterable[Path]:
         return imas_files(file.uri)
 
 
+def _find_partition_for_file(
+    file: Path, partitions: Dict[str, str]
+) -> Tuple[str, Path]:
+    # Match the partition with the longest root so that a catch-all mapping
+    # (e.g. "/") does not shadow more specific partitions.
+    best: Optional[Tuple[str, Path]] = None
+    best_depth = -1
+    for partition, path in partitions.items():
+        root = Path(path)
+        try:
+            relative = file.relative_to(root)
+        except ValueError:
+            continue
+        depth = len(root.parts)
+        if depth > best_depth:
+            best = (partition, relative)
+            best_depth = depth
+    if best is None:
+        raise APIError(
+            f"File {file} is not located under any configured partition "
+            f"(configured partitions: {', '.join(partitions) or 'none'})"
+        )
+    return best
+
+
+def _file_data_for_partition(
+    file: FileData, source: Path, partitions: Dict[str, str], keep_uuid: bool = True
+) -> FileData:
+    """Copy FILE with its URI rewritten relative to the partition holding SOURCE."""
+    partition, partition_path = _find_partition_for_file(source, partitions)
+    new_uri = SimDBUrl.build(scheme=partition, path=partition_path.as_posix())
+    update: Dict[str, Any] = {
+        "uri": new_uri.encoded_string(),
+        "checksum": calculate_checksum(source),
+    }
+    if not keep_uuid:
+        update["uuid"] = uuid.uuid1()
+    return file.model_copy(update=update)
+
+
+def _source_files(file: FileData) -> List[Path]:
+    """Return the local files that FILE refers to, expanding directories."""
+    file_uri = SimDBUrl(file.uri)
+    if file_uri.path is None:
+        raise APIError(f"File URI has no path: {file.uri}")
+
+    if file_uri.scheme == "imas":
+        try:
+            sources = sorted(imas_files(file_uri))
+        except ValueError as err:
+            raise APIError(f"Failed to list IMAS files of {file.uri}: {err}") from err
+        if not sources:
+            raise APIError(f"IMAS URI does not contain any files: {file.uri}")
+        return sources
+
+    file_path = Path(file_uri.path)
+    if not file_path.is_dir():
+        return [file_path]
+
+    sources = []
+    for sub_file in sorted(file_path.iterdir()):
+        if sub_file.is_dir():
+            raise APIError(f"Nested directory found in {file_path}: {sub_file.name}")
+        sources.append(sub_file)
+    return sources
+
+
+def _expand_directories(
+    files: Iterable[FileData], partitions: Dict[str, str]
+) -> List[FileData]:
+    new_file_list = []
+    for file in files:
+        sources = _source_files(file)
+        keep_uuid = len(sources) == 1
+        for source in sources:
+            new_file_list.append(
+                _file_data_for_partition(file, source, partitions, keep_uuid=keep_uuid)
+            )
+    return new_file_list
+
+
 class RemoteAPI:
     """
     Class to represent connection to remote API.
@@ -304,7 +403,10 @@ class RemoteAPI:
         if self._firewall is not None:
             self._load_cookies(remote, username, password)
 
-        self._api_url: str = f"{self._url}/"
+        self._base_url: str = f"{self._url}/"
+        self._api_version: Optional[str] = None
+        self._request_version: Optional[str] = None
+        self._server_versions: FrozenSet[str] = frozenset()
         self._server_auth = self.get_server_authentication()
         if self._firewall:
             self._server_auth = "None"
@@ -329,6 +431,7 @@ class RemoteAPI:
 
         endpoints = self.get_endpoints()
         endpoint_versions = [endpoint.split("/")[-1] for endpoint in endpoints]
+        self._server_versions = frozenset(endpoint_versions)
 
         selected_version = select_api_version(endpoint_versions)
         if selected_version is None:
@@ -342,8 +445,7 @@ class RemoteAPI:
             print(f"Selected API version {selected_version}")
 
         self._api_version = selected_version
-        self._api_url += f"{selected_version}/"
-        self.version = Version.coerce(self.get_api_version())
+        self.version = Version.coerce(selected_version.lstrip("v"))
         self.server_version = Version.coerce(self.get_server_version())
 
     def _load_cookies(
@@ -396,6 +498,42 @@ class RemoteAPI:
             raise ValueError(f"Unknown firewall option {self._firewall}")
 
     @property
+    def _api_url(self) -> str:
+        """
+        Return the base URL of the API version the current request targets.
+        """
+        version = self._request_version or self._api_version
+        if version is None:
+            return self._base_url
+        return f"{self._base_url}{version}/"
+
+    @contextmanager
+    def api_version(self, version: str) -> Iterator[None]:
+        """
+        Send the requests made inside this context to the given API version.
+
+        @param version: the API version, as it appears in the endpoint URL.
+        """
+        if version not in CLIENT_API_VERSIONS:
+            raise RemoteError(
+                f"API version '{version}' is not supported by this client. It "
+                f"supports: {', '.join(CLIENT_API_VERSIONS)}."
+            )
+        if version not in self._server_versions:
+            raise RemoteError(
+                f"API version '{version}' is not provided by remote "
+                f"'{self._remote}'. It provides: "
+                f"{', '.join(sorted(self._server_versions)) or 'none'}."
+            )
+
+        previous = self._request_version
+        self._request_version = version
+        try:
+            yield
+        finally:
+            self._request_version = previous
+
+    @property
     def remote(self) -> str:
         """
         Return the name of the remote.
@@ -428,13 +566,12 @@ class RemoteAPI:
         """
         Perform an HTTP GET request.
 
-        @param url: the URL of the request.
-        @param params: any additional parameters to send along with the request.
-        @param headers: additional headers to send with the request.
-        @param authenticate: True if we should send authentication headers with the
-                             request.
-        @param stream: True to enable streaming.
-        @return:
+        :param url: the URL of the request.
+        :param params: any additional parameters to send along with the request.
+        :param headers: additional headers to send with the request.
+        :param authenticate: True if we should send authentication headers with
+            the request.
+        :param stream: True to enable streaming.
         """
 
         params = params if params is not None else {}
@@ -461,6 +598,32 @@ class RemoteAPI:
                 stream=stream,
             )
 
+        check_return(res)
+        return res
+
+    def get_root(
+        self,
+        headers: Optional[Dict] = None,
+        stream: bool = False,
+    ) -> "requests.Response":
+        """
+        Perform an HTTP GET request to the server root endpoint.
+
+        @param headers: additional headers to send with the request.
+        @param stream: True to enable streaming.
+        @return:
+        """
+
+        headers = headers or {}
+        headers["Accept-encoding"] = "gzip"
+        headers["User-Agent"] = "it_script_basic"
+
+        res = requests.get(
+            self._url,
+            headers=headers,
+            cookies=self._cookies,
+            stream=stream,
+        )
         check_return(res)
         return res
 
@@ -644,16 +807,14 @@ class RemoteAPI:
 
     @versioned_method("v1.2", "v1.3")
     @try_request
-    def get_api_version(self) -> str:
-        res = self.get("", authenticate=False)
-        data = res.json()
-        return data["api_version"]
-
-    @versioned_method("v1.2", "v1.3")
-    @try_request
     def get_server_version(self) -> str:
-        res = self.get("", authenticate=False)
-        data = res.json()
+        try:
+            res = self.get_root().json()
+            if (server_version := res.get("server_version")) is not None:
+                return server_version
+        except Exception:
+            pass
+        data = self.get("", authenticate=False).json()
         return data["server_version"]
 
     @versioned_method("v1.2", "v1.3")
@@ -857,7 +1018,33 @@ class RemoteAPI:
         ]
         self.post("files", data={}, files=files)
 
-    @versioned_method("v1.2", "v1.3")
+    @versioned_method("v1.3")
+    @try_request
+    def push_local_simulation(self, simulation: Simulation, add_watcher: bool = False):
+        sim_data = simulation.to_model(recurse=True)
+
+        partitions = cast(
+            Dict[str, str], self._config.get_section("partition", default={})
+        )
+        sim_data.inputs.root = _expand_directories(sim_data.inputs.root, partitions)
+        sim_data.outputs.root = _expand_directories(sim_data.outputs.root, partitions)
+
+        uploaded_by = simulation.meta_dict().get("uploaded_by")
+
+        post_data = SimulationPostData(
+            simulation=sim_data,
+            add_watcher=add_watcher,
+            uploaded_by=str(uploaded_by) if uploaded_by is not None else None,
+        )
+        self.post("simulations", data=post_data.model_dump(mode="json"))
+
+    @versioned_method("v1.3")
+    @try_request
+    def get_ingestion_status(self, sim_id: str) -> str:
+        res = self.get(f"simulation/status/{sim_id}")
+        return res.json()["status"]
+
+    @versioned_method("v1.2")
     @try_request
     def push_simulation(
         self,
@@ -870,6 +1057,9 @@ class RemoteAPI:
 
         First we upload any files associated with the simulation, then push the
         simulation metadata.
+
+        Only supported on the v1.2 API: the chunked file upload is to be replaced by
+        a resumable HTTP upload, so it has not been ported to v1.3.
 
         :param simulation: The Simulation to push to remote server
         :param out_stream: The IO stream to write messages to the user (default: stdout)
@@ -1109,6 +1299,12 @@ class RemoteAPI:
             raise RemoteError(f"Failed to find simulation: {sim_id}")
 
         all_paths = []
+
+        if len(simulation.inputs) + len(simulation.outputs) == 0:
+            raise RemoteError(
+                f"Simulation '{sim_id}' on remote has no input or output files "
+                "registered, so there is nothing to download."
+            )
 
         for file in itertools.chain(simulation.inputs, simulation.outputs):
             info = self._get_file_info(file.uuid)

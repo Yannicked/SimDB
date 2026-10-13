@@ -7,6 +7,13 @@ from getpass import getuser
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
 
+from dateutil import parser as date_parser
+from sqlalchemy import JSON, Column, ForeignKey, Table, text
+from sqlalchemy import types as sql_types
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.orm import relationship
+
 from simdb.enums import IngestionStatus
 from simdb.imas.utils import SimDBUrl
 from simdb.remote.models import (
@@ -17,16 +24,6 @@ from simdb.remote.models import (
     SimulationDataResponse,
     SimulationTraceData,
 )
-
-if sys.version_info < (3, 11):
-    from backports.datetime_fromisoformat import MonkeyPatch
-
-from dateutil import parser as date_parser
-from sqlalchemy import JSON, Column, ForeignKey, Table, text
-from sqlalchemy import types as sql_types
-from sqlalchemy.dialects import postgresql
-from sqlalchemy.ext.mutable import MutableDict
-from sqlalchemy.orm import relationship
 
 if "sphinx" in sys.modules:
     # Patch to allow sphix doc generation
@@ -53,10 +50,6 @@ from .file import File
 from .types import UUID
 from .utils import checked_get, flatten_dict, unflatten_dict
 from .watcher import Watcher
-
-if sys.version_info < (3, 11):
-    MonkeyPatch.patch_fromisoformat()
-
 
 simulation_input_files = Table(
     "simulation_input_files",
@@ -163,14 +156,32 @@ class Simulation(Base):
         Returns a list of MetaDataWrapper objects from the JSON metadata.
         """
         meta_dict = self._get_metadata_dict()
-        return [MetaDataWrapper(k, v) for k, v in meta_dict.items()]
+        return list(itertools.starmap(MetaDataWrapper, meta_dict.items()))
 
     def _get_metadata_dict(self) -> Dict[str, Any]:
         if self._metadata is None:
             return {}
         return self._metadata
 
+    def _coerce_ids_list(self, v: Any) -> Any:
+        """Repair ``ids``/``input_ids`` metadata written as a display string.
+
+        SimDB <= 1.2 stored these as ``"[core_profiles, equilibrium]"`` rather than a
+        list, which fails validation when the simulation is pushed back (#119).
+        remains.
+        """
+        if not isinstance(v, str):
+            return v
+        text = v.strip()
+        if text.startswith("[") and text.endswith("]"):
+            text = text[1:-1]
+        return [name.strip() for name in text.split(",") if name.strip()]
+
     def _set_metadata_dict(self, meta_dict: Dict[str, Any]) -> None:
+        # Fix simulations pulled with odd formatted ids arrays:
+        for key in ("ids", "input_ids"):
+            if key in meta_dict:
+                meta_dict[key] = self._coerce_ids_list(meta_dict[key])
         self._metadata = meta_dict
 
     def __init__(
@@ -221,7 +232,7 @@ class Simulation(Base):
             self.inputs.append(file)
 
         if all_input_idss:
-            self.set_meta("input_ids", "[{}]".format(", ".join(all_input_idss)))
+            self.set_meta("input_ids", all_input_idss)
 
         all_output_idss = []
 
@@ -249,7 +260,7 @@ class Simulation(Base):
             self.outputs.append(file)
 
         if all_output_idss:
-            self.set_meta("ids", "[{}]".format(", ".join(all_output_idss)))
+            self.set_meta("ids", all_output_idss)
 
         flattened_dict = flatten_dict(manifest.metadata)
 
@@ -293,6 +304,10 @@ class Simulation(Base):
                     first_line = False
             elif isinstance(value, dict) and "min" in value and "max" in value:
                 result += f"  {element}: [{value['min']}, {value['max']}]\n"
+            elif isinstance(value, list):
+                result += "  {}: [{}]\n".format(
+                    element, ", ".join(str(el) for el in value)
+                )
             else:
                 result += f"  {element}: {value}\n"
         result += "inputs:\n"
