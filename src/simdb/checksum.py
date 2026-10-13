@@ -16,6 +16,7 @@ def calculate_checksum(path: Path) -> str:
             sha1.update(chunk)
     return sha1.hexdigest()
 
+
 #: Algorithm used to generate checksums. Prepended to every stored checksum as a
 #: ``<algorithm>:<hexdigest>`` prefix so the encoding is self-describing.
 CHECKSUM_ALGORITHM = "sha1"

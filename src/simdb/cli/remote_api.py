@@ -37,8 +37,7 @@ import requests
 from requests.auth import AuthBase
 from semantic_version import Version
 
-from simdb.checksum import checksums_match
-from simdb.checksum import calculate_checksum
+from simdb.checksum import calculate_checksum, checksums_match
 from simdb.config import Config
 from simdb.database.models import Simulation
 from simdb.imas.utils import SimDBUrl, imas_files

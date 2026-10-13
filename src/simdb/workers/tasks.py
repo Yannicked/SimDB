@@ -8,7 +8,7 @@ from typing import Iterable, List
 from uuid import UUID
 
 from celery.signals import worker_ready
-from simdb.checksum import calculate_checksum
+
 from simdb.checksum import format_checksum, is_prefixed
 from simdb.config import Config
 from simdb.database.database import get_db
