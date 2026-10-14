@@ -37,7 +37,7 @@ import requests
 from requests.auth import AuthBase
 from semantic_version import Version
 
-from simdb.checksum import calculate_checksum, checksums_match
+from simdb.checksum import calculate_checksum, checksums_match, format_checksum
 from simdb.config import Config
 from simdb.database.models import Simulation
 from simdb.imas.utils import SimDBUrl, imas_files
@@ -286,7 +286,7 @@ def _file_data_for_partition(
     new_uri = SimDBUrl.build(scheme=partition, path=partition_path.as_posix())
     update: Dict[str, Any] = {
         "uri": new_uri.encoded_string(),
-        "checksum": calculate_checksum(source),
+        "checksum": format_checksum(calculate_checksum(source)),
     }
     if not keep_uuid:
         update["uuid"] = uuid.uuid1()
